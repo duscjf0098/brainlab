@@ -182,9 +182,21 @@
     }
     return [order.slice(0, 2), order.slice(1, 3), OPS.union(order.slice(0, 2), order.slice(1, 3), order)];
   }
-  /* 2×2: 오른쪽 = 왼쪽 op K (K는 고정 집합). 두 행 모두 결과가 달라지도록 */
+  /* 정답이 유일하도록: 보기로 주어지는 두 행(0,1)이 다른 연산과 구별되어야 한다.
+     (예: 두 행 모두 A∩B=∅ 이면 합집합과 배타가 같아 보여 셋째 행의 답이 두 개가 된다) */
+  function logicRows(r, op, order) {
+    const others = Object.keys(OPS).filter(function (o) { return o !== op; });
+    for (let t = 0; t < 120; t++) {
+      const rows = [logicRow(r, op, order), logicRow(r, op, order), logicRow(r, op, order)];
+      const ok = others.every(function (o) { return rows.slice(0, 2).some(function (row) { return OPS[o](row[0], row[1], order) !== row[2]; }); });
+      if (ok) return rows;
+    }
+    return [logicRow(r, op, order), logicRow(r, op, order), logicRow(r, op, order)];
+  }
+  /* 2×2: 오른쪽 = 왼쪽 op K (K는 고정 집합). 두 행 모두 결과가 달라지고, 첫 행만으로 연산이 구별되도록 */
   function logicK(r, op, order) {
-    for (let t = 0; t < 80; t++) {
+    const others = Object.keys(OPS).filter(function (o) { return o !== op; });
+    for (let t = 0; t < 120; t++) {
       const K = randomSet(r, order, 1, 2);
       const rows = [];
       for (let i = 0; i < 2; i++) {
@@ -193,7 +205,9 @@
         if (!a) break;
         rows.push(a);
       }
-      if (rows.length === 2 && rows[0][0] !== rows[1][0]) return { K: K, rows: rows };
+      if (rows.length !== 2 || rows[0][0] === rows[1][0]) continue;
+      const distinct = others.every(function (o) { return OPS[o](rows[0][0], K, order) !== rows[0][1]; });
+      if (distinct) return { K: K, rows: rows };
     }
     return { K: order.slice(0, 1), rows: [[order.slice(1, 2), OPS.union(order.slice(1, 2), order.slice(0, 1), order)], [order.slice(2, 3), OPS.union(order.slice(2, 3), order.slice(0, 1), order)]] };
   }
@@ -271,7 +285,7 @@
     logicAttrs.forEach(function (a) {
       const order = a === 'marks' ? 'abcd' : 'hvde';
       const op = r.pick(grid === 2 ? recipe.ops.filter(function (o) { return o !== 'inter'; }) : recipe.ops);
-      if (grid === 3) spec[a] = { kind: 'logic', op: op, order: order, rows: [0, 1, 2].map(function () { return logicRow(r, op, order); }) };
+      if (grid === 3) spec[a] = { kind: 'logic', op: op, order: order, rows: logicRows(r, op, order) };
       else { const k = logicK(r, op, order); spec[a] = { kind: 'logicK', op: op, order: order, K: k.K, rows: k.rows }; }
     });
 
@@ -517,6 +531,20 @@
 
   /* ===== 3. 수열 (1~5단계) ===== */
   const PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
+  /* 앞 다섯 수에 맞는 단순 규칙들이 예측하는 여섯째 수 목록 (등차·등비·2차·피보나치·교대 등차·교대 차이·쌍 반복) */
+  function altNext(s) {
+    const out = [];
+    const d = [1, 2, 3, 4].map(function (i) { return s[i] - s[i - 1]; });
+    if (d.every(function (x) { return x === d[0]; })) out.push(s[4] + d[0]);
+    if (s.slice(0, 4).every(function (x) { return x !== 0; })) { const q = s[1] / s[0]; if ([1, 2, 3].every(function (i) { return s[i + 1] / s[i] === q; })) out.push(s[4] * q); }
+    const dd = [1, 2, 3].map(function (i) { return d[i] - d[i - 1]; });
+    if (dd.every(function (x) { return x === dd[0]; })) out.push(s[4] + d[3] + dd[0]);
+    if (s[2] === s[0] + s[1] && s[3] === s[1] + s[2] && s[4] === s[2] + s[3]) out.push(s[3] + s[4]);
+    if (s[2] - s[0] === s[4] - s[2] && (s[3] - s[1]) !== undefined) out.push(s[3] + (s[3] - s[1]));
+    if (d[0] === d[2] && d[1] === d[3]) out.push(s[4] + d[0]);
+    if (s[0] === s[1] && s[2] === s[3]) out.push(s[4]);
+    return out.filter(function (v, i, arr) { return isFinite(v) && arr.indexOf(v) === i; });
+  }
   function makeSequence(r, level) {
     const six = function (f) { return [0, 1, 2, 3, 4, 5].map(f); };
     const gens = {
@@ -541,7 +569,14 @@
       primesSkip: function () { const st = r.int(0, 3); return { seq: [0, 1, 2, 3, 4, 5].map(function (i) { return PRIMES[st + 2 * i]; }), explain: '소수를 하나씩 건너뛰며 나열한 것입니다.' }; }
     };
     const pools = { 1: ['arith', 'arithNeg', 'geo'], 2: ['alt', 'square', 'fib', 'inter'], 3: ['second', 'mulAdd', 'inter', 'square'], 4: ['mulSub', 'alt2', 'primes', 'sqPlusN'], 5: ['lookback3', 'altMulAdd', 'diffGeo', 'primesSkip'] };
-    const g = gens[r.pick(pools[level])]();
+    // 앞 다섯 수가 다른 단순 규칙으로도 설명되면서 여섯째 수가 달라지는 경우(모호한 문항)는 버리고 다시 만든다
+    let g = null;
+    for (let t = 0; t < 40; t++) {
+      const cand = gens[r.pick(pools[level])]();
+      const alts = altNext(cand.seq.slice(0, 5));
+      if (alts.every(function (v) { return v === cand.seq[5]; })) { g = cand; break; }
+      if (!g) g = cand;
+    }
     const seq = g.seq, shown = seq.slice(0, 5), answer = seq[5];
     const d = seq[4] - seq[3];
     const cands = [answer + d, answer - d, answer + 1, answer - 1, answer + 2, answer - 2, seq[4] * 2, answer + 2 * d, seq[4] + seq[3], seq[4] + d - 1, answer + 3];
@@ -602,14 +637,14 @@
   ];
   /* 공통점 찾기: 두 낱말의 본질적 공통점(범주·기능)을 고른다. 보기 길이는 정답과 무관하게 섞었다. */
   const SIMILAR = [
-    { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 나무에서 자란다', '둘 다 껍질을 벗겨 먹는다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"입니다. 색이나 껍질은 한쪽에만 맞거나 부분적입니다.' },
+    { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 나무에서 자란다', '둘 다 씨가 하나도 없다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"입니다. 바나나는 풀에서 열리고, 사과에는 씨가 있습니다.' },
     { pair: ['개', '고양이'], options: ['네 발 달린 포유류다', '사람을 보면 짖는다', '주인을 따라다닌다', '주로 밤에 활동한다'], answer: 0, level: 1, explain: '둘 다 포유류입니다. 나머지는 한쪽에만 해당합니다.' },
     { pair: ['시계', '달력'], options: ['시간을 재는 도구다', '벽에 걸어 둔다', '숫자가 적혀 있다', '매일 아침 확인한다'], answer: 0, level: 2, explain: '둘 다 시간을 측정·표시하는 도구입니다. 숫자가 있다는 것은 겉모습일 뿐입니다.' },
-    { pair: ['연필', '붓'], options: ['그리거나 쓰는 도구다', '나무로 만든 물건이다', '잉크를 묻혀 쓴다', '지우개로 지울 수 있다'], answer: 0, level: 2, explain: '기능(그리기·쓰기)이 본질적 공통점입니다.' },
-    { pair: ['증기', '얼음'], options: ['물의 다른 상태다', '만지면 차갑다', '물보다 가볍다', '하늘 위에 떠 있다'], answer: 0, level: 3, explain: '둘 다 물이 상태만 바뀐 것입니다.' },
+    { pair: ['연필', '붓'], options: ['그리거나 쓰는 도구다', '글씨를 쓰는 데만 쓴다', '잉크를 묻혀 쓴다', '지우개로 지울 수 있다'], answer: 0, level: 2, explain: '기능(그리기·쓰기)이 본질적 공통점입니다. 나머지는 한쪽에만 해당합니다.' },
+    { pair: ['증기', '얼음'], options: ['물의 다른 상태다', '만지면 차갑다', '사람이 만들어 낸 것이다', '하늘 위에 떠 있다'], answer: 0, level: 3, explain: '둘 다 물이 상태만 바뀐 것입니다.' },
     { pair: ['칭찬', '벌'], options: ['행동을 바꾸는 수단이다', '받으면 기분이 좋다', '아이에게만 쓰는 것이다', '말로만 할 수 있다'], answer: 0, level: 3, explain: '정반대로 보이지만 둘 다 행동을 조절하려는 수단입니다.' },
-    { pair: ['지도', '설명서'], options: ['모르는 것을 안내한다', '종이에 인쇄되어 나온다', '그림과 기호가 들어 있다', '여행을 갈 때 꼭 챙긴다'], answer: 0, level: 4, explain: '둘 다 모르는 것을 찾아가게 돕는 안내 도구입니다.' },
-    { pair: ['뿌리', '기초'], options: ['전체를 떠받치는 바탕이다', '땅속 깊이 묻혀 있다', '눈에 잘 보이지 않는다', '식물에게만 있는 것이다'], answer: 0, level: 4, explain: '보이지 않는 곳에서 전체를 지탱한다는 점이 본질입니다.' },
+    { pair: ['지도', '설명서'], options: ['모르는 것을 안내한다', '길을 찾을 때만 쓴다', '한 번 보면 다시 볼 일이 없다', '반드시 전문가가 만든다'], answer: 0, level: 4, explain: '둘 다 모르는 것을 찾아가게 돕는 안내 도구입니다. 나머지는 한쪽에만 맞거나 사실이 아닙니다.' },
+    { pair: ['뿌리', '기초'], options: ['전체를 떠받치는 바탕이다', '위로 갈수록 두꺼워진다', '시간이 지나면 저절로 사라진다', '식물에게만 있는 것이다'], answer: 0, level: 4, explain: '보이지 않는 곳에서 전체를 지탱한다는 점이 본질입니다.' },
     { pair: ['민주주의', '독재'], options: ['사회를 다스리는 방식이다', '국민이 직접 투표한다', '권력이 한 사람에게 있다', '현대에 와서 생긴 제도다'], answer: 0, level: 5, explain: '정반대의 체제지만 둘 다 "통치 방식"이라는 범주에 속합니다.' },
     { pair: ['희망', '두려움'], options: ['앞일에 대한 감정이다', '마음이 편해지는 감정이다', '주로 밤에 생기는 감정이다', '남에게 숨기는 감정이다'], answer: 0, level: 5, explain: '둘 다 아직 오지 않은 일을 향한 감정입니다.' },
     { pair: ['소문', '뉴스'], options: ['사람들에게 퍼지는 정보다', '언제나 사실에 근거한다', '신문과 방송에만 실린다', '며칠 지나면 모두 잊힌다'], answer: 0, level: 5, explain: '진위와 경로는 다르지만 둘 다 퍼져 나가는 정보입니다.' }
@@ -1114,6 +1149,7 @@
     glyphSVG: glyphSVG,
     adaptNext: adaptNext,
     adaptRecord: adaptRecord,
+    _internals: { OPS: OPS, logicRows: logicRows, logicK: logicK, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },
     tasks: TASK_KEYS.map(function (k) { return { key: k, label: TASKS[k].label, domain: TASKS[k].domain, domainLabel: DOMAINS.filter(function (d) { return d.key === TASKS[k].domain; })[0].label, minutes: TASKS[k].minutes }; }),
     domains: DOMAINS.map(function (d) { return { key: d.key, label: d.label }; }),
     intro: [
