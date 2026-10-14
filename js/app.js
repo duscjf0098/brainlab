@@ -154,7 +154,16 @@
     }
     const it = session.items[session.index];
     if (!it) { finish(); return; }
-    const scoredTotal = session.items.filter(function (x) { return x.scored; }).length;
+    if (it.type === 'adaptive') {
+      // 적응형 스텁: 다음 문항을 만들어 스텁 앞에 끼우거나, 다 끝났으면 건너뛴다
+      const nx = t.adaptNext ? t.adaptNext(it) : null;
+      if (nx) session.items.splice(session.index, 0, nx); else session.index += 1;
+      saveSession();
+      renderRun(id);
+      return;
+    }
+    const pending = session.items.reduce(function (s, x) { return s + (x.type === 'adaptive' && x.state ? Math.max(0, x.count - x.state.done) : 0); }, 0);
+    const scoredTotal = session.items.filter(function (x) { return x.scored; }).length + pending;
     const scoredDone = session.items.slice(0, session.index).filter(function (x) { return x.scored; }).length;
     const pct = Math.round(scoredDone / scoredTotal * 100);
     const chrome = '<div class="run-head"><a class="run-title" href="#/test/' + id + '">' + U.esc(t.title) + '</a>' +
@@ -165,6 +174,7 @@
       return RENDER[it.type](it, document.getElementById('item'), function (answer) {
         session.answers[session.index] = answer;
         session.times[session.index] = Date.now() - session.shownAt;
+        if (it.adaptive && t.adaptRecord) t.adaptRecord(session.items[session.index + 1], it, answer);
         session.index += 1;
         saveSession();
         renderRun(id);
@@ -766,7 +776,13 @@
     const t = BL.tests[id];
     const r = U.rng();
     const items = t.build(mode);
-    const answers = items.map(function (it) { return randomAnswer(it, r); });
+    const answers = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.type === 'adaptive') { const nx = t.adaptNext ? t.adaptNext(it) : null; if (nx) { items.splice(i, 0, nx); i -= 1; } continue; }
+      answers[i] = randomAnswer(it, r);
+      if (it.adaptive && t.adaptRecord) t.adaptRecord(items[i + 1], it, answers[i]);
+    }
     const result = t.score(answers, items, { times: items.map(function () { return r.int(4000, 20000); }), mode: mode });
     result.testId = id; result.at = Date.now();
     setScreen(resultHtml(t, result, { banner: '미리보기 · 무작위 응답으로 만든 결과입니다. 저장되지 않습니다.' }), function () { mountResult(t, result); });

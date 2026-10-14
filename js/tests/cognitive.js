@@ -785,6 +785,16 @@
     symbol: { kind: 'count', mean: 24, sd: 6 }
   };
   const IQ_RANGE = [55, 145];
+  /* 라쉬(1PL)+찍기 확률 모형의 사후 최빈값. obs = [{b: 난이도, c: 찍기 확률, ok}], 사전분포 N(0, 1.5²) */
+  function irtTheta(obs) {
+    let best = 0, bestLp = -Infinity;
+    for (let th = -4; th <= 4.0001; th += 0.05) {
+      let lp = -0.5 * (th / 1.5) * (th / 1.5);
+      obs.forEach(function (o) { const pr = o.c + (1 - o.c) / (1 + Math.exp(-(th - o.b))); lp += Math.log(Math.max(1e-6, o.ok ? pr : 1 - pr)); });
+      if (lp > bestLp) { bestLp = lp; best = th; }
+    }
+    return best;
+  }
   function iqOf(z) { return Math.round(U.clamp(100 + 15 * z, IQ_RANGE[0], IQ_RANGE[1])); }
   function topPct(z) { return Math.max(1, Math.round((1 - U.normCdf(z)) * 100)); }
   function compositeZ(zs, r) {
@@ -858,13 +868,64 @@
     if (withPractice && PRACTICE[key]) items.push(practiceItem(r, key));
     return items.concat(BUILD[key](r, full));
   }
+
+  /* ===== 적응형 진행: 맞히면 한 단계 위, 틀리면 한 단계 아래. 문항은 그때그때 생성한다. =====
+     스텁(type 'adaptive')이 과제 자리에 놓이고, 엔진이 adaptNext()로 다음 문항을 받아 스텁 앞에 끼운 뒤
+     답이 오면 adaptRecord()로 상태를 갱신한다. 스텁 상태는 세션에 함께 저장된다. */
+  const ADAPT = {
+    matrix: { n: 8, start: 3, max: 6 }, figAnalogy: { n: 7, start: 3, max: 5 }, series: { n: 5, start: 2, max: 3 },
+    sequence: { n: 6, start: 3, max: 5 }, weights: { n: 6, start: 2, max: 5 }, rotation: { n: 5, start: 3, max: 5 },
+    analogy: { n: 7, start: 3, max: 5 }, vocab: { n: 7, start: 3, max: 5 }, logic: { n: 7, start: 3, max: 5 }, similar: { n: 7, start: 3, max: 5 }
+  };
+  const GEN = { matrix: makeMatrix, figAnalogy: makeFigAnalogy, series: makeSeries, sequence: makeSequence, weights: makeWeights, rotation: makeRotation };
+  const POOL = { analogy: VERBAL, vocab: VOCAB, logic: LOGIC, similar: SIMILAR };
+  const POOL_OPTS = { analogy: [40, 2, false], vocab: [35, 1, false], logic: [60, 1, true], similar: [35, 1, false] };
+  function adaptStub(key) {
+    const a = ADAPT[key];
+    return { type: 'adaptive', part: key, scored: false, count: a.n, state: { done: 0, level: a.start, max: a.max, used: [], levels: [], oks: [] } };
+  }
+  function adaptNext(stub) {
+    if (!stub || stub.type !== 'adaptive') return null;
+    const st = stub.state, key = stub.part;
+    if (st.done >= stub.count) return null;
+    const r = U.rng();
+    let item;
+    if (GEN[key]) item = GEN[key](r, st.level);
+    else {
+      const pool = POOL[key];
+      const all = pool.map(function (it, i) { return { it: it, i: i }; }).filter(function (x) { return st.used.indexOf(x.i) < 0; });
+      let cand = [];
+      for (let d = 0; d <= 5 && !cand.length; d++) cand = all.filter(function (x) { return x.it.level === st.level - d || x.it.level === st.level + d; });
+      if (!cand.length) cand = all;
+      if (!cand.length) return null;
+      const pick = r.pick(cand);
+      st.used.push(pick.i);
+      const o = POOL_OPTS[key];
+      item = choiceItems(r, [pick.it], key, o[0], o[1], o[2])[0];
+    }
+    item.adaptive = true;
+    return item;
+  }
+  function adaptRecord(stub, item, answer) {
+    if (!stub || stub.type !== 'adaptive' || !item) return;
+    const st = stub.state, ok = answer === item.answer;
+    st.levels.push(item.level); st.oks.push(ok); st.done += 1;
+    st.level = ok ? Math.min(st.max, st.level + 1) : Math.max(1, st.level - 1);
+  }
+  function taskItemsAdaptive(r, key, withPractice) {
+    const a = ADAPT[key];
+    const items = [{ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' 적응형입니다. ' + a.start + '단계에서 시작해 맞히면 한 단계 올라가고 틀리면 내려갑니다.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 봅니다. 연습은 점수에 들어가지 않습니다.' : ''), count: a.n + '문항 · 적응형 · 1~' + a.max + '단계' }];
+    if (withPractice && PRACTICE[key]) items.push(practiceItem(r, key));
+    items.push(adaptStub(key));
+    return items;
+  }
   function parseMode(mode) {
     if (typeof mode === 'string' && mode.indexOf('task:') === 0 && TASKS[mode.slice(5)]) return { kind: 'task', key: mode.slice(5) };
-    return { kind: mode === 'quick' ? 'quick' : 'full' };
+    return { kind: mode === 'quick' ? 'quick' : mode === 'full' ? 'full' : 'adaptive' };
   }
   function modeLabel(mode) {
     const m = parseMode(mode);
-    return m.kind === 'task' ? '과제별 검사 · ' + TASKS[m.key].label : m.kind === 'quick' ? '빠른 검사' : '정밀 검사';
+    return m.kind === 'task' ? '과제별 검사 · ' + TASKS[m.key].label : m.kind === 'quick' ? '빠른 검사' : m.kind === 'full' ? '정밀 검사' : '적응형 검사';
   }
 
   /* opts.practiced: 이미 해 본 과제 키 배열 → 그 과제는 연습 문제를 건너뛴다 */
@@ -874,14 +935,16 @@
     const wantPractice = function (k) { return opts.practice !== false && practiced.indexOf(k) < 0; };
     const m = parseMode(mode);
     const r = U.rng();
-    if (m.kind === 'task') return taskItems(r, m.key, true, wantPractice(m.key));
-    const full = m.kind === 'full';
+    const adaptive = m.kind === 'adaptive' || m.kind === 'task';
+    const make = function (k, full) { return adaptive && ADAPT[k] ? taskItemsAdaptive(r, k, wantPractice(k)) : taskItems(r, k, full, wantPractice(k)); };
+    if (m.kind === 'task') return make(m.key, true);
+    const full = m.kind !== 'quick';
     const items = [];
     const part = function (num, d, desc, keys) {
       const use = keys.filter(function (k) { return full || QUICK.indexOf(k) >= 0; });
       if (!use.length) return;
       items.push({ type: 'section', num: num, title: d.label, desc: desc, count: use.length + '과제 · ' + use.map(function (k) { return TASKS[k].label; }).join(', ') });
-      use.forEach(function (k) { items.push.apply(items, taskItems(r, k, full, wantPractice(k))); });
+      use.forEach(function (k) { items.push.apply(items, make(k, full)); });
     };
     part(1, DOMAINS[0], '도형과 숫자에 숨은 규칙을 찾습니다. 문항마다 제한 시간이 있고, 시간이 끝나면 자동으로 넘어갑니다.', ['matrix', 'figAnalogy', 'series', 'sequence', 'weights']);
     part(2, DOMAINS[1], '단어의 관계와 뜻, 문장의 논리를 다룹니다.', ['analogy', 'vocab', 'logic', 'similar']);
@@ -912,9 +975,16 @@
       const ps = rows.map(function (x) { return LP[x.it.level]; }).filter(function (p) { return typeof p === 'number'; });
       const meanP = ps.length ? U.mean(ps) : 0.6;
       const p = n ? c / n : 0;
-      // 가장 어려운 단계까지 맞힌 사람이 조금 더 위로 가도록, 맞힌 문항의 난이도도 소폭 반영한다
-      const hardBonus = rows.filter(function (x) { return x.a === x.it.answer && x.it.level >= 4; }).length * 0.02;
-      return { z: U.clamp((p + hardBonus - meanP) / norm.sd, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (avg != null ? (lvText ? ' · ' : '') + '평균 ' + avg + '초' : ''), meanP: Math.round(meanP * 100) };
+      // 문항 난이도를 반영한 능력 추정(라쉬 모형 + 찍기 확률): 어느 단계를 맞혔는지가 점수에 들어간다
+      const obs = rows.filter(function (x) { return x.it.level && LP[x.it.level]; }).map(function (x) {
+        const pl = LP[x.it.level];
+        return { b: Math.log((1 - pl) / pl), c: 1 / (((x.it.options || x.it.optionsHtml || []).length) || 4), ok: x.a === x.it.answer };
+      });
+      const theta = obs.length ? irtTheta(obs) : (p - meanP) / norm.sd;
+      const adaptive = rows.some(function (x) { return x.it.adaptive; });
+      const top = rows.filter(function (x) { return x.a === x.it.answer && x.it.level; }).map(function (x) { return x.it.level; });
+      const maxReached = top.length ? Math.max.apply(null, top) : 0;
+      return { z: U.clamp(theta, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (adaptive ? (lvText ? ' · ' : '') + '맞힌 최고 단계 ' + maxReached : '') + (avg != null ? ' · 평균 ' + avg + '초' : ''), meanP: adaptive ? undefined : Math.round(meanP * 100) };
     }
     if (norm.kind === 'span') {
       const it = rows[0].it;
@@ -986,7 +1056,7 @@
       summary = bandText + ' 가장 강한 영역은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + sorted[sorted.length - 1].label + ' ' + sorted[sorted.length - 1].value + '은 연습 여지가 있습니다.' +
         (keys.length < TASK_KEYS.length ? ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했습니다.' : '');
     }
-    sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균 100, 표준편차 15인 IQ 척도로 환산한 값이고, "상위 %"는 그 척도에서의 위치입니다. ±' + sem + '은 측정 오차 범위로, 실제 값이 그 안에 있을 확률이 약 68%입니다. 과제를 많이 풀수록 범위가 좁아집니다. 문항은 1~5단계 난이도로 설계되었고, 과제별 "기준 정답률"은 그 설계상 일반 성인이 맞힐 것으로 예상한 비율입니다. 기준값은 아직 실제 응시 자료로 보정되지 않은 추정치라 공인 지능검사의 IQ와 같지 않습니다. 85~115가 평균 범위이며, 같은 과제를 여러 번 하면 익숙해져 점수가 오릅니다.' });
+    sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균 100, 표준편차 15인 IQ 척도로 환산한 값이고, "상위 %"는 그 척도에서의 위치입니다. ±' + sem + '은 측정 오차 범위로, 실제 값이 그 안에 있을 확률이 약 68%입니다. 과제를 많이 풀수록 범위가 좁아집니다. 문항은 1~6단계 난이도로 설계되었고, 점수는 몇 개를 맞혔는지가 아니라 어느 단계를 맞혔는지를 반영한 능력 추정값(문항반응이론 방식)입니다. 각 단계의 난이도는 설계상 일반 성인의 예상 정답률에서 정한 것이라, 실제 응시 자료로 보정되기 전까지는 공인 지능검사의 IQ와 같지 않습니다. 85~115가 평균 범위이며, 같은 과제를 여러 번 하면 익숙해져 점수가 오릅니다.' });
     return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: tasks, z: z };
   }
 
@@ -1037,17 +1107,21 @@
     length: '18과제',
     timed: true,
     modes: [
+      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 어려워지고 틀리면 쉬워져서 실력에 맞는 단계에서 집중 측정합니다. 과제당 5~8문항이라 정밀 검사보다 짧으면서 상위 단계까지 올라갑니다. 추천.', duration: '약 35분', length: '18과제' },
       { id: 'quick', label: '빠른 검사', desc: '핵심 과제 6개로 다섯 영역을 한 번씩 훑어봅니다. 문항은 1~6단계에서 하나씩 나옵니다.', duration: '약 12분', length: '6과제' },
-      { id: 'full', label: '정밀 검사', desc: '18개 과제를 모두 풀어 영역마다 세네 가지 방식으로 측정합니다. 쉬운 단계부터 실제 지능검사 상위 문항 수준까지 올라가며, 난이도별 정답률과 틀린 문항 복기까지 보여줍니다. 한 번에 다 하기 힘들면 과제별로 나눠 풀어도 종합 프로필에 합쳐집니다.', duration: '약 50분', length: '18과제' }
+      { id: 'full', label: '정밀 검사', desc: '18개 과제의 모든 단계를 순서대로 다 풉니다. 쉬운 단계부터 실제 지능검사 상위 문항 수준까지 올라가며, 난이도별 정답률과 틀린 문항 복기까지 보여줍니다.', duration: '약 50분', length: '18과제' }
     ],
     glyphSVG: glyphSVG,
+    adaptNext: adaptNext,
+    adaptRecord: adaptRecord,
     tasks: TASK_KEYS.map(function (k) { return { key: k, label: TASKS[k].label, domain: TASKS[k].domain, domainLabel: DOMAINS.filter(function (d) { return d.key === TASKS[k].domain; })[0].label, minutes: TASKS[k].minutes }; }),
     domains: DOMAINS.map(function (d) { return { key: d.key, label: d.label }; }),
     intro: [
       '점수는 평균 100, 표준편차 15인 IQ 척도로 환산한 "추정 IQ"입니다. 공인 지능검사의 IQ가 아니라 참고용 추정치입니다.',
       '문항은 1~5단계로 쉬운 것부터 나오며, 4~5단계는 실제 지능검사의 상위 문항 유형(회전·논리 연산 규칙, 다단계 수열, 고난도 어휘·삼단논법)을 따릅니다.',
       '도형 행렬, 도형 계열, 수열, 도형 회전 문항은 매번 새로 생성되므로 같은 문제가 두 번 나오지 않습니다.',
-      '한 번에 다 풀어도 되고, 과제를 하나씩 따로 풀어도 됩니다. 따로 푼 결과는 종합 프로필에 자동으로 합쳐집니다.'
+      '한 번에 다 풀어도 되고, 과제를 하나씩 따로 풀어도 됩니다. 따로 푼 결과는 종합 프로필에 자동으로 합쳐집니다. 과제별 검사는 적응형으로 진행됩니다.',
+      '점수는 몇 개를 맞혔는지가 아니라 어느 단계의 문항을 맞혔는지를 반영해 계산합니다. 어려운 문항을 맞히면 더 크게 오릅니다.'
     ],
     build: build,
     score: score,
