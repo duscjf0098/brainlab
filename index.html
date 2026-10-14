@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>두뇌실험실</title>
+<meta name="description" content="인지 능력, 정서 지능, 성격, 애착 유형을 직접 만든 문항으로 측정하는 자기평가 실험실">
+<meta name="theme-color" content="#fafaf9">
+<meta property="og:title" content="두뇌실험실">
+<meta property="og:description" content="나를 측정하는 네 가지 실험. 인지 능력, 정서 지능, 성격, 애착 유형.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a href="#/" class="brand"><span class="brand-mark" aria-hidden="true"></span>두뇌실험실</a>
+    <nav class="topnav">
+      <a href="#/history">내 기록</a>
+      <a href="#/about">안내</a>
+    </nav>
+  </div>
+</header>
+
+<main id="app" class="app"></main>
+
+<footer class="footer">
+  <p>두뇌실험실의 모든 검사는 참고용 자기평가이며, 전문가의 심리검사나 의학적 진단을 대체하지 않습니다.</p>
+  <p>결과는 이 브라우저에만 저장되며 어떤 서버로도 전송되지 않습니다.</p>
+</footer>
+
+<script src="js/util.js"></script>
+<script src="js/tests/cognitive.js"></script>
+<script src="js/tests/eq.js"></script>
+<script src="js/tests/personality.js"></script>
+<script src="js/tests/attachment.js"></script>
+<script src="js/card.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

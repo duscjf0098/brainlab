@@ -1,0 +1,714 @@
+/* 두뇌실험실 · 화면 엔진 (해시 라우팅, 문항 렌더러, 결과 화면) */
+(function () {
+  const U = BL.util;
+  const app = document.getElementById('app');
+  const ORDER = ['cognitive', 'eq', 'personality', 'attachment'];
+  const STORE_KEY = 'bl.results';
+  const SESSION_KEY = 'bl.session';
+  const MAX_RESULTS = 40;
+  let session = null;
+  let lastResult = null;   // 저장이 막힌 브라우저에서도 방금 결과를 보여 주기 위한 메모리 사본
+  let cleanup = null;
+  function saveSession() { if (session) U.sstore.set(SESSION_KEY, session); }
+  const TIME_KEY = 'bl.timeFactor';   // 1 표준 · 1.5 여유 · 0 무제한
+  function getTimeFactor() { const v = U.store.get(TIME_KEY, 1); return v === 0 || v === 1.5 ? v : 1; }
+  function setTimeFactor(v) { U.store.set(TIME_KEY, v); }
+
+  function setScreen(html, mount) {
+    if (cleanup) { try { cleanup(); } catch (e) { } cleanup = null; }
+    app.innerHTML = html;
+    window.scrollTo(0, 0);
+    if (mount) { const c = mount(); if (typeof c === 'function') cleanup = c; }
+  }
+  function go(hash) { location.hash = hash; }
+  function results() { return U.store.get(STORE_KEY, []); }
+
+  /* ---------- 라우팅 ---------- */
+  function route() {
+    const p = (location.hash || '#/').replace(/^#\/?/, '').split('/').filter(Boolean);
+    const a = p[0], b = p[1], c = p[2];
+    if (!a) return renderHome();
+    if (a === 'test' && BL.tests[b]) return renderIntro(b);
+    if (a === 'run' && BL.tests[b]) return renderRun(b);
+    if (a === 'result' && BL.tests[b]) return renderResult(b, c);
+    if (a === 'preview' && BL.tests[b]) return renderPreview(b, c);
+    if (a === 'profile' && BL.tests[b] && BL.tests[b].merge) return renderProfile(b);
+    if (a === 'history') return renderHistory();
+    if (a === 'about') return renderAbout();
+    go('#/');
+  }
+
+  /* ---------- 홈 ---------- */
+  function testCard(id) {
+    const t = BL.tests[id];
+    return '<a class="test-card" href="#/test/' + id + '">' +
+      '<div class="test-card-top"><span class="mono num">' + U.pad2(t.num) + '</span><span class="tag tag-' + t.kind + '">' + U.esc(t.kindLabel) + '</span></div>' +
+      '<h2>' + U.esc(t.title) + '</h2>' +
+      '<p>' + U.esc(t.subtitle) + '</p>' +
+      '<div class="test-card-meta mono">' + U.esc(t.duration) + ' · ' + U.esc(t.length) + '</div>' +
+      '</a>';
+  }
+  function rowHtml(r, idx) {
+    const t = BL.tests[r.testId];
+    if (!t) return '';
+    return '<a class="row" href="#/result/' + t.id + '/' + idx + '"><span class="row-title">' + U.esc(t.title) + (r.modeLabel ? ' · ' + U.esc(r.modeLabel) : '') + '</span><span class="row-sub">' + U.esc(r.headline) + (r.label ? ' · ' + U.esc(r.label) : '') + '</span><span class="row-date mono">' + U.fmtDate(r.at) + '</span></a>';
+  }
+  function renderHome() {
+    const all = results();
+    const recent = all.map(function (r, i) { return { r: r, i: i }; }).slice(-3).reverse();
+    const recentHtml = recent.length ? '<section class="block"><div class="block-head"><h3>최근 기록</h3><a href="#/history" class="link">전체 보기</a></div>' +
+      recent.map(function (x) { return rowHtml(x.r, x.i); }).join('') + '</section>' : '';
+    const cog = BL.tests.cognitive && BL.tests.cognitive.merge ? BL.tests.cognitive.merge(all) : null;
+    const profileHtml = cog ? '<a class="profile-card" href="#/profile/cognitive"><span class="eyebrow mono">인지 종합 프로필</span><span class="profile-main">' + U.esc(cog.headline) + '</span><span class="muted small">' + U.esc(cog.label) + ' · ' + cog.coverage.done + '/' + cog.coverage.total + ' 과제 반영</span></a>' : '';
+    setScreen(
+      '<div class="wrap">' +
+      '<section class="hero">' +
+      '<p class="eyebrow mono">LAB NOTE · 자기평가 실험실</p>' +
+      '<h1>나를 측정하는<br>네 가지 실험</h1>' +
+      '<p class="lead">인지 능력부터 애착 유형까지. 문항은 직접 만들었고, 결과는 당신의 브라우저에만 남습니다.</p>' +
+      '</section>' +
+      '<section class="grid">' + ORDER.map(testCard).join('') + '</section>' +
+      profileHtml +
+      recentHtml +
+      '</div>'
+    );
+  }
+
+  /* ---------- 소개 ---------- */
+  function taskGridHtml(t) {
+    if (!t.tasks) return '';
+    const merged = t.merge ? t.merge(results()) : null;
+    const done = merged && merged.tasks ? merged.tasks : {};
+    const groups = {};
+    t.tasks.forEach(function (k) { (groups[k.domainLabel] = groups[k.domainLabel] || []).push(k); });
+    const doneCount = Object.keys(done).length;
+    return '<div class="task-head"><p class="modes-label">과제별로 따로 풀기</p>' +
+      (merged ? '<a class="link" href="#/profile/' + t.id + '">종합 프로필 보기 (' + doneCount + '/' + t.tasks.length + ')</a>' : '<span class="muted small">따로 푼 결과는 종합 프로필에 합쳐집니다</span>') + '</div>' +
+      Object.keys(groups).map(function (g) {
+        return '<div class="task-group"><span class="task-group-label mono">' + U.esc(g) + '</span><div class="task-chips">' +
+          groups[g].map(function (k) {
+            const d = done[k.key];
+            return '<button class="task-chip' + (d ? ' done' : '') + '" data-mode="task:' + k.key + '"><span>' + U.esc(k.label) + '</span><span class="mono">' + (d ? 'IQ ' + Math.round(U.clamp(100 + 15 * d.z, 55, 145)) : '약 ' + k.minutes + '분') + '</span></button>';
+          }).join('') + '</div></div>';
+      }).join('');
+  }
+  function renderIntro(id) {
+    const t = BL.tests[id];
+    const modes = t.modes;
+    const savedSession = U.sstore.get(SESSION_KEY, null);
+    const canResume = savedSession && savedSession.id === id && Array.isArray(savedSession.items) && savedSession.index < savedSession.items.length;
+    const resumeHtml = canResume
+      ? '<div class="resume"><div><strong>진행 중인 검사가 있습니다</strong><span class="muted small">' + savedSession.items.slice(0, savedSession.index).filter(function (x) { return x.scored; }).length + ' / ' + savedSession.items.filter(function (x) { return x.scored; }).length + ' 문항 완료</span></div><div class="resume-btns"><a class="btn btn-primary" href="#/run/' + id + '">이어서 하기</a><button class="btn" id="discard">새로 시작</button></div></div>'
+      : '';
+    const tf = getTimeFactor();
+    const timeHtml = t.timed
+      ? '<div class="time-set"><span class="modes-label">제한 시간</span><div class="seg">' + [[1, '표준'], [1.5, '여유 ×1.5'], [0, '무제한']].map(function (o) { return '<button class="seg-btn' + (tf === o[0] ? ' on' : '') + '" data-tf="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div><span class="muted small">여유·무제한으로 풀면 추정 IQ가 조금 높게 나올 수 있다고 결과에 표시됩니다.</span></div>'
+      : '';
+    const startHtml = modes
+      ? '<p class="modes-label">한 번에 풀기</p><div class="modes">' + modes.map(function (m) {
+        return '<button class="mode" data-mode="' + m.id + '"><span class="mode-title">' + U.esc(m.label) + '</span><span class="mode-desc">' + U.esc(m.desc) + '</span><span class="mode-meta mono">' + U.esc(m.duration) + ' · ' + U.esc(m.length) + '</span></button>';
+      }).join('') + '</div>' + taskGridHtml(t)
+      : '<button class="btn btn-primary btn-block" id="start">시작하기</button>';
+    setScreen(
+      '<div class="wrap">' +
+      '<a class="back" href="#/">← 실험 목록</a>' +
+      '<p class="eyebrow mono">EXPERIMENT ' + U.pad2(t.num) + ' · ' + U.esc(t.kindLabel) + '</p>' +
+      '<h1 class="title">' + U.esc(t.title) + '</h1>' +
+      '<p class="lead">' + U.esc(t.subtitle) + '</p>' +
+      '<ul class="intro-list">' + t.intro.map(function (s) { return '<li>' + U.esc(s) + '</li>'; }).join('') + '</ul>' +
+      '<div class="spec"><div><span class="mono">소요 시간</span>' + U.esc(t.duration) + '</div><div><span class="mono">구성</span>' + U.esc(t.length) + '</div><div><span class="mono">저장</span>이 브라우저</div></div>' +
+      resumeHtml + timeHtml + startHtml +
+      '<p class="notice">참고용 자기평가입니다. 전문가의 심리검사나 의학적 진단을 대체하지 않습니다.</p>' +
+      '</div>',
+      function () {
+        const start = function (mode) {
+          const merged = t.merge ? t.merge(results()) : null;
+          const practiced = merged && merged.tasks ? Object.keys(merged.tasks) : [];
+          session = { id: id, mode: mode, items: t.build(mode, { practiced: practiced }), index: 0, answers: [], times: [], startedAt: Date.now(), shownAt: Date.now(), timeFactor: getTimeFactor() };
+          saveSession();
+          go('#/run/' + id);
+        };
+        const discard = document.getElementById('discard');
+        if (discard) discard.addEventListener('click', function () { U.sstore.remove(SESSION_KEY); session = null; renderIntro(id); });
+        document.querySelectorAll('.seg-btn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            setTimeFactor(Number(b.getAttribute('data-tf')));
+            document.querySelectorAll('.seg-btn').forEach(function (x) { x.classList.toggle('on', x === b); });
+          });
+        });
+        const btn = document.getElementById('start');
+        if (btn) btn.addEventListener('click', function () { start(undefined); });
+        document.querySelectorAll('.mode, .task-chip').forEach(function (b) { b.addEventListener('click', function () { start(b.getAttribute('data-mode')); }); });
+      }
+    );
+  }
+
+  /* ---------- 진행 ---------- */
+  function renderRun(id) {
+    const t = BL.tests[id];
+    if (!session || session.id !== id) {
+      // 새로고침이나 탭 복원 뒤에는 진행 중이던 검사를 이어 간다
+      const saved = U.sstore.get(SESSION_KEY, null);
+      if (saved && saved.id === id && Array.isArray(saved.items)) session = saved;
+      else { go('#/test/' + id); return; }
+    }
+    const it = session.items[session.index];
+    if (!it) { finish(); return; }
+    const scoredTotal = session.items.filter(function (x) { return x.scored; }).length;
+    const scoredDone = session.items.slice(0, session.index).filter(function (x) { return x.scored; }).length;
+    const pct = Math.round(scoredDone / scoredTotal * 100);
+    const chrome = '<div class="run-head"><a class="run-title" href="#/test/' + id + '">' + U.esc(t.title) + '</a>' +
+      '<span class="run-count mono">' + (scoredDone + (it.scored ? 1 : 0)) + ' / ' + scoredTotal + '</span></div>' +
+      '<div class="progress"><div class="progress-bar" style="width:' + pct + '%"></div></div>';
+    setScreen('<div class="wrap run">' + chrome + '<div id="item" class="item"></div></div>', function () {
+      session.shownAt = Date.now();
+      return RENDER[it.type](it, document.getElementById('item'), function (answer) {
+        session.answers[session.index] = answer;
+        session.times[session.index] = Date.now() - session.shownAt;
+        session.index += 1;
+        saveSession();
+        renderRun(id);
+      }, { timeFactor: session.timeFactor });
+    });
+  }
+
+  function finish() {
+    const t = BL.tests[session.id];
+    const result = t.score(session.answers, session.items, { times: session.times, mode: session.mode });
+    if (t.timed && typeof session.timeFactor === 'number' && session.timeFactor !== 1) {
+      result.timeFactor = session.timeFactor;
+      result.modeLabel = (result.modeLabel || '') + (session.timeFactor === 0 ? ' · 시간 무제한' : ' · 시간 여유 ×' + session.timeFactor);
+      (result.sections = result.sections || []).push({ title: '시간 설정', body: session.timeFactor === 0
+        ? '제한 시간 없이 풀었습니다. 기준값은 표준 시간 기준이라 추정 IQ가 실제보다 높게 나올 수 있습니다.'
+        : '제한 시간을 표준의 ' + session.timeFactor + '배로 두고 풀었습니다. 기준값은 표준 시간 기준이라 추정 IQ가 조금 높게 나올 수 있습니다.' });
+    }
+    result.testId = session.id;
+    result.mode = session.mode;
+    result.at = Date.now();
+    result.elapsed = Date.now() - session.startedAt;
+    let all = results();
+    all.push(result);
+    if (all.length > MAX_RESULTS) all = all.slice(all.length - MAX_RESULTS);
+    const saved = U.store.set(STORE_KEY, all);
+    lastResult = result;
+    session = null;
+    U.sstore.remove(SESSION_KEY);
+    go('#/result/' + t.id + '/' + (saved ? all.length - 1 : 'last'));
+  }
+
+  /* ---------- 문항 렌더러 ---------- */
+  function introCard(el, it, onStart, extra) {
+    el.innerHTML = '<div class="section-card"><p class="eyebrow mono">TASK</p><h2>' + U.esc(it.title) + '</h2><p>' + U.esc(it.desc) + '</p>' +
+      (extra ? '<p class="muted small">' + U.esc(extra) + '</p>' : '') +
+      '<button class="btn btn-primary btn-block" id="go">시작</button></div>';
+    el.querySelector('#go').addEventListener('click', onStart);
+  }
+
+  const RENDER = {
+    section: function (it, el, done) {
+      el.innerHTML = '<div class="section-card' + (it.sub ? ' section-sub' : '') + '">' +
+        '<p class="eyebrow mono">' + (it.sub ? 'TASK' : 'PART ' + it.num) + '</p>' +
+        '<h2>' + U.esc(it.title) + '</h2>' +
+        '<p>' + U.esc(it.desc) + '</p>' +
+        (it.count ? '<p class="mono muted small">' + U.esc(it.count) + '</p>' : '') +
+        '<button class="btn btn-primary btn-block" id="go">' + (it.sub ? '시작' : '다음') + '</button></div>';
+      el.querySelector('#go').addEventListener('click', function () { done(null); });
+    },
+
+    choice: function (it, el, done, ctx) {
+      let answered = false, gone = false, timer = null, tick = null;
+      const factor = ctx && typeof ctx.timeFactor === 'number' ? ctx.timeFactor : 1;
+      const limit = it.practice || !it.timeLimit || factor === 0 ? 0 : Math.round(it.timeLimit * factor);
+      const opts = it.optionsHtml ? it.optionsHtml : it.options.map(function (o) { return '<span class="opt-text">' + U.esc(o) + '</span>'; });
+      el.innerHTML =
+        (limit ? '<div class="timer-row"><div class="timer"><div class="timer-bar" id="tbar"></div></div><span class="timer-num mono" id="tnum">' + limit + '</span></div>' : '') +
+        (it.practice ? '<div class="practice-tag">연습 문제 · 점수에 들어가지 않습니다</div>' : '') +
+        (it.level ? '<div class="q-meta"><span class="level-dots" aria-hidden="true">' + '●'.repeat(it.level) + '○'.repeat(5 - it.level) + '</span><span class="mono">' + it.level + '단계' + (it.level >= 4 ? ' · 상위 문항' : '') + '</span></div>' : '') +
+        (it.scenario ? '<div class="scenario">' + U.esc(it.scenario) + '</div>' : '') +
+        '<p class="q-prompt">' + U.esc(it.prompt) + '</p>' +
+        (it.promptHtml || '') +
+        '<div class="options cols-' + (it.optionCols || 1) + (it.optionsHtml ? ' options-visual' : '') + '">' +
+        opts.map(function (o, i) { return '<button class="opt" data-i="' + i + '">' + (it.optionsHtml ? o : '<span class="opt-key mono">' + (i + 1) + '</span>' + o) + '</button>'; }).join('') +
+        '</div>';
+      // 연습 문제: 고르면 정답과 규칙을 보여 주고, 버튼을 눌러야 본 문항으로 간다
+      const showPractice = function (i) {
+        const ok = i === it.answer;
+        const box = document.createElement('div');
+        box.className = 'practice-fb ' + (ok ? 'ok' : 'bad');
+        box.innerHTML = '<p class="practice-title">' + (ok ? '정답입니다.' : '아쉽네요. 정답은 ' + (it.answer + 1) + '번입니다.') + '</p>' +
+          (it.optionsHtml ? '<div class="rv-opt">' + it.optionsHtml[it.answer] + '</div>' : '') +
+          '<p class="practice-explain">' + U.esc(it.explain || '') + '</p>' +
+          '<button class="btn btn-primary btn-block" id="pnext">본 문항 시작</button>';
+        el.appendChild(box);
+        el.querySelectorAll('.opt').forEach(function (b, k) { b.disabled = true; if (k === it.answer) b.classList.add('correct'); });
+        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        el.querySelector('#pnext').addEventListener('click', function () { if (!gone) done(null); });
+      };
+      // 누르는 순간 타이머를 멈춘다. 마지막 순간에 누른 답이 시간 초과로 처리되지 않도록.
+      const pick = function (i) {
+        if (answered || gone) return;
+        answered = true;
+        if (timer) clearTimeout(timer);
+        if (tick) clearInterval(tick);
+        const b = el.querySelector('.opt[data-i="' + i + '"]');
+        if (b) b.classList.add('selected');
+        if (it.practice) { showPractice(i); return; }
+        setTimeout(function () { if (!gone) done(i); }, 180);
+      };
+      el.querySelectorAll('.opt').forEach(function (b) {
+        b.addEventListener('click', function () { pick(Number(b.getAttribute('data-i'))); });
+      });
+      const onKey = function (e) {
+        const n = parseInt(e.key, 10);
+        if (n >= 1 && n <= opts.length && !e.ctrlKey && !e.metaKey && !e.altKey) pick(n - 1);
+      };
+      document.addEventListener('keydown', onKey);
+      if (limit) {
+        const bar = el.querySelector('#tbar'), num = el.querySelector('#tnum'), row = el.querySelector('.timer-row');
+        bar.style.width = '100%';
+        bar.getBoundingClientRect();
+        bar.style.transition = 'width ' + limit + 's linear';
+        bar.style.width = '0%';
+        const t0 = Date.now();
+        tick = setInterval(function () {
+          const left = Math.max(0, limit - Math.round((Date.now() - t0) / 1000));
+          num.textContent = left;
+          if (left <= 10) row.classList.add('urgent');
+        }, 250);
+        timer = setTimeout(function () { if (answered || gone) return; answered = true; if (tick) clearInterval(tick); done(null); }, limit * 1000);
+      }
+      return function () { gone = true; if (timer) clearTimeout(timer); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); };
+    },
+
+    likert: function (it, el, done) {
+      const labels = it.labels || ['전혀 아니다', '아니다', '보통이다', '그렇다', '매우 그렇다'];
+      let finished = false;
+      el.innerHTML = '<p class="q-prompt q-likert">' + U.esc(it.text) + '</p>' +
+        '<div class="likert">' + labels.map(function (l, i) {
+          return '<button class="lk lk-' + (i + 1) + '" data-v="' + (i + 1) + '"><span class="lk-dot"></span><span class="lk-label">' + U.esc(l) + '</span></button>';
+        }).join('') + '</div>';
+      let gone = false;
+      const pick = function (v) {
+        if (finished || gone) return;
+        finished = true;
+        const b = el.querySelector('.lk[data-v="' + v + '"]');
+        if (b) b.classList.add('selected');
+        setTimeout(function () { if (!gone) done(v); }, 150);
+      };
+      el.querySelectorAll('.lk').forEach(function (b) {
+        b.addEventListener('click', function () { pick(Number(b.getAttribute('data-v'))); });
+      });
+      const onKey = function (e) { const n = parseInt(e.key, 10); if (n >= 1 && n <= 5) pick(n); };
+      document.addEventListener('keydown', onKey);
+      return function () { gone = true; document.removeEventListener('keydown', onKey); };
+    },
+
+    digitspan: function (it, el, done) {
+      let timers = [];
+      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      let len = it.start, fails = 0, best = it.start - 1, finished = false;
+      function genDigits(n) {
+        const d = [];
+        while (d.length < n) { const x = Math.floor(Math.random() * 10); if (d.length && d[d.length - 1] === x) continue; d.push(x); }
+        return d;
+      }
+      function trial() {
+        const digits = genDigits(len);
+        el.innerHTML = '<div class="span-stage"><p class="mono muted">' + len + '자리 · ' + (it.mode === 'backward' ? '거꾸로' : '순서대로') + '</p><div class="span-digit mono" id="digit">&nbsp;</div><p class="muted small">숫자를 잘 보세요</p></div>';
+        const box = el.querySelector('#digit');
+        digits.forEach(function (d, i) {
+          T(function () { box.textContent = String(d); box.classList.add('on'); }, 500 + i * 1000);
+          T(function () { box.textContent = ' '; box.classList.remove('on'); }, 500 + i * 1000 + 750);
+        });
+        T(function () { ask(digits); }, 500 + digits.length * 1000 + 150);
+      }
+      function ask(digits) {
+        const expect = (it.mode === 'backward' ? digits.slice().reverse() : digits).join('');
+        el.innerHTML = '<div class="span-stage"><p class="q-prompt">' + (it.mode === 'backward' ? '거꾸로 뒤집어' : '보인 순서대로') + ' 입력하세요</p>' +
+          '<input id="inp" class="span-input mono" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="' + len + '" aria-label="숫자 입력">' +
+          '<button class="btn btn-primary btn-block" id="ok">확인</button></div>';
+        const inp = el.querySelector('#inp');
+        setTimeout(function () { inp.focus(); }, 50);
+        let submitted = false;
+        const submit = function () {
+          const v = inp.value.replace(/\D/g, '');
+          if (!v || submitted) return;
+          submitted = true;
+          const ok = v === expect;
+          el.innerHTML = '<div class="span-stage"><p class="span-fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '정답' : '오답') + '</p>' +
+            (ok ? '' : '<p class="mono muted">정답은 ' + expect.split('').join(' ') + '</p>') + '</div>';
+          if (ok) { best = len; fails = 0; len += 1; } else { fails += 1; }
+          if (len > it.max || fails >= 2) T(end, 1000); else T(trial, 1000);
+        };
+        el.querySelector('#ok').addEventListener('click', submit);
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+      }
+      function end() { if (finished) return; finished = true; done(best); }
+      introCard(el, it, trial, it.start + '자리부터 시작해 맞힐 때마다 한 자리씩 늘어납니다. 최대 ' + it.max + '자리.');
+      return function () { timers.forEach(clearTimeout); };
+    },
+
+    gridspan: function (it, el, done) {
+      let timers = [];
+      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      let len = it.start, fails = 0, best = it.start - 1, finished = false;
+      function gridHtml(cls) {
+        let h = '<div class="gspan ' + cls + '">';
+        for (let i = 0; i < 9; i++) h += '<button class="gcell" data-i="' + i + '" aria-label="칸 ' + (i + 1) + '"></button>';
+        return h + '</div>';
+      }
+      function trial() {
+        const seq = [];
+        while (seq.length < len) { const x = Math.floor(Math.random() * 9); if (seq.length && seq[seq.length - 1] === x) continue; seq.push(x); }
+        el.innerHTML = '<div class="span-stage"><p class="mono muted">' + len + '칸 · 잘 보세요</p>' + gridHtml('show') + '</div>';
+        const cells = el.querySelectorAll('.gcell');
+        seq.forEach(function (c, i) {
+          T(function () { cells[c].classList.add('on'); }, 500 + i * 900);
+          T(function () { cells[c].classList.remove('on'); }, 500 + i * 900 + 600);
+        });
+        T(function () { ask(seq); }, 500 + seq.length * 900 + 200);
+      }
+      function ask(seq) {
+        el.innerHTML = '<div class="span-stage"><p class="q-prompt">켜진 순서대로 탭하세요</p>' + gridHtml('input') + '<p class="mono muted" id="cnt">0 / ' + len + '</p></div>';
+        const taps = [];
+        el.querySelectorAll('.gcell').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if (taps.length >= len) return;
+            taps.push(Number(b.getAttribute('data-i')));
+            b.classList.add('tap');
+            setTimeout(function () { b.classList.remove('tap'); }, 250);
+            el.querySelector('#cnt').textContent = taps.length + ' / ' + len;
+            if (taps.length === len) T(function () { judge(seq, taps); }, 250);
+          });
+        });
+      }
+      function judge(seq, taps) {
+        const ok = seq.every(function (v, i) { return v === taps[i]; });
+        el.innerHTML = '<div class="span-stage"><p class="span-fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '정답' : '오답') + '</p></div>';
+        if (ok) { best = len; fails = 0; len += 1; } else { fails += 1; }
+        if (len > it.max || fails >= 2) T(end, 900); else T(trial, 900);
+      }
+      function end() { if (finished) return; finished = true; done(best); }
+      introCard(el, it, trial, it.start + '칸부터 시작해 맞힐 때마다 한 칸씩 늘어납니다. 최대 ' + it.max + '칸.');
+      return function () { timers.forEach(clearTimeout); };
+    },
+
+    reaction: function (it, el, done) {
+      let timers = [], times = [], state = 'idle', t0 = 0, finished = false;
+      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      function pad() { return el.querySelector('#pad'); }
+      function draw(cls, big, small) {
+        el.innerHTML = '<div class="rt-wrap"><p class="mono muted">' + times.length + ' / ' + it.trials + '</p>' +
+          '<button class="rt-pad ' + cls + '" id="pad"><span class="rt-big">' + big + '</span><span class="rt-small">' + (small || '') + '</span></button></div>';
+        pad().addEventListener('pointerdown', onTap);
+      }
+      function arm() {
+        state = 'wait';
+        draw('wait', '기다리세요', '초록색이 되면 탭');
+        T(function () {
+          if (state !== 'wait') return;
+          state = 'go';
+          const p = pad();
+          p.className = 'rt-pad go';
+          p.querySelector('.rt-big').textContent = '지금!';
+          p.querySelector('.rt-small').textContent = '';
+          t0 = performance.now();
+        }, 1500 + Math.random() * 2500);
+      }
+      function onTap(e) {
+        e.preventDefault();
+        if (finished) return;
+        if (state === 'idle' || state === 'shown' || state === 'early') { arm(); return; }
+        if (state === 'wait') {
+          state = 'early'; timers.forEach(clearTimeout); timers = [];
+          draw('early', '너무 빨라요', '탭해서 다시');
+          return;
+        }
+        if (state === 'go') {
+          const ms = Math.round(performance.now() - t0);
+          if (ms < 100) {
+            // 사람의 반응으로는 불가능한 속도: 예측해서 누른 것이므로 다시 잰다
+            state = 'early'; timers.forEach(clearTimeout); timers = [];
+            draw('early', '너무 빨라요', '초록색을 보고 누르세요 · 탭해서 다시');
+            return;
+          }
+          times.push(ms);
+          state = 'shown';
+          if (times.length >= it.trials) {
+            finished = true;
+            draw('done', ms + ' ms', '측정 완료');
+            T(function () { done(times); }, 800);
+          } else {
+            draw('shown', ms + ' ms', '탭해서 다음');
+          }
+        }
+      }
+      introCard(el, it, function () { draw('idle', '탭하여 시작', '초록색이 되면 최대한 빨리 탭'); }, it.trials + '회 측정합니다. 초록색이 되기 전에 탭하면 다시 합니다.');
+      return function () { timers.forEach(clearTimeout); };
+    },
+
+    choicert: function (it, el, done) {
+      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false;
+      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      function stage() {
+        el.innerHTML = '<div class="crt"><p class="mono muted">' + trials.length + ' / ' + it.trials + '</p>' +
+          '<div class="crt-stim" id="stim"></div>' +
+          '<div class="crt-btns"><button class="btn crt-btn" data-d="L">← 왼쪽</button><button class="btn crt-btn" data-d="R">오른쪽 →</button></div></div>';
+        el.querySelectorAll('.crt-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-d')); }); });
+      }
+      function next() {
+        if (finished) return;
+        if (trials.length >= it.trials) { finished = true; done(trials); return; }
+        state = 'wait';
+        stage();
+        T(function () {
+          if (state !== 'wait') return;
+          cur = Math.random() < 0.5 ? 'L' : 'R';
+          const s = el.querySelector('#stim');
+          s.textContent = cur === 'L' ? '←' : '→';
+          s.className = 'crt-stim';
+          state = 'go';
+          t0 = performance.now();
+        }, 500 + Math.random() * 900);
+      }
+      function answer(d) {
+        if (state !== 'go') return;
+        const rt = Math.round(performance.now() - t0);
+        const s = el.querySelector('#stim');
+        state = 'fb';
+        if (rt < 120) {
+          s.textContent = '너무 빨라요'; s.className = 'crt-stim early';
+          T(next, 600); return;   // 기록하지 않고 같은 번호를 다시 잰다
+        }
+        const ok = d === cur;
+        trials.push({ rt: rt, ok: ok });
+        s.textContent = ok ? '✓' : '✗';
+        s.className = 'crt-stim ' + (ok ? 'ok' : 'bad');
+        T(next, 350);
+      }
+      function onKey(e) { if (e.key === 'ArrowLeft') answer('L'); else if (e.key === 'ArrowRight') answer('R'); }
+      document.addEventListener('keydown', onKey);
+      introCard(el, it, next, it.trials + '회. 화살표가 나타나기 전에 누른 것은 무시됩니다.');
+      return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); };
+    },
+
+    stroop: function (it, el, done) {
+      // 색각 이상이 있어도 구분되는 조합(Okabe-Ito 팔레트). 흰 바탕에서 잘 안 보이는 노랑은 쓰지 않는다.
+      const COLORS = [
+        { k: 'blue', ko: '파랑', hex: '#0072b2' }, { k: 'orange', ko: '주황', hex: '#d55e00' },
+        { k: 'purple', ko: '보라', hex: '#cc79a7' }, { k: 'green', ko: '초록', hex: '#009e73' }
+      ];
+      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false;
+      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      const plan = [];
+      for (let i = 0; i < it.trials; i++) plan.push(i % 2 === 0);
+      for (let i = plan.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = plan[i]; plan[i] = plan[j]; plan[j] = t; }
+      function stage() {
+        el.innerHTML = '<div class="crt"><p class="mono muted">' + trials.length + ' / ' + it.trials + '</p>' +
+          '<p class="muted small">글자의 색을 고르세요</p><div class="stroop-word" id="stim"></div>' +
+          '<div class="stroop-btns">' + COLORS.map(function (c, i) { return '<button class="stroop-btn" data-k="' + c.k + '" style="background:' + c.hex + '" aria-label="' + c.ko + '"><span class="mono">' + (i + 1) + '</span></button>'; }).join('') + '</div></div>';
+        el.querySelectorAll('.stroop-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-k')); }); });
+      }
+      function next() {
+        if (finished) return;
+        if (trials.length >= it.trials) { finished = true; done(trials); return; }
+        state = 'wait';
+        stage();
+        T(function () {
+          if (state !== 'wait') return;
+          const ink = COLORS[Math.floor(Math.random() * 4)];
+          const cong = plan[trials.length];
+          let word = ink;
+          if (!cong) { const others = COLORS.filter(function (c) { return c.k !== ink.k; }); word = others[Math.floor(Math.random() * others.length)]; }
+          cur = { ink: ink.k, cong: cong };
+          const s = el.querySelector('#stim');
+          s.textContent = word.ko;
+          s.style.color = ink.hex;
+          state = 'go';
+          t0 = performance.now();
+        }, 400 + Math.random() * 600);
+      }
+      function answer(k) {
+        if (state !== 'go') return;
+        const rt = Math.round(performance.now() - t0);
+        const s = el.querySelector('#stim');
+        state = 'fb';
+        if (rt < 120) {
+          s.textContent = '너무 빨라요'; s.style.color = 'var(--warn)';
+          T(next, 600); return;
+        }
+        const ok = k === cur.ink;
+        trials.push({ rt: rt, ok: ok, cong: cur.cong });
+        s.textContent = ok ? '✓' : '✗';
+        s.style.color = ok ? 'var(--ok)' : 'var(--bad)';
+        T(next, 350);
+      }
+      function onKey(e) { const i = ['1', '2', '3', '4'].indexOf(e.key); if (i >= 0) answer(COLORS[i].k); }
+      document.addEventListener('keydown', onKey);
+      introCard(el, it, next, it.trials + '회. 절반은 글자와 색이 같고 절반은 다릅니다. PC에서는 1~4 숫자키도 됩니다.');
+      return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); };
+    }
+  };
+
+  /* ---------- 결과 ---------- */
+  function scaleHtml(s, child) {
+    const lo = s.range ? s.range[0] : 0, hi = s.range ? s.range[1] : 100;
+    const pct = U.clamp((s.value - lo) / (hi - lo) * 100, 0, 100);
+    const tick = s.range ? '<div class="bar-tick" style="left:' + ((100 - lo) / (hi - lo) * 100) + '%" title="평균 100"></div>' : '';
+    return '<div class="scale' + (child ? ' scale-child' : '') + (s.range ? ' scale-iq' : '') + '"><div class="scale-head"><span>' + U.esc(s.label) + '</span>' +
+      '<span class="mono">' + s.value + (s.raw ? ' <small>' + U.esc(s.raw) + '</small>' : '') + '</span></div>' +
+      '<div class="bar">' + tick + '<div class="bar-fill" style="width:' + pct + '%"></div></div></div>' +
+      (s.children && s.children.length ? '<div class="scale-children">' + s.children.map(function (c) { return scaleHtml(c, true); }).join('') + '</div>' : '');
+  }
+  function reviewHtml(review) {
+    if (!review || !review.length) return '';
+    return '<details class="review"><summary>틀린 문항 다시 보기 (' + review.length + ')</summary>' + review.map(function (rv) {
+      const chosen = rv.chosenHtml ? '<div class="rv-opt">' + rv.chosenHtml + '</div>' : '<span>' + U.esc(rv.chosen == null ? '시간 초과' : rv.chosen) + '</span>';
+      const answer = rv.answerHtml ? '<div class="rv-opt">' + rv.answerHtml + '</div>' : '<span>' + U.esc(rv.answer) + '</span>';
+      return '<div class="rv"><p class="rv-title mono">' + U.esc(rv.title) + '</p>' +
+        (rv.scenario ? '<p class="rv-prompt muted">' + U.esc(rv.scenario) + '</p>' : '') +
+        (rv.promptHtml ? '<div class="rv-visual">' + rv.promptHtml + '</div>' : '<p class="rv-prompt">' + U.esc(rv.prompt) + '</p>') +
+        '<div class="rv-ans"><div><span class="rv-k">내 답</span>' + chosen + '</div><div><span class="rv-k">정답</span>' + answer + '</div></div>' +
+        '<p class="rv-explain">' + U.esc(rv.explain) + '</p></div>';
+    }).join('') + '</details>';
+  }
+  function resultHtml(t, result, opts) {
+    opts = opts || {};
+    const sections = (result.sections || []).map(function (sec) {
+      return '<section class="rs"><h3>' + U.esc(sec.title) + '</h3><p>' + U.esc(sec.body) + '</p></section>';
+    }).join('');
+    return '<div class="wrap result">' +
+      (opts.banner ? '<div class="banner">' + opts.banner + '</div>' : '') +
+      '<a class="back" href="#/">← 실험 목록</a>' +
+      '<p class="eyebrow mono">RESULT · ' + U.esc(t.title) + (result.modeLabel ? ' · ' + U.esc(result.modeLabel) : '') + (result.at ? ' · ' + U.fmtDate(result.at) : '') + '</p>' +
+      '<h1 class="headline">' + U.esc(result.headline) + '</h1>' +
+      (result.label ? '<span class="badge">' + U.esc(result.label) + '</span>' : '') +
+      '<p class="summary">' + U.esc(result.summary) + '</p>' +
+      (result.plot || '') +
+      '<div class="scales">' + (result.scales || []).map(function (s) { return scaleHtml(s, false); }).join('') + '</div>' +
+      '<div class="actions"><button class="btn" id="save">이미지 저장</button><button class="btn" id="share">공유</button></div>' +
+      '<p class="action-note muted small" id="note"></p>' +
+      (t.merge && !opts.profile ? '<a class="btn btn-block profile-link" href="#/profile/' + t.id + '">종합 프로필 보기 · 따로 푼 과제를 합친 결과</a>' : '') +
+      sections +
+      reviewHtml(result.review) +
+      '<div class="actions"><a class="btn btn-primary" href="#/test/' + t.id + '">' + (opts.profile ? '다른 과제 풀기' : '다시 하기') + '</a><a class="btn" href="#/">다른 실험</a></div>' +
+      '<p class="notice">이 결과는 참고용 자기평가입니다. 전문가의 심리검사나 의학적 진단을 대체하지 않으며, 점수는 응답 당시의 상태와 환경에 따라 달라질 수 있습니다.</p>' +
+      '</div>';
+  }
+  function mountResult(t, result) {
+    const note = document.getElementById('note');
+    document.getElementById('save').addEventListener('click', function () {
+      BL.card.download(result, t).then(function () { note.textContent = '이미지를 저장했습니다.'; });
+    });
+    document.getElementById('share').addEventListener('click', function () {
+      BL.card.share(result, t).then(function (how) {
+        note.textContent = { shared: '공유했습니다.', copied: '공유 기능이 없는 브라우저라 결과 텍스트를 복사했습니다.', cancel: '', none: '이 브라우저에서는 공유를 지원하지 않습니다. 이미지 저장을 이용해 주세요.', error: '공유에 실패했습니다. 이미지 저장을 이용해 주세요.' }[how] || '';
+      });
+    });
+  }
+  function renderResult(id, idx) {
+    const t = BL.tests[id];
+    if (idx === 'last') {
+      if (!lastResult || lastResult.testId !== id) { go('#/test/' + id); return; }
+      setScreen(resultHtml(t, lastResult, { banner: '이 브라우저는 저장이 꺼져 있어 결과가 기록에 남지 않습니다. 창을 닫기 전에 이미지로 저장해 두세요.' }), function () { mountResult(t, lastResult); });
+      return;
+    }
+    const all = results();
+    const result = all[Number(idx)];
+    if (!result || result.testId !== id) { go('#/test/' + id); return; }
+    const view = withComparison(t, result, all.slice(0, Number(idx)));
+    setScreen(resultHtml(t, view), function () { mountResult(t, view); });
+  }
+  /* 같은 검사의 직전 결과와 비교하는 항목을 맨 앞에 덧붙인다 (표시용, 저장하지 않음) */
+  function withComparison(t, result, earlier) {
+    const prev = earlier.filter(function (r) { return r && r.testId === t.id; }).pop();
+    if (!prev) return result;
+    const iq = function (z) { return Math.round(U.clamp(100 + 15 * z, 55, 145)); };
+    const delta = function (a, b) { return a + ' → ' + b + ' (' + (b - a >= 0 ? '+' : '') + (b - a) + ')'; };
+    const lines = [];
+    if (result.tasks && prev.tasks) {
+      const labelOf = function (k) {
+        let l = k;
+        (result.scales || []).forEach(function (s) { if (s.key === k) l = s.label; (s.children || []).forEach(function (c) { if (c.key === k) l = c.label; }); });
+        return l;
+      };
+      Object.keys(result.tasks).forEach(function (k) { if (prev.tasks[k]) lines.push(labelOf(k) + ' ' + delta(iq(prev.tasks[k].z), iq(result.tasks[k].z))); });
+    } else {
+      (result.scales || []).forEach(function (s) {
+        const p = (prev.scales || []).filter(function (x) { return x.key === s.key; })[0];
+        if (p) lines.push(s.label + ' ' + delta(p.value, s.value));
+      });
+    }
+    if (!lines.length) return result;
+    const copy = Object.assign({}, result);
+    copy.sections = [{ title: '지난 결과와 비교 (' + U.fmtDate(prev.at) + ')', body: lines.join(' · ') + '. 같은 과제를 다시 풀면 익숙해져서 오르는 것이 보통이니, 큰 차이만 의미 있게 보세요.' }].concat(result.sections || []);
+    return copy;
+  }
+
+  function renderProfile(id) {
+    const t = BL.tests[id];
+    const merged = t.merge(results());
+    if (!merged) {
+      setScreen('<div class="wrap"><a class="back" href="#/test/' + id + '">← ' + U.esc(t.title) + '</a><p class="eyebrow mono">PROFILE</p><h1 class="title">종합 프로필</h1><p class="empty">아직 합칠 결과가 없습니다. 과제를 하나라도 풀면 여기에 모입니다.</p><a class="btn btn-primary btn-block" href="#/test/' + id + '">과제 고르러 가기</a></div>');
+      return;
+    }
+    merged.testId = id; merged.at = Date.now();
+    setScreen(resultHtml(t, merged, { profile: true, banner: '종합 프로필 · 과제별 가장 최근 결과를 합친 값입니다. 과제를 다시 풀면 자동으로 갱신됩니다.' }), function () { mountResult(t, merged); });
+  }
+
+  function randomAnswer(it, r) {
+    if (it.type === 'choice') return r.int(0, (it.options || it.optionsHtml).length - 1);
+    if (it.type === 'likert') return r.int(1, 5);
+    if (it.type === 'digitspan' || it.type === 'gridspan') return r.int(it.start, it.max);
+    if (it.type === 'reaction') return [0, 1, 2, 3, 4].map(function () { return r.int(190, 380); });
+    if (it.type === 'choicert') { const a = []; for (let i = 0; i < it.trials; i++) a.push({ rt: r.int(320, 650), ok: r.next() < 0.92 }); return a; }
+    if (it.type === 'stroop') { const a = []; for (let i = 0; i < it.trials; i++) { const cong = i % 2 === 0; a.push({ rt: r.int(cong ? 500 : 650, cong ? 850 : 1050), ok: r.next() < 0.9, cong: cong }); } return a; }
+    return null;
+  }
+  function renderPreview(id, mode) {
+    const t = BL.tests[id];
+    const r = U.rng();
+    const items = t.build(mode);
+    const answers = items.map(function (it) { return randomAnswer(it, r); });
+    const result = t.score(answers, items, { times: items.map(function () { return r.int(4000, 20000); }), mode: mode });
+    result.testId = id; result.at = Date.now();
+    setScreen(resultHtml(t, result, { banner: '미리보기 · 무작위 응답으로 만든 결과입니다. 저장되지 않습니다.' }), function () { mountResult(t, result); });
+  }
+
+  /* ---------- 기록 ---------- */
+  function renderHistory() {
+    const all = results();
+    const rows = all.map(function (r, i) { return rowHtml(r, i); }).reverse().join('');
+    setScreen(
+      '<div class="wrap">' +
+      '<a class="back" href="#/">← 실험 목록</a>' +
+      '<p class="eyebrow mono">ARCHIVE</p><h1 class="title">내 기록</h1>' +
+      (rows ? '<div class="rows">' + rows + '</div><button class="btn btn-ghost btn-block" id="clear">기록 모두 삭제</button>' : '<p class="empty">아직 기록이 없습니다. 첫 실험을 시작해 보세요.</p>') +
+      '<p class="notice">기록은 이 브라우저의 저장 공간에만 있습니다. 브라우저 데이터를 지우면 함께 사라집니다.</p>' +
+      '</div>',
+      function () {
+        const btn = document.getElementById('clear');
+        if (btn) btn.addEventListener('click', function () {
+          if (confirm('모든 기록을 삭제할까요? 되돌릴 수 없습니다.')) { U.store.remove(STORE_KEY); renderHistory(); }
+        });
+      }
+    );
+  }
+
+  /* ---------- 안내 ---------- */
+  function renderAbout() {
+    setScreen(
+      '<div class="wrap about">' +
+      '<a class="back" href="#/">← 실험 목록</a>' +
+      '<p class="eyebrow mono">ABOUT</p><h1 class="title">두뇌실험실 안내</h1>' +
+      '<section class="rs"><h3>무엇을 하는 곳인가요</h3><p>인지 능력, 정서 지능, 성격, 연애 애착 유형을 스스로 측정해 보는 자기평가 실험실입니다. 문항은 전부 이 사이트를 위해 직접 만들었거나, 누구나 쓸 수 있도록 공개된 문항을 한국어로 옮긴 것입니다.</p></section>' +
+      '<section class="rs"><h3>각 실험의 근거</h3><p>인지 능력 검사는 유동 추론(도형 행렬·도형 계열·수열), 언어(유추·어휘·논리), 공간(도형 회전), 기억(숫자·위치 폭), 속도·주의(단순 반응·선택 반응·색-단어 간섭)라는, 지능 연구에서 오래 쓰여 온 과제 형식을 따릅니다. 도형과 수열 문항은 규칙 기반으로 매번 새로 생성됩니다.</p><p>정서 지능 검사는 감정의 인식·활용·이해·조절이라는 네 영역 모델을 틀로 삼고, 영역마다 두 가지 세부 능력을 상황 판단 문항으로 측정합니다.</p><p>성격 검사는 빅파이브(다섯 요인) 모델과 요인별 세부 특성을 따르며, 문항은 공개 도메인인 국제 성격 문항 풀(IPIP)을 바탕으로 번역·각색했습니다.</p><p>연애 애착 유형 검사는 성인 애착의 2차원(불안·회피) 모델을 바탕으로, 축마다 세 가지 세부 패턴을 봅니다.</p></section>' +
+      '<section class="rs"><h3>한계</h3><p>모든 결과는 참고용입니다. 표준화 표본으로 검증된 공인 검사가 아니며, 지능지수(IQ)나 임상 진단을 제공하지 않습니다. 점수는 응답 당시의 컨디션, 기기, 환경에 따라 달라집니다. 정신건강과 관련해 걱정되는 점이 있다면 전문가와 상담하세요.</p></section>' +
+      '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않습니다. 응답과 결과는 이 브라우저의 저장 공간에만 보관되고 서버로 전송되지 않습니다. "내 기록"에서 언제든 삭제할 수 있습니다.</p></section>' +
+      '</div>'
+    );
+  }
+
+  window.addEventListener('hashchange', route);
+  route();
+})();
