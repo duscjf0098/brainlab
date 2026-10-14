@@ -56,4 +56,14 @@ node serve.cjs
 
 ## 배포
 
-폴더째로 GitHub Pages, Netlify, Cloudflare Pages 어디에 올려도 된다. 빌드 단계가 없다.
+- 공개 주소: https://duscjf0098.github.io/brainlab/ (GitHub Pages, 저장소 https://github.com/duscjf0098/brainlab, main 브랜치 루트)
+- 업데이트: 파일을 고친 뒤 커밋하고 push 하면 1~2분 안에 반영된다.
+
+```
+git add -A
+git commit -m "변경 내용"
+git push
+```
+
+- 처음 만들 때 쓴 명령: `gh repo create brainlab --public --source . --remote origin --push` 후 `gh api -X POST repos/<id>/brainlab/pages -f build_type=legacy -f "source[branch]=main" -f "source[path]=/"`.
+- 빌드 단계가 없으므로 Netlify, Cloudflare Pages 등 다른 정적 호스팅에도 폴더째 올리면 된다.
