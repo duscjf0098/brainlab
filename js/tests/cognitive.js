@@ -303,9 +303,10 @@
       const s = spec[a];
       varying[a] = fitSet(r, a, s.kind === 'logic' ? logicFoils(r, s.rows[lastRow][0], s.rows[lastRow][1], s.op, s.order, answer[a], 4) : logicFoils(r, s.rows[lastRow][0], s.K, s.op, s.order, answer[a], 4));
     });
-    if (Object.keys(varying).length === 1) { const f = pickFoil(r, answer, Object.keys(varying)); varying[f.attr] = f.vals; }
+    const foilEx = function () { return Object.keys(varying).concat(progAttrs.indexOf('rot') >= 0 || flipAttr ? ['shape'] : []).concat(progAttrs.indexOf('pos') >= 0 ? ['count'] : []); };
+    if (Object.keys(varying).length === 1) { const f = pickFoil(r, answer, foilEx()); varying[f.attr] = f.vals; }
     let dis = balancedDistractors(r, answer, varying, 8);
-    if (!dis) { const f = pickFoil(r, answer, Object.keys(varying)); varying[f.attr] = f.vals; dis = balancedDistractors(r, answer, varying, 8); }
+    if (!dis) { const f = pickFoil(r, answer, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, answer, varying, 8); }
     if (!dis) dis = balancedDistractors(r, answer, varying, 6) || [];
     const o = shuffleOptions(r, [answer].concat(dis), 0);
 
@@ -320,6 +321,165 @@
       promptHtml: '<div class="matrix' + (grid === 2 ? ' matrix2' : '') + '">' + cells.slice(0, cells.length - 1).map(cellSVG).join('') + '<div class="cell cell-missing"><span>?</span></div></div>',
       optionsHtml: o.options.map(cellSVG), answer: o.answer, optionCols: 4,
       explain: explain
+    };
+  }
+
+  /* ===== 1b. 도형 유추 (A → B 와 같은 변환을 C에 적용) ===== */
+  function fit3(a, set) {
+    const out = set.filter(function (x, i, arr) { return x != null && arr.indexOf(x) === i; });
+    if (out.length >= 3) return out.slice(0, 3);
+    const extra = (DOMAIN[a] || PROG_SEQ[a] || []).filter(function (v) { return out.indexOf(v) < 0; });
+    while (out.length < 3 && extra.length) out.push(extra.shift());
+    return out.length >= 3 ? out : out.slice(0, 2);
+  }
+  const TRANS_KO = { fill: '채움', shape: '모양', frame: '틀', size: '크기', count: '개수', rot: '방향', flip: '좌우', marks: '모서리 점', lines: '선' };
+  function makeFigAnalogy(r, level) {
+    const nT = [1, 1, 2, 2, 3][level - 1], nN = [0, 1, 1, 2, 2][level - 1];
+    const pool = level <= 2 ? ['fill', 'shape', 'size', 'count', 'frame'] : ['fill', 'shape', 'frame', 'size', 'count', 'rot', 'flip', 'marks', 'lines'];
+    let trans = r.sample(pool, nT);
+    if (trans.indexOf('rot') >= 0 && trans.indexOf('flip') >= 0) trans = trans.filter(function (t) { return t !== 'flip'; });
+    if (trans.indexOf('shape') >= 0 && (trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0)) trans = trans.filter(function (t) { return t !== 'shape'; });
+    const A = { frame: r.pick(FRAMES), shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.int(1, 3), size: r.pick(['s', 'm']), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
+    if (trans.indexOf('rot') >= 0) A.shape = r.pick(['triangle', 'arrow']);
+    if (trans.indexOf('flip') >= 0) A.shape = 'lshape';
+    if (trans.indexOf('marks') >= 0) A.marks = r.next() < 0.5 ? '' : randomSet(r, 'abcd', 1, 2);
+    if (trans.indexOf('lines') >= 0) A.lines = r.next() < 0.5 ? '' : randomSet(r, 'hvde', 1, 1);
+    const noisePool = ['fill', 'shape', 'frame', 'size', 'count'].filter(function (a) { return trans.indexOf(a) < 0 && !(a === 'shape' && (trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0)); });
+    const noise = r.sample(noisePool, Math.min(nN, noisePool.length));
+    const C = Object.assign({}, A);
+    noise.forEach(function (a) { C[a] = r.pick(DOMAIN[a].filter(function (v) { return v !== A[a] && !(a === 'size' && v === 'l') && !(a === 'count' && v === 4); })); });
+    const T = {};
+    trans.forEach(function (t) {
+      if (t === 'fill' || t === 'shape' || t === 'frame') T[t] = { to: r.pick(DOMAIN[t].filter(function (v) { return v !== A[t] && v !== C[t]; })) };
+      else if (t === 'size' || t === 'count') T[t] = { step: 1 };
+      else if (t === 'rot') T[t] = { step: r.pick([1, -1]) };
+      else if (t === 'flip') T[t] = {};
+      else {
+        const order = t === 'marks' ? 'abcd' : 'hvde';
+        const op = r.pick(['union', 'xor']);
+        let K = order.slice(0, 1);
+        for (let g = 0; g < 40; g++) { const k = randomSet(r, order, 1, 2); if (OPS[op](A[t], k, order) !== A[t] && OPS[op](C[t], k, order) !== C[t]) { K = k; break; } }
+        T[t] = { op: op, K: K, order: order };
+      }
+    });
+    function apply(cell) {
+      const out = Object.assign({}, cell);
+      trans.forEach(function (t) {
+        const p = T[t];
+        if (p.to) out[t] = p.to;
+        else if (t === 'size' || t === 'count' || t === 'rot') out[t] = nextVal(t, cell[t], p.step);
+        else if (t === 'flip') out.flip = cell.flip ? 0 : 1;
+        else out[t] = OPS[p.op](cell[t], p.K, p.order);
+      });
+      return out;
+    }
+    const B = apply(A), D = apply(C);
+    const varying = {};
+    trans.forEach(function (t) {
+      if (t === 'flip') varying.flip = [D.flip, C.flip];
+      else if (t === 'size' || t === 'count' || t === 'rot') varying[t] = fit3(t, [D[t], C[t], nextVal(t, D[t], T[t].step || 1)]);
+      else if (T[t].to) varying[t] = fit3(t, [D[t], C[t], r.pick(DOMAIN[t].filter(function (v) { return v !== D[t] && v !== C[t]; }))]);
+      else varying[t] = logicFoils(r, C[t], T[t].K, T[t].op, T[t].order, D[t], 3);
+    });
+    const foilEx = function () { return Object.keys(varying).concat(trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0 ? ['shape'] : []); };
+    if (Object.keys(varying).length === 1) { const f = pickFoil(r, D, foilEx()); varying[f.attr] = f.vals; }
+    let dis = balancedDistractors(r, D, varying, 6);
+    if (!dis) { const f = pickFoil(r, D, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, D, varying, 6) || []; }
+    const o = shuffleOptions(r, [D].concat(dis), 0);
+    const explain = 'A에서 B로: ' + trans.map(function (t) {
+      const p = T[t];
+      if (p.to) return TRANS_KO[t] + '이(가) ' + VAL_KO[t][p.to] + '(으)로 바뀜';
+      if (t === 'size') return '크기가 한 단계 커짐';
+      if (t === 'count') return '개수가 하나 늘어남';
+      if (t === 'rot') return (p.step > 0 ? '시계 방향' : '반시계 방향') + '으로 90° 돎';
+      if (t === 'flip') return '좌우가 뒤집힘';
+      return TRANS_KO[t] + ': ' + OPK_KO[p.op];
+    }).join(', ') + '. 같은 변화를 C에 적용한 것이 정답입니다.' + (noise.length ? ' C는 A와 ' + noise.map(function (a) { return TRANS_KO[a]; }).join('·') + '이(가) 다르지만 변화 규칙은 같습니다.' : '');
+    return {
+      type: 'choice', part: 'figAnalogy', scored: true, level: level, timeLimit: level >= 4 ? 60 : 45,
+      prompt: 'A가 B로 바뀐 것과 같은 방식으로 C를 바꾸면?',
+      promptHtml: '<div class="analogy"><div class="an-pair"><span class="an-label mono">A</span>' + cellSVG(A) + '<span class="an-sep">→</span><span class="an-label mono">B</span>' + cellSVG(B) + '</div><div class="an-pair"><span class="an-label mono">C</span>' + cellSVG(C) + '<span class="an-sep">→</span><span class="an-label mono">?</span><div class="cell cell-missing"><span>?</span></div></div></div>',
+      optionsHtml: o.options.map(cellSVG), answer: o.answer, optionCols: 3,
+      explain: explain
+    };
+  }
+
+  /* ===== 1c. 저울 추론 (양적 추론) ===== */
+  const W_SHAPES = ['circle', 'square', 'triangle'];
+  function bagWeight(bag, w) { return bag.reduce(function (s, k) { return s + w[k]; }, 0); }
+  function bagKey(bag) { return bag.slice().sort().join(','); }
+  function bagItems(bag, cx, cy, r) {
+    const n = bag.length, gap = r * 2.4;
+    return bag.map(function (k, i) { return shapeEl(k, cx + (i - (n - 1) / 2) * gap, cy, r, 'fill="currentColor" stroke="currentColor" stroke-width="1"', 0, 0); }).join('');
+  }
+  function scaleSVG(left, right) {
+    const pan = function (bag, x) {
+      return '<line x1="' + x + '" y1="36" x2="' + x + '" y2="62" stroke="currentColor" stroke-width="2"/>' +
+        '<path d="M' + (x - 40) + ',62 Q' + x + ',84 ' + (x + 40) + ',62" fill="none" stroke="currentColor" stroke-width="2.5"/>' +
+        (bag === null ? '<text x="' + x + '" y="56" text-anchor="middle" font-size="22" font-weight="800" fill="var(--accent)">?</text>' : bagItems(bag, x, 50, 6.5));
+    };
+    return '<svg class="scale" viewBox="0 0 260 96" aria-hidden="true">' +
+      '<line x1="40" y1="36" x2="220" y2="36" stroke="currentColor" stroke-width="3"/>' +
+      '<polygon points="130,36 118,90 142,90" fill="none" stroke="currentColor" stroke-width="2.5"/>' +
+      '<line x1="100" y1="90" x2="160" y2="90" stroke="currentColor" stroke-width="2.5"/>' +
+      pan(left, 60) + pan(right, 200) + '</svg>';
+  }
+  function panSVG(bag) {
+    return '<svg class="cell pan-opt" viewBox="0 0 120 56" aria-hidden="true">' + bagItems(bag, 60, 26, 6.5) +
+      '<path d="M22,40 Q60,60 98,40" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>';
+  }
+  function bagsOfWeight(target, shapes, w, maxItems) {
+    const out = [];
+    const rec = function (i, bag, sum) {
+      if (sum > target || bag.length > maxItems) return;
+      if (i === shapes.length) { if (sum === target && bag.length) out.push(bag.slice()); return; }
+      for (let c = 0; c <= maxItems; c++) { for (let k = 0; k < c; k++) bag.push(shapes[i]); rec(i + 1, bag, sum + c * w[shapes[i]]); for (let k = 0; k < c; k++) bag.pop(); }
+    };
+    rec(0, [], 0);
+    return out;
+  }
+  function makeWeights(r, level) {
+    const nShapes = level <= 2 ? 2 : 3;
+    const shapes = r.sample(W_SHAPES, nShapes);
+    const w = {};
+    w[shapes[0]] = 1;
+    const others = r.sample(level >= 5 ? [2, 3, 4, 5] : level >= 3 ? [2, 3, 4] : [2, 3], nShapes - 1);
+    shapes.slice(1).forEach(function (s, i) { w[s] = others[i]; });
+    const givens = [];
+    shapes.slice(1).forEach(function (s, i) {
+      const k = level >= 4 ? r.int(1, 2) : 1;
+      const left = []; for (let j = 0; j < k; j++) left.push(s);
+      const allowed = level >= 3 && i > 0 ? shapes.slice(0, i + 1) : [shapes[0]];
+      const cands = bagsOfWeight(bagWeight(left, w), allowed, w, 5).filter(function (b) { return bagKey(b) !== bagKey(left); });
+      const right = cands.length ? r.pick(cands) : [shapes[0]];
+      givens.push([left, right]);
+    });
+    // 질문: 왼쪽 무게를 보기 중에서 찾기
+    let qLeft, cands;
+    for (let g = 0; g < 60; g++) {
+      const n = level <= 2 ? r.int(2, 3) : r.int(2, 4);
+      qLeft = []; for (let j = 0; j < n; j++) qLeft.push(r.pick(shapes));
+      if (level >= 3 && !qLeft.some(function (s) { return s === shapes[shapes.length - 1]; })) continue;
+      const t = bagWeight(qLeft, w);
+      const optShapes = level <= 2 ? [shapes[0]] : shapes;
+      const answerBags = bagsOfWeight(t, optShapes, w, 7).filter(function (b) { return bagKey(b) !== bagKey(qLeft); });
+      if (!answerBags.length) continue;
+      const offsets = r.pick([[-2, -1, 1], [-1, 1, 2], [-3, -1, 1], [-1, 1, 3], [-2, 1, 2]]);
+      const dist = [];
+      offsets.forEach(function (d) { const bs = bagsOfWeight(t + d, optShapes, w, 7); if (bs.length) dist.push(r.pick(bs)); });
+      if (dist.length < 3) continue;
+      cands = { t: t, answer: r.pick(answerBags), dist: dist };
+      break;
+    }
+    if (!cands) { qLeft = [shapes[0], shapes[0]]; cands = { t: 2, answer: [shapes[0], shapes[0]], dist: [[shapes[0]], [shapes[0], shapes[0], shapes[0]], [shapes[0], shapes[0], shapes[0], shapes[0]]] }; }
+    const o = shuffleOptions(r, [cands.answer].concat(cands.dist), 0);
+    const names = shapes.map(function (s) { return VAL_KO.shape[s] + '=' + w[s]; }).join(', ');
+    return {
+      type: 'choice', part: 'weights', scored: true, level: level, timeLimit: level >= 4 ? 90 : level === 3 ? 75 : 60,
+      prompt: '위 저울들은 모두 평형입니다. 마지막 저울의 물음표 자리에 올려야 평형이 되는 것은?',
+      promptHtml: '<div class="scales-given">' + givens.map(function (g) { return scaleSVG(g[0], g[1]); }).join('') + scaleSVG(qLeft, null) + '</div>',
+      optionsHtml: o.options.map(panSVG), answer: o.answer, optionCols: 2,
+      explain: '가장 가벼운 ' + VAL_KO.shape[shapes[0]] + '을(를) 1로 두면 ' + names + '입니다. 왼쪽의 무게는 ' + cands.t + '이므로 무게가 ' + cands.t + '인 보기가 정답입니다.'
     };
   }
 
@@ -440,7 +600,26 @@
     { premise: '모든 B는 C다. 어떤 A는 B가 아니다.', options: ['A와 C의 관계는 알 수 없다', '어떤 A는 C가 아니다', '모든 A는 C다', '어떤 A는 C다'], answer: 0, level: 5, explain: 'B가 아닌 A가 C인지 아닌지는 전제에 없습니다. "B가 아니면 C도 아니다"로 읽기 쉬운 함정입니다.' },
     { premise: '진우, 민아, 서준 중 한 명만 거짓말을 한다. 진우: "민아는 거짓말쟁이다." 민아: "서준은 거짓말쟁이다." 서준: "나는 거짓말쟁이가 아니다."', options: ['민아', '진우', '서준', '알 수 없다'], answer: 0, level: 5, explain: '민아가 거짓말쟁이라면 진우의 말은 참, 서준의 말도 참이 되어 한 명만 거짓인 조건에 맞습니다. 다른 경우는 거짓말쟁이가 둘이 됩니다.' }
   ];
+  /* 공통점 찾기: 두 낱말의 본질적 공통점(범주·기능)을 고른다. 보기 길이는 정답과 무관하게 섞었다. */
+  const SIMILAR = [
+    { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 나무에서 자란다', '둘 다 껍질을 벗겨 먹는다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"입니다. 색이나 껍질은 한쪽에만 맞거나 부분적입니다.' },
+    { pair: ['개', '고양이'], options: ['네 발 달린 포유류다', '사람을 보면 짖는다', '주인을 따라다닌다', '주로 밤에 활동한다'], answer: 0, level: 1, explain: '둘 다 포유류입니다. 나머지는 한쪽에만 해당합니다.' },
+    { pair: ['시계', '달력'], options: ['시간을 재는 도구다', '벽에 걸어 둔다', '숫자가 적혀 있다', '매일 아침 확인한다'], answer: 0, level: 2, explain: '둘 다 시간을 측정·표시하는 도구입니다. 숫자가 있다는 것은 겉모습일 뿐입니다.' },
+    { pair: ['연필', '붓'], options: ['그리거나 쓰는 도구다', '나무로 만든 물건이다', '잉크를 묻혀 쓴다', '지우개로 지울 수 있다'], answer: 0, level: 2, explain: '기능(그리기·쓰기)이 본질적 공통점입니다.' },
+    { pair: ['증기', '얼음'], options: ['물의 다른 상태다', '만지면 차갑다', '물보다 가볍다', '하늘 위에 떠 있다'], answer: 0, level: 3, explain: '둘 다 물이 상태만 바뀐 것입니다.' },
+    { pair: ['칭찬', '벌'], options: ['행동을 바꾸는 수단이다', '받으면 기분이 좋다', '아이에게만 쓰는 것이다', '말로만 할 수 있다'], answer: 0, level: 3, explain: '정반대로 보이지만 둘 다 행동을 조절하려는 수단입니다.' },
+    { pair: ['지도', '설명서'], options: ['모르는 것을 안내한다', '종이에 인쇄되어 나온다', '그림과 기호가 들어 있다', '여행을 갈 때 꼭 챙긴다'], answer: 0, level: 4, explain: '둘 다 모르는 것을 찾아가게 돕는 안내 도구입니다.' },
+    { pair: ['뿌리', '기초'], options: ['전체를 떠받치는 바탕이다', '땅속 깊이 묻혀 있다', '눈에 잘 보이지 않는다', '식물에게만 있는 것이다'], answer: 0, level: 4, explain: '보이지 않는 곳에서 전체를 지탱한다는 점이 본질입니다.' },
+    { pair: ['민주주의', '독재'], options: ['사회를 다스리는 방식이다', '국민이 직접 투표한다', '권력이 한 사람에게 있다', '현대에 와서 생긴 제도다'], answer: 0, level: 5, explain: '정반대의 체제지만 둘 다 "통치 방식"이라는 범주에 속합니다.' },
+    { pair: ['희망', '두려움'], options: ['앞일에 대한 감정이다', '마음이 편해지는 감정이다', '주로 밤에 생기는 감정이다', '남에게 숨기는 감정이다'], answer: 0, level: 5, explain: '둘 다 아직 오지 않은 일을 향한 감정입니다.' },
+    { pair: ['소문', '뉴스'], options: ['사람들에게 퍼지는 정보다', '언제나 사실에 근거한다', '신문과 방송에만 실린다', '며칠 지나면 모두 잊힌다'], answer: 0, level: 5, explain: '진위와 경로는 다르지만 둘 다 퍼져 나가는 정보입니다.' }
+  ].map(function (it) { it.prompt = '"' + it.pair[0] + '"와(과) "' + it.pair[1] + '"의 공통점으로 가장 알맞은 것은?'; return it; });
   const QUICK_VERBAL = [0, 3, 6, 8, 10, 11];
+  /* 기호 찾기용 글리프 12종 (세 가지 비대칭 모양 × 네 방향) */
+  function glyphSVG(i) {
+    const kind = ['triangle', 'arrow', 'lshape'][Math.floor(i / 4) % 3], rot = (i % 4) * 90;
+    return '<svg class="glyph" viewBox="0 0 40 40" aria-hidden="true">' + shapeEl(kind, 20, 20, 13, 'fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"', rot, 0) + '</svg>';
+  }
   function choiceItems(r, list, part, timeLimit, cols, withPremise) {
     return list.map(function (v) {
       const o = shuffleOptions(r, v.options, v.answer);
@@ -569,18 +748,23 @@
   ];
   const TASKS = {
     matrix: { label: '도형 행렬', domain: 'fluid', minutes: 9, desc: '격자의 규칙을 찾아 빈칸에 들어갈 도형을 보기 8개 중에서 고릅니다. 한 칸은 틀·안쪽 도형·선·모서리 점으로 이루어지고, 뒤로 갈수록 분배·진행·회전·반전·겹침·빼기 규칙이 겹치며 2×2와 3×3이 섞여 나옵니다.' },
+    figAnalogy: { label: '도형 유추', domain: 'fluid', minutes: 5, desc: 'A가 B로 바뀐 방식을 찾아 C에 똑같이 적용한 결과를 고릅니다. 뒤로 갈수록 바뀌는 요소가 늘고, C는 A와 다른 모양이라 변화 규칙만 뽑아내야 합니다.' },
     series: { label: '도형 계열', domain: 'fluid', minutes: 3, desc: '왼쪽부터 차례로 변해 가는 도형 네 개를 보고 다섯 번째를 고릅니다.' },
     sequence: { label: '수열', domain: 'fluid', minutes: 5, desc: '숫자 다섯 개의 규칙을 찾아 여섯 번째 숫자를 고릅니다. 뒤로 갈수록 두 규칙이 번갈아 적용되거나 소수·제곱 같은 수의 성질이 쓰입니다.' },
+    weights: { label: '저울 추론', domain: 'fluid', minutes: 6, desc: '평형을 이룬 저울들을 보고 도형들의 무게 관계를 알아낸 뒤, 마지막 저울을 평형으로 만드는 보기를 고릅니다. 뒤로 갈수록 도형이 세 종류가 되고 두 저울을 이어서 풀어야 합니다.' },
     analogy: { label: '언어 유추', domain: 'verbal', minutes: 4, desc: '앞 단어 쌍의 관계를 파악해, 같은 관계가 되도록 빈칸에 들어갈 단어를 고릅니다.' },
     vocab: { label: '어휘', domain: 'verbal', minutes: 4, desc: '제시된 낱말과 뜻이 가장 가까운 말, 또는 반대말을 고릅니다. 뒤로 갈수록 드문 낱말이 나옵니다.' },
     logic: { label: '논리 추론', domain: 'verbal', minutes: 6, desc: '문장이 참이라고 할 때 반드시 참인 결론을 고릅니다. 그럴듯한 것이 아니라 "반드시" 참인 것을 찾습니다.' },
+    similar: { label: '공통점 찾기', domain: 'verbal', minutes: 4, desc: '두 낱말이 공통으로 속하는 범주나 기능을 고릅니다. 겉모습이 아니라 본질적인 공통점을 찾아야 합니다.' },
     rotation: { label: '도형 회전', domain: 'spatial', minutes: 3, desc: '위 도형을 돌리기만 해서 만들 수 있는 것을 고릅니다. 거울처럼 뒤집은 것은 정답이 아닙니다.' },
     digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타납니다. 보이는 순서 그대로 입력하세요.' },
     digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '보이는 순서를 거꾸로 뒤집어 입력하세요. 예: 3 7 1 → 1 7 3' },
     grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 차례로 켜집니다. 켜진 순서 그대로 탭하세요.' },
+    lns: { label: '숫자-문자 순서', domain: 'memory', minutes: 3, desc: '숫자와 한글 자음이 섞여 하나씩 나타납니다. 다 본 뒤 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 탭하세요. 예: 7 ㄷ 2 ㄱ → 2 7 ㄱ ㄷ' },
     reaction: { label: '단순 반응', domain: 'speed', minutes: 1, desc: '화면이 초록색으로 바뀌는 순간 최대한 빨리 탭합니다.' },
     choicert: { label: '선택 반응', domain: 'speed', minutes: 1, desc: '화살표가 나타나면 같은 방향의 버튼을 최대한 빨리 누릅니다. PC에서는 방향키도 됩니다.' },
-    stroop: { label: '색-단어 간섭', domain: 'speed', minutes: 1, desc: '글자의 "색"을 고릅니다. 글자가 뜻하는 색 이름은 무시하세요. 예: 파란색으로 쓰인 "주황" → 파랑.' }
+    stroop: { label: '색-단어 간섭', domain: 'speed', minutes: 1, desc: '글자의 "색"을 고릅니다. 글자가 뜻하는 색 이름은 무시하세요. 예: 파란색으로 쓰인 "주황" → 파랑.' },
+    symbol: { label: '기호 찾기', domain: 'speed', minutes: 2, desc: '왼쪽의 기호 두 개 중 하나라도 오른쪽 다섯 개 안에 있으면 "있음", 없으면 "없음"을 60초 동안 최대한 많이, 정확하게 고릅니다.' }
   };
   const TASK_KEYS = Object.keys(TASKS);
   const QUICK = ['matrix', 'sequence', 'analogy', 'rotation', 'digitF', 'reaction'];
@@ -594,10 +778,11 @@
   };
   /* 임시 기준값: prop = 정답률(평균은 LEVEL_P로 계산), span = 폭, rt = 반응 시간(ms, 낮을수록 좋음). 공인 규준이 아니다. */
   const NORMS = {
-    matrix: { kind: 'prop', sd: 0.20 }, series: { kind: 'prop', sd: 0.22 }, sequence: { kind: 'prop', sd: 0.20 },
-    analogy: { kind: 'prop', sd: 0.18 }, vocab: { kind: 'prop', sd: 0.18 }, logic: { kind: 'prop', sd: 0.20 }, rotation: { kind: 'prop', sd: 0.22 },
-    digitF: { kind: 'span', mean: 6.5, sd: 1.2 }, digitB: { kind: 'span', mean: 4.8, sd: 1.2 }, grid: { kind: 'span', mean: 5.5, sd: 1.2 },
-    reaction: { kind: 'rt', mean: 280, sd: 45 }, choicert: { kind: 'rt', mean: 480, sd: 80 }, stroop: { kind: 'rt', mean: 800, sd: 130 }
+    matrix: { kind: 'prop', sd: 0.20 }, figAnalogy: { kind: 'prop', sd: 0.20 }, series: { kind: 'prop', sd: 0.22 }, sequence: { kind: 'prop', sd: 0.20 }, weights: { kind: 'prop', sd: 0.22 },
+    analogy: { kind: 'prop', sd: 0.18 }, vocab: { kind: 'prop', sd: 0.18 }, logic: { kind: 'prop', sd: 0.20 }, similar: { kind: 'prop', sd: 0.18 }, rotation: { kind: 'prop', sd: 0.22 },
+    digitF: { kind: 'span', mean: 6.5, sd: 1.2 }, digitB: { kind: 'span', mean: 4.8, sd: 1.2 }, grid: { kind: 'span', mean: 5.5, sd: 1.2 }, lns: { kind: 'span', mean: 5.0, sd: 1.2 },
+    reaction: { kind: 'rt', mean: 280, sd: 45 }, choicert: { kind: 'rt', mean: 480, sd: 80 }, stroop: { kind: 'rt', mean: 800, sd: 130 },
+    symbol: { kind: 'count', mean: 24, sd: 6 }
   };
   const IQ_RANGE = [55, 145];
   function iqOf(z) { return Math.round(U.clamp(100 + 15 * z, IQ_RANGE[0], IQ_RANGE[1])); }
@@ -615,6 +800,8 @@
   /* 과제별 문항 구성: 쉬운 단계부터 어려운 단계로 */
   const LEVELS = {
     matrix: { full: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6], quick: [1, 2, 3, 4, 5, 6] },
+    figAnalogy: { full: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5] },
+    weights: { full: [1, 2, 2, 3, 3, 4, 4, 5] },
     series: { full: [1, 1, 2, 2, 3, 3] },
     sequence: { full: [1, 2, 2, 3, 3, 4, 4, 5], quick: [1, 2, 3, 4, 5] },
     rotation: { full: [1, 2, 3, 4, 5, 5], quick: [1, 2, 4, 5] }
@@ -622,6 +809,11 @@
   const byLevel = function (list) { return list.slice().sort(function (a, b) { return a.level - b.level; }); };
   const BUILD = {
     matrix: function (r, full) { return (full ? LEVELS.matrix.full : LEVELS.matrix.quick).map(function (l) { return makeMatrix(r, l); }); },
+    figAnalogy: function (r) { return LEVELS.figAnalogy.full.map(function (l) { return makeFigAnalogy(r, l); }); },
+    weights: function (r) { return LEVELS.weights.full.map(function (l) { return makeWeights(r, l); }); },
+    similar: function (r) { return choiceItems(r, byLevel(SIMILAR), 'similar', 35, 1); },
+    lns: function () { return [{ type: 'seqspan', part: 'lns', scored: true, start: 2, max: 8, title: '숫자-문자 순서', desc: TASKS.lns.desc }]; },
+    symbol: function () { return [{ type: 'symsearch', part: 'symbol', scored: true, seconds: 60, title: '기호 찾기', desc: TASKS.symbol.desc }]; },
     series: function (r) { return LEVELS.series.full.map(function (l) { return makeSeries(r, l); }); },
     sequence: function (r, full) { return (full ? LEVELS.sequence.full : LEVELS.sequence.quick).map(function (l) { return makeSequence(r, l); }); },
     analogy: function (r, full) { return choiceItems(r, byLevel(full ? VERBAL : QUICK_VERBAL.map(function (i) { return VERBAL[i]; })), 'analogy', function (l) { return l >= 4 ? 45 : 40; }, 2); },
@@ -637,6 +829,7 @@
   };
   const COUNT_KO = {
     matrix: function (f) { return (f ? 12 : 6) + '문항 · 60~120초 · 1~6단계 · 보기 8개'; }, series: function () { return '6문항 · 40~50초 · 1~3단계'; },
+    figAnalogy: function () { return '10문항 · 45~60초 · 1~5단계'; }, weights: function () { return '8문항 · 60~90초 · 1~5단계'; }, similar: function () { return '11문항 · 35초 · 1~5단계'; },
     sequence: function (f) { return (f ? 8 : 5) + '문항 · 50~60초 · 1~5단계'; }, analogy: function (f) { return (f ? 12 : 6) + '문항 · 40~45초 · 1~5단계'; },
     vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '11문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~50초 · 1~5단계'; }
   };
@@ -644,6 +837,9 @@
   /* 처음 보는 과제 앞에 붙는 연습 문제 (시간 제한 없음, 점수 없음, 풀고 나면 정답과 규칙을 보여 준다) */
   const PRACTICE = {
     matrix: function (r) { return makeMatrix(r, 1); },
+    figAnalogy: function (r) { return makeFigAnalogy(r, 1); },
+    weights: function (r) { return makeWeights(r, 1); },
+    similar: function (r) { return choiceItems(r, [SIMILAR[0]], 'similar', 0, 1)[0]; },
     series: function (r) { return makeSeries(r, 1); },
     sequence: function (r) { return makeSequence(r, 1); },
     rotation: function (r) { return makeRotation(r, 1); },
@@ -687,11 +883,11 @@
       items.push({ type: 'section', num: num, title: d.label, desc: desc, count: use.length + '과제 · ' + use.map(function (k) { return TASKS[k].label; }).join(', ') });
       use.forEach(function (k) { items.push.apply(items, taskItems(r, k, full, wantPractice(k))); });
     };
-    part(1, DOMAINS[0], '도형과 숫자에 숨은 규칙을 찾습니다. 문항마다 제한 시간이 있고, 시간이 끝나면 자동으로 넘어갑니다.', ['matrix', 'series', 'sequence']);
-    part(2, DOMAINS[1], '단어의 관계와 뜻, 문장의 논리를 다룹니다.', ['analogy', 'vocab', 'logic']);
+    part(1, DOMAINS[0], '도형과 숫자에 숨은 규칙을 찾습니다. 문항마다 제한 시간이 있고, 시간이 끝나면 자동으로 넘어갑니다.', ['matrix', 'figAnalogy', 'series', 'sequence', 'weights']);
+    part(2, DOMAINS[1], '단어의 관계와 뜻, 문장의 논리를 다룹니다.', ['analogy', 'vocab', 'logic', 'similar']);
     part(3, DOMAINS[2], '머릿속에서 도형을 돌려 봅니다.', ['rotation']);
-    part(4, DOMAINS[3], '숫자와 위치를 잠시 기억했다가 그대로, 또는 거꾸로 떠올립니다. 틀리면 같은 길이로 한 번 더 기회가 있습니다.', ['digitF', 'digitB', 'grid']);
-    part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응합니다. 조용한 곳에서 화면을 정면으로 보고 진행하세요.', ['reaction', 'choicert', 'stroop']);
+    part(4, DOMAINS[3], '숫자와 위치를 잠시 기억했다가 그대로, 거꾸로, 또는 정렬해서 떠올립니다. 틀리면 같은 길이로 한 번 더 기회가 있습니다.', ['digitF', 'digitB', 'grid', 'lns']);
+    part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응합니다. 조용한 곳에서 화면을 정면으로 보고 진행하세요.', ['reaction', 'choicert', 'stroop', 'symbol']);
     return items;
   }
 
@@ -723,7 +919,13 @@
     if (norm.kind === 'span') {
       const it = rows[0].it;
       const s = typeof rows[0].a === 'number' ? rows[0].a : it.start - 1;
-      return { z: U.clamp((s - norm.mean) / norm.sd, -3, 3), raw: Math.max(s, it.start - 1) + (key === 'grid' ? '칸' : '자리'), detail: '' };
+      return { z: U.clamp((s - norm.mean) / norm.sd, -3, 3), raw: Math.max(s, it.start - 1) + (key === 'grid' ? '칸' : key === 'lns' ? '개' : '자리'), detail: '' };
+    }
+    if (norm.kind === 'count') {
+      const a = rows[0].a && typeof rows[0].a === 'object' ? rows[0].a : { correct: 0, wrong: 0 };
+      const net = Math.max(0, (a.correct || 0) - (a.wrong || 0));
+      const tot = (a.correct || 0) + (a.wrong || 0);
+      return { z: U.clamp((net - norm.mean) / norm.sd, -3, 3), raw: net + '개/60초', detail: tot ? '정답 ' + a.correct + ' · 오답 ' + a.wrong + ' · 정확도 ' + Math.round(a.correct / tot * 100) + '%' : '' };
     }
     const a = Array.isArray(rows[0].a) ? rows[0].a : [];
     if (key === 'reaction') {
@@ -782,7 +984,7 @@
       const sorted = scales.slice().sort(function (a, b) { return b.value - a.value; });
       headline = (opts.merged ? '종합 ' : '') + '추정 IQ ' + iq;
       summary = bandText + ' 가장 강한 영역은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + sorted[sorted.length - 1].label + ' ' + sorted[sorted.length - 1].value + '은 연습 여지가 있습니다.' +
-        (keys.length < TASK_KEYS.length ? ' 13개 과제 중 ' + keys.length + '개를 반영했습니다.' : '');
+        (keys.length < TASK_KEYS.length ? ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했습니다.' : '');
     }
     sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균 100, 표준편차 15인 IQ 척도로 환산한 값이고, "상위 %"는 그 척도에서의 위치입니다. ±' + sem + '은 측정 오차 범위로, 실제 값이 그 안에 있을 확률이 약 68%입니다. 과제를 많이 풀수록 범위가 좁아집니다. 문항은 1~5단계 난이도로 설계되었고, 과제별 "기준 정답률"은 그 설계상 일반 성인이 맞힐 것으로 예상한 비율입니다. 기준값은 아직 실제 응시 자료로 보정되지 않은 추정치라 공인 지능검사의 IQ와 같지 않습니다. 85~115가 평균 범위이며, 같은 과제를 여러 번 하면 익숙해져 점수가 오릅니다.' });
     return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: tasks, z: z };
@@ -820,7 +1022,7 @@
     const missing = TASK_KEYS.filter(function (k) { return !tasks[k]; });
     res.modeLabel = '종합 프로필';
     res.coverage = { done: keys.length, total: TASK_KEYS.length, missing: missing.map(function (k) { return TASKS[k].label; }) };
-    res.sections.unshift({ title: '합친 범위', body: '13개 과제 중 ' + keys.length + '개의 가장 최근 결과를 합쳤습니다.' + (missing.length ? ' 아직 안 한 과제: ' + res.coverage.missing.join(', ') + '.' : ' 모든 과제가 반영되었습니다.') + ' 과제를 다시 풀면 그 과제의 최신 결과로 바뀝니다.' });
+    res.sections.unshift({ title: '합친 범위', body: TASK_KEYS.length + '개 과제 중 ' + keys.length + '개의 가장 최근 결과를 합쳤습니다.' + (missing.length ? ' 아직 안 한 과제: ' + res.coverage.missing.join(', ') + '.' : ' 모든 과제가 반영되었습니다.') + ' 과제를 다시 풀면 그 과제의 최신 결과로 바뀝니다.' });
     return res;
   }
 
@@ -831,13 +1033,14 @@
     kindLabel: '측정',
     title: '인지 능력 검사',
     subtitle: '유동 추론, 언어, 공간, 기억, 속도·주의. 다섯 영역 13개 과제를 한 번에, 또는 하나씩 풀고 IQ 척도로 봅니다.',
-    duration: '과제당 1~7분',
-    length: '13과제',
+    duration: '과제당 1~9분',
+    length: '18과제',
     timed: true,
     modes: [
-      { id: 'quick', label: '빠른 검사', desc: '핵심 과제 6개로 다섯 영역을 한 번씩 훑어봅니다. 문항은 1~5단계에서 하나씩 나옵니다.', duration: '약 12분', length: '6과제' },
-      { id: 'full', label: '정밀 검사', desc: '13개 과제를 모두 풀어 영역마다 두세 가지 방식으로 측정합니다. 쉬운 단계부터 실제 지능검사 상위 문항 수준까지 올라가며, 난이도별 정답률과 틀린 문항 복기까지 보여줍니다.', duration: '약 35분', length: '13과제' }
+      { id: 'quick', label: '빠른 검사', desc: '핵심 과제 6개로 다섯 영역을 한 번씩 훑어봅니다. 문항은 1~6단계에서 하나씩 나옵니다.', duration: '약 12분', length: '6과제' },
+      { id: 'full', label: '정밀 검사', desc: '18개 과제를 모두 풀어 영역마다 세네 가지 방식으로 측정합니다. 쉬운 단계부터 실제 지능검사 상위 문항 수준까지 올라가며, 난이도별 정답률과 틀린 문항 복기까지 보여줍니다. 한 번에 다 하기 힘들면 과제별로 나눠 풀어도 종합 프로필에 합쳐집니다.', duration: '약 50분', length: '18과제' }
     ],
+    glyphSVG: glyphSVG,
     tasks: TASK_KEYS.map(function (k) { return { key: k, label: TASKS[k].label, domain: TASKS[k].domain, domainLabel: DOMAINS.filter(function (d) { return d.key === TASKS[k].domain; })[0].label, minutes: TASKS[k].minutes }; }),
     domains: DOMAINS.map(function (d) { return { key: d.key, label: d.label }; }),
     intro: [

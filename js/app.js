@@ -393,6 +393,102 @@
       return function () { timers.forEach(clearTimeout); };
     },
 
+    seqspan: function (it, el, done) {
+      const LETTERS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ'];
+      let timers = [], len = it.start, fails = 0, best = it.start - 1, finished = false;
+      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      const sampleN = function (arr, n) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a.slice(0, n); };
+      function gen(n) {
+        const nNum = Math.ceil(n / 2), nLet = Math.floor(n / 2);
+        const nums = sampleN([1, 2, 3, 4, 5, 6, 7, 8, 9], nNum).map(String);
+        const lets = sampleN(LETTERS, nLet);
+        const seq = sampleN(nums.concat(lets), n);
+        const target = nums.slice().sort(function (a, b) { return a - b; }).concat(lets.slice().sort(function (a, b) { return LETTERS.indexOf(a) - LETTERS.indexOf(b); }));
+        return { seq: seq, target: target };
+      }
+      function trial() {
+        const g = gen(len);
+        el.innerHTML = '<div class="span-stage"><p class="mono muted">' + len + '개 · 잘 보세요</p><div class="span-digit mono" id="digit">&nbsp;</div><p class="muted small">숫자와 자음이 섞여 나옵니다</p></div>';
+        const box = el.querySelector('#digit');
+        g.seq.forEach(function (d, i) {
+          T(function () { box.textContent = d; box.classList.add('on'); }, 500 + i * 1000);
+          T(function () { box.textContent = ' '; box.classList.remove('on'); }, 500 + i * 1000 + 750);
+        });
+        T(function () { ask(g); }, 500 + g.seq.length * 1000 + 150);
+      }
+      function ask(g) {
+        const btns = sampleN(g.seq, g.seq.length);
+        el.innerHTML = '<div class="span-stage"><p class="q-prompt">숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 탭하세요</p><div class="lns-picked mono" id="picked">&nbsp;</div>' +
+          '<div class="lns-btns">' + btns.map(function (b) { return '<button class="lns-btn mono" data-v="' + b + '">' + b + '</button>'; }).join('') + '</div></div>';
+        const taps = [];
+        el.querySelectorAll('.lns-btn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if (b.disabled) return;
+            b.disabled = true;
+            taps.push(b.getAttribute('data-v'));
+            el.querySelector('#picked').textContent = taps.join(' ');
+            if (taps.length === g.seq.length) T(function () { judge(g, taps); }, 250);
+          });
+        });
+      }
+      function judge(g, taps) {
+        const ok = taps.join('') === g.target.join('');
+        el.innerHTML = '<div class="span-stage"><p class="span-fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '정답' : '오답') + '</p>' + (ok ? '' : '<p class="mono muted">정답 순서: ' + g.target.join(' ') + '</p>') + '</div>';
+        if (ok) { best = len; fails = 0; len += 1; } else { fails += 1; }
+        if (len > it.max || fails >= 2) T(end, 1000); else T(trial, 1000);
+      }
+      function end() { if (finished) return; finished = true; done(best); }
+      introCard(el, it, trial, it.start + '개부터 시작해 맞힐 때마다 하나씩 늘어납니다. 최대 ' + it.max + '개.');
+      return function () { timers.forEach(clearTimeout); };
+    },
+
+    symsearch: function (it, el, done) {
+      const G = BL.tests.cognitive.glyphSVG;
+      let timers = [], correct = 0, wrong = 0, finished = false, cur = null, tick = null, endAt = 0, keyOn = false;
+      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      const sampleN = function (arr, n) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a.slice(0, n); };
+      function next() {
+        if (finished) return;
+        const ids = sampleN([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 7);
+        const targets = ids.slice(0, 2), row = ids.slice(2, 7);
+        const present = Math.random() < 0.5;
+        if (present) row[Math.floor(Math.random() * 5)] = targets[Math.floor(Math.random() * 2)];
+        cur = { present: present };
+        el.querySelector('#ss-t').innerHTML = targets.map(G).join('');
+        el.querySelector('#ss-r').innerHTML = row.map(G).join('');
+      }
+      function answer(yes) {
+        if (finished || !cur) return;
+        if (yes === cur.present) correct++; else wrong++;
+        el.querySelector('#ss-cnt').textContent = (correct + wrong) + '문항 · 정답 ' + correct;
+        next();
+      }
+      function finish() {
+        if (finished) return;
+        finished = true; keyOn = false;
+        el.innerHTML = '<div class="span-stage"><p class="span-fb ok">끝</p><p class="mono muted">정답 ' + correct + ' · 오답 ' + wrong + '</p></div>';
+        T(function () { done({ correct: correct, wrong: wrong }); }, 900);
+      }
+      function start() {
+        el.innerHTML = '<div class="ss"><div class="ss-head mono"><span id="ss-cnt">0문항 · 정답 0</span><span id="ss-time">' + it.seconds + '</span></div>' +
+          '<div class="ss-board"><div class="ss-targets" id="ss-t"></div><div class="ss-div"></div><div class="ss-row" id="ss-r"></div></div>' +
+          '<div class="crt-btns"><button class="btn crt-btn" data-y="1">있음</button><button class="btn crt-btn" data-y="0">없음</button></div>' +
+          '<p class="muted small">왼쪽 두 기호 중 하나라도 오른쪽에 있으면 "있음". PC: ← 있음 · → 없음</p></div>';
+        el.querySelectorAll('.crt-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-y') === '1'); }); });
+        endAt = Date.now() + it.seconds * 1000; keyOn = true;
+        tick = setInterval(function () {
+          const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+          const tEl = el.querySelector('#ss-time'); if (tEl) { tEl.textContent = left; if (left <= 10) tEl.classList.add('urgent'); }
+          if (left <= 0) { clearInterval(tick); finish(); }
+        }, 200);
+        next();
+      }
+      function onKey(e) { if (!keyOn) return; if (e.key === 'ArrowLeft' || e.key === '1') answer(true); else if (e.key === 'ArrowRight' || e.key === '2') answer(false); }
+      document.addEventListener('keydown', onKey);
+      introCard(el, it, start, it.seconds + '초 동안 진행합니다. 빠르기와 정확도를 함께 봅니다.');
+      return function () { timers.forEach(clearTimeout); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); };
+    },
+
     reaction: function (it, el, done) {
       let timers = [], times = [], state = 'idle', t0 = 0, finished = false;
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
@@ -659,7 +755,8 @@
   function randomAnswer(it, r) {
     if (it.type === 'choice') return r.int(0, (it.options || it.optionsHtml).length - 1);
     if (it.type === 'likert') return r.int(1, 5);
-    if (it.type === 'digitspan' || it.type === 'gridspan') return r.int(it.start, it.max);
+    if (it.type === 'digitspan' || it.type === 'gridspan' || it.type === 'seqspan') return r.int(it.start, it.max);
+    if (it.type === 'symsearch') return { correct: r.int(14, 34), wrong: r.int(0, 4) };
     if (it.type === 'reaction') return [0, 1, 2, 3, 4].map(function () { return r.int(190, 380); });
     if (it.type === 'choicert') { const a = []; for (let i = 0; i < it.trials; i++) a.push({ rt: r.int(320, 650), ok: r.next() < 0.92 }); return a; }
     if (it.type === 'stroop') { const a = []; for (let i = 0; i < it.trials; i++) { const cong = i % 2 === 0; a.push({ rt: r.int(cong ? 500 : 650, cong ? 850 : 1050), ok: r.next() < 0.9, cong: cong }); } return a; }

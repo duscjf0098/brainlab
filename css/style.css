@@ -287,6 +287,29 @@ p { margin: 0; }
 /* ---------- 추가 과제 ---------- */
 .options.cols-4 { grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .series { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 18px; }
+.analogy { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.an-pair { display: flex; align-items: center; gap: 6px; }
+.an-pair .cell { width: 30%; max-width: 120px; flex-shrink: 0; }
+.an-label { font-size: 11px; color: var(--muted); width: 14px; text-align: center; }
+.an-sep { font-weight: 800; color: var(--muted); padding: 0 4px; }
+.scales-given { display: grid; gap: 6px; margin-bottom: 16px; }
+.scale { display: block; width: 100%; max-width: 360px; margin: 0 auto; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s); }
+.scales-given .scale:last-child { border-color: var(--accent-line); }
+.options.cols-2.options-visual .opt { aspect-ratio: auto; padding: 6px 10px; }
+.pan-opt { width: 100%; color: var(--ink); background: transparent; border: 0; }
+.glyph { width: 40px; height: 40px; color: var(--ink); }
+.ss { display: flex; flex-direction: column; gap: 12px; }
+.ss-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.ss-head .urgent { color: var(--bad); font-weight: 700; }
+.ss-board { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 10px; min-height: 90px; }
+.ss-targets { display: flex; gap: 4px; }
+.ss-div { width: 2px; align-self: stretch; background: var(--accent); border-radius: 1px; }
+.ss-row { display: flex; gap: 4px; flex: 1; justify-content: space-around; }
+.ss-board .glyph { width: 11vw; max-width: 44px; height: auto; aspect-ratio: 1; }
+.lns-picked { min-height: 28px; font-size: 22px; font-weight: 700; letter-spacing: .2em; color: var(--accent); }
+.lns-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 320px; }
+.lns-btn { width: 56px; height: 56px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--surface); font-size: 22px; font-weight: 700; }
+.lns-btn:disabled { opacity: .3; }
 .poly-prompt { display: flex; justify-content: center; margin-bottom: 18px; }
 .poly-prompt .cell { width: 140px; }
 .cell.poly { color: var(--accent); }
