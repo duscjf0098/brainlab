@@ -223,7 +223,7 @@
       el.innerHTML =
         (limit ? '<div class="timer-row"><div class="timer"><div class="timer-bar" id="tbar"></div></div><span class="timer-num mono" id="tnum">' + limit + '</span></div>' : '') +
         (it.practice ? '<div class="practice-tag">연습 문제 · 점수에 들어가지 않습니다</div>' : '') +
-        (it.level ? '<div class="q-meta"><span class="level-dots" aria-hidden="true">' + '●'.repeat(it.level) + '○'.repeat(5 - it.level) + '</span><span class="mono">' + it.level + '단계' + (it.level >= 4 ? ' · 상위 문항' : '') + '</span></div>' : '') +
+        (it.level ? '<div class="q-meta"><span class="level-dots" aria-hidden="true">' + '●'.repeat(it.level) + '○'.repeat(Math.max(0, 6 - it.level)) + '</span><span class="mono">' + it.level + '단계' + (it.level >= 4 ? ' · 상위 문항' : '') + '</span></div>' : '') +
         (it.scenario ? '<div class="scenario">' + U.esc(it.scenario) + '</div>' : '') +
         '<p class="q-prompt">' + U.esc(it.prompt) + '</p>' +
         (it.promptHtml || '') +

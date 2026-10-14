@@ -11,28 +11,34 @@
 (function () {
   const U = BL.util;
 
-  /* ===== 공통: 도형 셀 ===== */
-  const SHAPES = ['circle', 'square', 'triangle', 'diamond', 'pentagon', 'hexagon'];
-  const ASYM = ['triangle', 'arrow'];                 // 회전이 보이는 모양
-  const FILLS = ['none', 'solid', 'half', 'dot'];
+  /* ===== 공통: 도형 셀 (네 층: 틀 · 안쪽 도형 · 선 · 모서리 점) ===== */
+  const SHAPES = ['circle', 'square', 'triangle', 'diamond', 'pentagon', 'hexagon', 'star', 'cross'];
+  const ASYM = ['triangle', 'arrow', 'lshape'];       // 회전이 보이는 모양
+  const FRAMES = ['none', 'square', 'circle', 'diamond', 'hexagon'];
+  const FILLS = ['none', 'solid', 'half', 'dot', 'hatch'];
   const COUNTS = [1, 2, 3, 4];
   const SIZES = ['s', 'm', 'l'];
   const ROTS = [0, 90, 180, 270];
-  const MARK_POS = { a: [14, 14], b: [86, 14], c: [14, 86], d: [86, 86] };   // 모서리 점
-  const LINE_DEF = { h: [8, 50, 92, 50], v: [50, 8, 50, 92], d: [12, 12, 88, 88], e: [12, 88, 88, 12] };
-  const DOMAIN = { shape: SHAPES, fill: FILLS, count: COUNTS, size: SIZES };
-  const ATTRS = ['shape', 'fill', 'count', 'size'];    // 기본 속성 (행·열·라틴 규칙)
-  const ALL_ATTRS = ATTRS.concat(['rot', 'marks', 'lines']);
-  const RADIUS = { s: 9, m: 13, l: 17 };
-  const ATTR_KO = { shape: '모양', fill: '채움', count: '개수', size: '크기', rot: '방향', marks: '모서리 점', lines: '선' };
+  const POSS = ['c', 'n', 'e', 's', 'w'];
+  const POS_XY = { c: [50, 50], n: [50, 30], e: [70, 50], s: [50, 70], w: [30, 50] };
+  const MARK_POS = { a: [22, 22], b: [78, 22], c: [22, 78], d: [78, 78] };   // 모서리 점 (틀 안쪽)
+  const LINE_DEF = { h: [10, 50, 90, 50], v: [50, 10, 50, 90], d: [14, 14, 86, 86], e: [14, 86, 86, 14] };
+  const DOMAIN = { shape: SHAPES, fill: FILLS, count: COUNTS, size: SIZES, frame: FRAMES, pos: POSS };
+  const ATTRS = ['shape', 'fill', 'count', 'size'];    // 도형 계열에서 쓰는 기본 속성
+  const ALL_ATTRS = ['frame', 'shape', 'fill', 'count', 'size', 'pos', 'rot', 'flip', 'lines', 'marks'];
+  const RADIUS = { s: 8, m: 11, l: 14 };
+  const ATTR_KO = { frame: '틀', shape: '모양', fill: '채움', count: '개수', size: '크기', pos: '위치', rot: '방향', flip: '좌우', marks: '모서리 점', lines: '선' };
   const VAL_KO = {
-    shape: { circle: '원', square: '사각형', triangle: '삼각형', diamond: '마름모', pentagon: '오각형', hexagon: '육각형', arrow: '화살표' },
-    fill: { none: '비움', solid: '채움', half: '반 채움', dot: '점' },
+    frame: { none: '없음', square: '네모 틀', circle: '둥근 틀', diamond: '마름모 틀', hexagon: '육각 틀' },
+    shape: { circle: '원', square: '사각형', triangle: '삼각형', diamond: '마름모', pentagon: '오각형', hexagon: '육각형', star: '별', cross: '십자', arrow: '화살표', lshape: 'ㄱ자' },
+    fill: { none: '비움', solid: '채움', half: '반 채움', dot: '점', hatch: '빗금' },
     count: { 1: '1개', 2: '2개', 3: '3개', 4: '4개' },
-    size: { s: '작게', m: '중간', l: '크게' }
+    size: { s: '작게', m: '중간', l: '크게' },
+    pos: { c: '가운데', n: '위', e: '오른쪽', s: '아래', w: '왼쪽' }
   };
-  const RULE_KO = { row: '같은 행에서는 같고 행마다 다름', col: '같은 열에서는 같고 열마다 다름', latin: '각 행과 각 열에 세 가지가 한 번씩 나옴' };
-  const OP_KO = { union: '첫째와 둘째를 합친 것', xor: '첫째와 둘째 중 한쪽에만 있는 것', inter: '첫째와 둘째에 모두 있는 것' };
+  const RULE_KO = { row: '같은 행에서는 같고 행마다 다름', col: '같은 열에서는 같고 열마다 다름', latin: '각 행과 각 열에 세 가지가 한 번씩 나옴', prog: '오른쪽으로 갈수록 한 단계씩 커지거나 돎' };
+  const OP_KO = { union: '첫째와 둘째를 합친 것', xor: '첫째와 둘째 중 한쪽에만 있는 것', inter: '첫째와 둘째에 모두 있는 것', sub: '첫째에서 둘째를 뺀 것' };
+  const OPK_KO = { union: '왼쪽에 정해진 것을 더한 것', xor: '왼쪽에서 정해진 것을 뒤집은 것(있으면 빼고 없으면 더함)', sub: '왼쪽에서 정해진 것을 뺀 것' };
   let uid = 0;
 
   function polygonPoints(cx, cy, r, n, offsetDeg) {
@@ -43,46 +49,72 @@
     }
     return pts.join(' ');
   }
-  function shapeEl(shape, cx, cy, r, attrs, rot) {
+  function shapeEl(shape, cx, cy, r, attrs, rot, flip) {
     let el;
+    const poly = function (u, k) { return '<polygon points="' + u.map(function (p) { return (cx + p[0] * r * k).toFixed(1) + ',' + (cy + p[1] * r * k).toFixed(1); }).join(' ') + '" ' + attrs + '/>'; };
     if (shape === 'circle') el = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" ' + attrs + '/>';
-    else if (shape === 'arrow') {
-      const u = [[0, -1], [0.62, -0.3], [0.3, -0.3], [0.3, 1], [-0.3, 1], [-0.3, -0.3], [-0.62, -0.3]];
-      el = '<polygon points="' + u.map(function (p) { return (cx + p[0] * r * 0.95).toFixed(1) + ',' + (cy + p[1] * r * 0.95).toFixed(1); }).join(' ') + '" ' + attrs + '/>';
+    else if (shape === 'arrow') el = poly([[0, -1], [0.62, -0.3], [0.3, -0.3], [0.3, 1], [-0.3, 1], [-0.3, -0.3], [-0.62, -0.3]], 0.95);
+    else if (shape === 'lshape') el = poly([[-0.8, -1], [-0.2, -1], [-0.2, 0.4], [0.8, 0.4], [0.8, 1], [-0.8, 1]], 0.9);
+    else if (shape === 'cross') el = poly([[-0.3, -1], [0.3, -1], [0.3, -0.3], [1, -0.3], [1, 0.3], [0.3, 0.3], [0.3, 1], [-0.3, 1], [-0.3, 0.3], [-1, 0.3], [-1, -0.3], [-0.3, -0.3]], 0.9);
+    else if (shape === 'star') {
+      const pts = [];
+      for (let i = 0; i < 10; i++) { const a = (-90 + i * 36) * Math.PI / 180, rr = i % 2 === 0 ? r * 1.1 : r * 0.48; pts.push((cx + rr * Math.cos(a)).toFixed(1) + ',' + (cy + rr * Math.sin(a)).toFixed(1)); }
+      el = '<polygon points="' + pts.join(' ') + '" ' + attrs + '/>';
     } else {
       const n = { triangle: 3, square: 4, diamond: 4, pentagon: 5, hexagon: 6 }[shape];
       const off = { triangle: -90, square: 45, diamond: -90, pentagon: -90, hexagon: 0 }[shape];
       const rr = shape === 'square' ? r * 1.15 : shape === 'triangle' ? r * 1.1 : r;
       el = '<polygon points="' + polygonPoints(cx, cy, rr, n, off) + '" ' + attrs + '/>';
     }
-    return rot ? '<g transform="rotate(' + rot + ' ' + cx + ' ' + cy + ')">' + el + '</g>' : el;
+    const tf = (flip ? 'translate(' + (2 * cx) + ' 0) scale(-1 1) ' : '') + (rot ? 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' : '');
+    return tf ? '<g transform="' + tf.trim() + '">' + el + '</g>' : el;
+  }
+  function frameEl(frame) {
+    const a = 'fill="none" stroke="currentColor" stroke-width="1.8" opacity=".9"';
+    if (!frame || frame === 'none') return '';
+    if (frame === 'square') return '<rect x="7" y="7" width="86" height="86" rx="3" ' + a + '/>';
+    if (frame === 'circle') return '<circle cx="50" cy="50" r="44" ' + a + '/>';
+    if (frame === 'diamond') return '<polygon points="' + polygonPoints(50, 50, 46, 4, -90) + '" ' + a + '/>';
+    return '<polygon points="' + polygonPoints(50, 50, 46, 6, 0) + '" ' + a + '/>';
   }
   function cellSVG(cell) {
     const r = RADIUS[cell.size];
-    const pos = cell.count === 1 ? [[50, 50]] : cell.count === 2 ? [[31, 50], [69, 50]] : cell.count === 3 ? [[50, 30], [30, 68], [70, 68]] : [[32, 32], [68, 32], [32, 68], [68, 68]];
+    let pos;
+    if (cell.count === 1) pos = [POS_XY[cell.pos || 'c']];
+    else if (cell.count === 2) pos = [[34, 50], [66, 50]];
+    else if (cell.count === 3) pos = [[50, 33], [34, 64], [66, 64]];
+    else pos = [[35, 35], [65, 35], [35, 65], [65, 65]];
     const rot = ASYM.indexOf(cell.shape) >= 0 ? (cell.rot || 0) : 0;
-    let body = '', defs = '';
-    const base = 'stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"';
+    const flip = cell.shape === 'lshape' ? !!cell.flip : false;
+    let body = frameEl(cell.frame), defs = '';
+    const base = 'stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"';
     (cell.lines || '').split('').forEach(function (k) {
       const l = LINE_DEF[k]; if (!l) return;
-      body += '<line x1="' + l[0] + '" y1="' + l[1] + '" x2="' + l[2] + '" y2="' + l[3] + '" stroke="currentColor" stroke-width="1.6" opacity=".75"/>';
+      body += '<line x1="' + l[0] + '" y1="' + l[1] + '" x2="' + l[2] + '" y2="' + l[3] + '" stroke="currentColor" stroke-width="1.6" opacity=".7"/>';
     });
     pos.forEach(function (p) {
-      if (cell.fill === 'none') body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot);
-      else if (cell.fill === 'solid') body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="currentColor"', rot);
+      if (cell.fill === 'none') body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot, flip);
+      else if (cell.fill === 'solid') body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="currentColor"', rot, flip);
       else if (cell.fill === 'half') {
         const id = 'clip' + (++uid);
         defs += '<clipPath id="' + id + '"><rect x="' + (p[0] - r - 4) + '" y="' + (p[1] - r - 4) + '" width="' + (r + 4) + '" height="' + (2 * r + 8) + '"/></clipPath>';
-        body += shapeEl(cell.shape, p[0], p[1], r, 'fill="currentColor" stroke="none" clip-path="url(#' + id + ')"', rot);
-        body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot);
+        body += shapeEl(cell.shape, p[0], p[1], r, 'fill="currentColor" stroke="none" clip-path="url(#' + id + ')"', rot, flip);
+        body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot, flip);
+      } else if (cell.fill === 'hatch') {
+        const id = 'clip' + (++uid);
+        defs += '<clipPath id="' + id + '">' + shapeEl(cell.shape, p[0], p[1], r, '', rot, flip) + '</clipPath>';
+        let h = '';
+        for (let i = -2; i <= 2; i++) { const o = i * r * 0.5; h += '<line x1="' + (p[0] - r - 2 + o) + '" y1="' + (p[1] + r + 2) + '" x2="' + (p[0] + r + 2 + o) + '" y2="' + (p[1] - r - 2) + '" stroke="currentColor" stroke-width="1.5"/>'; }
+        body += '<g clip-path="url(#' + id + ')">' + h + '</g>';
+        body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot, flip);
       } else {
-        body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot);
+        body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot, flip);
         body += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + (r * 0.3).toFixed(1) + '" fill="currentColor"/>';
       }
     });
     (cell.marks || '').split('').forEach(function (k) {
       const m = MARK_POS[k]; if (!m) return;
-      body += '<circle cx="' + m[0] + '" cy="' + m[1] + '" r="4.5" fill="currentColor"/>';
+      body += '<circle cx="' + m[0] + '" cy="' + m[1] + '" r="4" fill="currentColor"/>';
     });
     return '<svg class="cell" viewBox="0 0 100 100" aria-hidden="true">' + (defs ? '<defs>' + defs + '</defs>' : '') + body + '</svg>';
   }
@@ -101,9 +133,12 @@
         const vals = varying[a];
         const others = vals.filter(function (v) { return v !== answer[a]; });
         const per = Math.floor(nOpt / vals.length);
+        let rem = nOpt - per * vals.length;
+        // 나머지는 정답 값부터 채워, 정답 값이 "가장 드문 값"이 되지 않게 한다
+        let ansCount = per + (rem > 0 ? 1 : 0); if (rem > 0) rem--;
         const bag = [];
-        for (let i = 0; i < per - 1; i++) bag.push(answer[a]);
-        others.forEach(function (v) { for (let i = 0; i < per; i++) bag.push(v); });
+        for (let i = 0; i < ansCount - 1; i++) bag.push(answer[a]);
+        r.shuffle(others).forEach(function (v) { const c = per + (rem > 0 ? 1 : 0); if (rem > 0) rem--; for (let i = 0; i < c; i++) bag.push(v); });
         while (bag.length < nOpt - 1) bag.push(r.pick(others));
         cols[a] = r.shuffle(bag.slice(0, nOpt - 1));
       });
@@ -122,7 +157,8 @@
     return null;
   }
   function pickFoil(r, answer, exclude) {
-    const a = r.pick(ATTRS.filter(function (x) { return exclude.indexOf(x) < 0; }));
+    const pool = ATTRS.filter(function (x) { return exclude.indexOf(x) < 0; });
+    const a = r.pick(pool.length ? pool : ['frame']);
     return { attr: a, vals: [answer[a], r.pick(DOMAIN[a].filter(function (v) { return v !== answer[a]; }))] };
   }
 
@@ -132,84 +168,157 @@
   const OPS = {
     union: function (a, b, o) { return setStr(setOf(a).concat(setOf(b)), o); },
     xor: function (a, b, o) { return setStr(setOf(a).filter(function (k) { return b.indexOf(k) < 0; }).concat(setOf(b).filter(function (k) { return a.indexOf(k) < 0; })), o); },
-    inter: function (a, b, o) { return setStr(setOf(a).filter(function (k) { return b.indexOf(k) >= 0; }), o); }
+    inter: function (a, b, o) { return setStr(setOf(a).filter(function (k) { return b.indexOf(k) >= 0; }), o); },
+    sub: function (a, b, o) { return setStr(setOf(a).filter(function (k) { return b.indexOf(k) < 0; }), o); }
   };
   function randomSet(r, order, min, max) { return setStr(r.sample(order.split(''), r.int(min, max)), order); }
-  /* 행마다 (A, B, op(A,B)) — 결과가 A나 B와 같거나 비어 있지 않게 */
+  /* 3×3: 행마다 (A, B, op(A,B)) — 결과가 A나 B와 같거나 비어 있지 않게 */
   function logicRow(r, op, order) {
-    for (let t = 0; t < 60; t++) {
+    for (let t = 0; t < 80; t++) {
       const a = randomSet(r, order, 1, 3), b = randomSet(r, order, 1, 3);
       const c = OPS[op](a, b, order);
-      if (!c || c === a || c === b) continue;
-      if (op === 'inter' && (a === b)) continue;
+      if (!c || c === a || c === b || a === b) continue;
       return [a, b, c];
     }
-    return [order.slice(0, 2), order.slice(1, 3), OPS[op](order.slice(0, 2), order.slice(1, 3), order)];
+    return [order.slice(0, 2), order.slice(1, 3), OPS.union(order.slice(0, 2), order.slice(1, 3), order)];
   }
-  function logicFoils(r, a, b, op, order, answer) {
+  /* 2×2: 오른쪽 = 왼쪽 op K (K는 고정 집합). 두 행 모두 결과가 달라지도록 */
+  function logicK(r, op, order) {
+    for (let t = 0; t < 80; t++) {
+      const K = randomSet(r, order, 1, 2);
+      const rows = [];
+      for (let i = 0; i < 2; i++) {
+        let a = null;
+        for (let u = 0; u < 40; u++) { const cand = randomSet(r, order, 1, 3); const c = OPS[op](cand, K, order); if (c && c !== cand) { a = [cand, c]; break; } }
+        if (!a) break;
+        rows.push(a);
+      }
+      if (rows.length === 2 && rows[0][0] !== rows[1][0]) return { K: K, rows: rows };
+    }
+    return { K: order.slice(0, 1), rows: [[order.slice(1, 2), OPS.union(order.slice(1, 2), order.slice(0, 1), order)], [order.slice(2, 3), OPS.union(order.slice(2, 3), order.slice(0, 1), order)]] };
+  }
+  function logicFoils(r, a, b, op, order, answer, n) {
+    n = n || 3;
     const vals = [answer];
-    Object.keys(OPS).filter(function (o) { return o !== op; }).forEach(function (o) { const v = OPS[o](a, b, order); if (vals.indexOf(v) < 0) vals.push(v); });
+    Object.keys(OPS).filter(function (o) { return o !== op; }).forEach(function (o) { const v = OPS[o](a, b, order); if (v && vals.indexOf(v) < 0) vals.push(v); });
     let guard = 0;
-    while (vals.length < 3 && guard++ < 40) { const v = randomSet(r, order, 1, 3); if (vals.indexOf(v) < 0) vals.push(v); }
-    return vals.slice(0, 3);
+    while (vals.length < n && guard++ < 60) { const v = randomSet(r, order, 1, 3); if (vals.indexOf(v) < 0) vals.push(v); }
+    return vals.slice(0, n);
+  }
+  /* 보기 8개가 속성마다 정확히 균형(4값×2 또는 2값×4)을 이루도록 값 집합을 맞춘다. set[0]은 정답 값. */
+  function fitSet(r, a, set) {
+    const out = set.filter(function (x, i, arr) { return x != null && arr.indexOf(x) === i; });
+    if (out.length >= 4) return out.slice(0, 4);
+    if (out.length === 3 && DOMAIN[a]) {
+      const extra = r.shuffle(DOMAIN[a].filter(function (v) { return out.indexOf(v) < 0; }));
+      if (extra.length) return out.concat([extra[0]]);
+    }
+    if (out.length === 3 && PROG_SEQ[a]) {
+      const extra = PROG_SEQ[a].filter(function (v) { return out.indexOf(v) < 0; });
+      if (extra.length) return out.concat([extra[0]]);
+    }
+    return out.slice(0, 2);
   }
 
-  /* ===== 1. 도형 행렬 (1~5단계) ===== */
+  /* ===== 1. 도형 행렬 (1~6단계, 2×2·3×3 혼합, 보기 8개) =====
+     규칙 종류: 범주(행 고정·열 고정·라틴 분배), 진행(개수·크기·방향·위치가 한 단계씩), 집합 논리(선·모서리 점의
+     합집합·교집합·배타·빼기), 2×2에서는 "오른쪽 = 왼쪽을 변환한 것"(진행·좌우 반전·고정 집합 더하기/빼기/뒤집기). */
+  const PROG_SEQ = { count: [1, 2, 3, 4], size: ['s', 'm', 'l'], rot: [0, 90, 180, 270], pos: ['n', 'e', 's', 'w'] };
+  const CYCLIC = { rot: true, pos: true };
+  function nextVal(a, v, step) { const s = PROG_SEQ[a]; const i = s.indexOf(v); return CYCLIC[a] ? s[((i + step) % s.length + s.length) % s.length] : s[Math.min(s.length - 1, Math.max(0, i + step))]; }
+
   function makeMatrix(r, level) {
-    // 단계별 구성: 기본 속성 수 + 상위 규칙
-    let nBasic = Math.min(level, 3), useRot = false, useMarks = false, useLines = false;
-    if (level === 4) { if (r.next() < 0.5) { nBasic = 2; useRot = true; } else { nBasic = 2; useMarks = true; } }
-    if (level === 5) { nBasic = 2; useMarks = true; if (r.next() < 0.5) useLines = true; else useRot = true; }
-    const basicPool = useRot ? ATTRS.filter(function (a) { return a !== 'shape'; }) : ATTRS;
-    const active = r.sample(basicPool, nBasic);
+    const grid = level >= 4 && r.next() < 0.4 ? 2 : 3;
+    const recipe = {
+      1: { cat: 1, prog: 0, logic: 0, pool: ['shape', 'fill', 'count', 'size'] },
+      2: { cat: 2, prog: 0, logic: 0, pool: ['shape', 'fill', 'count', 'size', 'frame'] },
+      3: { cat: 2, prog: 1, logic: 0, pool: ['shape', 'fill', 'count', 'size', 'frame'], progPool: ['count', 'size', 'pos'] },
+      4: { cat: 2, prog: 0, logic: 1, pool: ['shape', 'fill', 'count', 'size', 'frame'], progPool: ['count', 'size', 'pos'], ops: ['union', 'inter'] },
+      5: { cat: 2, prog: 1, logic: 1, pool: ['shape', 'fill', 'size', 'frame'], progPool: ['rot', 'pos', 'count', 'size'], ops: ['union', 'inter', 'xor', 'sub'] },
+      6: { cat: 2, prog: 1, logic: 2, pool: ['shape', 'fill', 'size', 'frame'], progPool: ['rot', 'pos'], ops: ['xor', 'sub', 'union', 'inter'] }
+    }[level];
+    if (grid === 2) { recipe.cat = Math.max(1, recipe.cat - 1); recipe.prog = Math.max(recipe.prog, 1); }
+
+    // 기본값 (모든 칸 공통)
+    const base = { frame: level >= 3 && r.next() < 0.4 ? r.pick(FRAMES.slice(1)) : 'none', shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.int(1, 2), size: r.pick(SIZES), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
+    // 진행 속성 고르기 (회전·반전은 비대칭 모양을 요구하고, 위치는 개수 1을 요구한다)
+    const progAttrs = recipe.prog ? r.sample(recipe.progPool, recipe.prog) : [];
+    let flipAttr = false;
+    if (grid === 2 && level >= 5 && r.next() < 0.35) flipAttr = true;
+    if (progAttrs.indexOf('rot') >= 0 || flipAttr) base.shape = flipAttr ? 'lshape' : r.pick(ASYM);
+    if (progAttrs.indexOf('pos') >= 0) base.count = 1;
+    const catPool = recipe.pool.filter(function (a) { return progAttrs.indexOf(a) < 0 && !(a === 'shape' && (progAttrs.indexOf('rot') >= 0 || flipAttr)) && !(a === 'count' && progAttrs.indexOf('pos') >= 0); });
+    const catAttrs = r.sample(catPool, Math.min(recipe.cat, catPool.length));
+
+    // 규칙 명세
     const spec = {};
-    ATTRS.forEach(function (a) {
-      const vals = r.sample(DOMAIN[a], 3);
-      if (active.indexOf(a) < 0) { spec[a] = { rule: 'const', vals: [a === 'shape' && useRot ? r.pick(ASYM) : vals[0]] }; return; }
-      spec[a] = { rule: r.pick(level === 1 ? ['col', 'latin'] : ['row', 'col', 'latin']), vals: vals, perm: r.shuffle([0, 1, 2]) };
+    catAttrs.forEach(function (a) {
+      const vals = r.sample(DOMAIN[a], grid === 3 ? 3 : 2);
+      const rule = grid === 2 ? (r.next() < 0.3 ? 'row' : 'col') : r.pick(level === 1 ? ['col', 'latin'] : ['row', 'col', 'latin']);
+      spec[a] = { kind: 'cat', rule: rule, vals: vals, perm: r.shuffle([0, 1, 2]) };
     });
-    if (level >= 2 && !active.some(function (a) { return spec[a].rule === 'latin'; })) spec[r.pick(active)].rule = 'latin';
-    if (useRot) spec.rot = { rule: r.pick(['col', 'latin']), vals: r.sample(ROTS, 3), perm: r.shuffle([0, 1, 2]) };
-    const markOp = useMarks ? r.pick(['union', 'xor', 'inter']) : null;
-    const lineOp = useLines ? r.pick(['union', 'xor']) : null;
-    const markRows = useMarks ? [0, 1, 2].map(function () { return logicRow(r, markOp, 'abcd'); }) : null;
-    const lineRows = useLines ? [0, 1, 2].map(function () { return logicRow(r, lineOp, 'hvde'); }) : null;
+    if (grid === 3 && catAttrs.length >= 2 && !catAttrs.some(function (a) { return spec[a].rule === 'latin'; })) spec[r.pick(catAttrs)].rule = 'latin';
+    if (grid === 2 && catAttrs.length && !catAttrs.some(function (a) { return spec[a].rule === 'col'; }) && !progAttrs.length && !flipAttr) spec[catAttrs[0]].rule = 'col';
+    progAttrs.forEach(function (a) {
+      const seq = PROG_SEQ[a];
+      const step = a === 'rot' && r.next() < 0.3 ? -1 : 1;
+      const starts = [];
+      for (let row = 0; row < grid; row++) starts.push(CYCLIC[a] ? r.int(0, seq.length - 1) : (a === 'count' ? r.int(0, 1) : 0));
+      spec[a] = { kind: 'prog', step: step, starts: starts };
+    });
+    if (flipAttr) spec.flip = { kind: 'flip' };
+    const logicAttrs = recipe.logic ? r.sample(['marks', 'lines'], recipe.logic) : [];
+    logicAttrs.forEach(function (a) {
+      const order = a === 'marks' ? 'abcd' : 'hvde';
+      const op = r.pick(grid === 2 ? recipe.ops.filter(function (o) { return o !== 'inter'; }) : recipe.ops);
+      if (grid === 3) spec[a] = { kind: 'logic', op: op, order: order, rows: [0, 1, 2].map(function () { return logicRow(r, op, order); }) };
+      else { const k = logicK(r, op, order); spec[a] = { kind: 'logicK', op: op, order: order, K: k.K, rows: k.rows }; }
+    });
 
     function value(a, row, col) {
       const s = spec[a];
-      if (s.rule === 'const') return s.vals[0];
-      if (s.rule === 'row') return s.vals[row];
-      if (s.rule === 'col') return s.vals[col];
-      return s.vals[(s.perm[row] + col) % 3];
+      if (!s) return base[a];
+      if (s.kind === 'cat') {
+        if (s.rule === 'row') return s.vals[row];
+        if (s.rule === 'col') return s.vals[col];
+        return s.vals[(s.perm[row] + col) % 3];
+      }
+      if (s.kind === 'prog') { const seq = PROG_SEQ[a]; return CYCLIC[a] ? seq[((s.starts[row] + s.step * col) % seq.length + seq.length) % seq.length] : seq[Math.min(seq.length - 1, s.starts[row] + col)]; }
+      if (s.kind === 'flip') return col;
+      return s.rows[row][col];
     }
     const cells = [];
-    for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
-      const c = {};
-      ATTRS.forEach(function (a) { c[a] = value(a, row, col); });
-      c.rot = useRot ? value('rot', row, col) : 0;
-      c.marks = useMarks ? markRows[row][col] : '';
-      c.lines = useLines ? lineRows[row][col] : '';
-      cells.push(c);
+    for (let row = 0; row < grid; row++) for (let col = 0; col < grid; col++) {
+      const c = {}; ALL_ATTRS.forEach(function (a) { c[a] = value(a, row, col); }); cells.push(c);
     }
-    const answer = cells[8];
+    const answer = cells[cells.length - 1];
+    const lastRow = grid - 1;
+
+    // 보기: 달라지는 속성마다 값 세 가지(정답 포함), 균형 배치
     const varying = {};
-    active.forEach(function (a) { varying[a] = spec[a].vals; });
-    if (useRot) varying.rot = spec.rot.vals;
-    if (useMarks) varying.marks = logicFoils(r, markRows[2][0], markRows[2][1], markOp, 'abcd', answer.marks);
-    if (useLines) varying.lines = logicFoils(r, lineRows[2][0], lineRows[2][1], lineOp, 'hvde', answer.lines);
-    if (Object.keys(varying).length === 1) { const f = pickFoil(r, answer, active); varying[f.attr] = f.vals; }
-    let dis = balancedDistractors(r, answer, varying, 6);
-    if (!dis) { const f = pickFoil(r, answer, Object.keys(varying)); varying[f.attr] = f.vals; dis = balancedDistractors(r, answer, varying, 6); }
+    catAttrs.forEach(function (a) { varying[a] = fitSet(r, a, [answer[a]].concat(spec[a].vals)); });
+    progAttrs.forEach(function (a) { const v = answer[a]; varying[a] = fitSet(r, a, [v, nextVal(a, v, -1), nextVal(a, v, 1), nextVal(a, v, 2)]); });
+    if (flipAttr) varying.flip = [answer.flip, answer.flip ? 0 : 1];
+    logicAttrs.forEach(function (a) {
+      const s = spec[a];
+      varying[a] = fitSet(r, a, s.kind === 'logic' ? logicFoils(r, s.rows[lastRow][0], s.rows[lastRow][1], s.op, s.order, answer[a], 4) : logicFoils(r, s.rows[lastRow][0], s.K, s.op, s.order, answer[a], 4));
+    });
+    if (Object.keys(varying).length === 1) { const f = pickFoil(r, answer, Object.keys(varying)); varying[f.attr] = f.vals; }
+    let dis = balancedDistractors(r, answer, varying, 8);
+    if (!dis) { const f = pickFoil(r, answer, Object.keys(varying)); varying[f.attr] = f.vals; dis = balancedDistractors(r, answer, varying, 8); }
+    if (!dis) dis = balancedDistractors(r, answer, varying, 6) || [];
     const o = shuffleOptions(r, [answer].concat(dis), 0);
-    const explain = active.map(function (a) { return ATTR_KO[a] + ': ' + RULE_KO[spec[a].rule]; })
-      .concat(useRot ? ['방향: ' + (spec.rot.rule === 'col' ? '열마다 정해진 각도' : '각 행과 각 열에 세 방향이 한 번씩')] : [])
-      .concat(useMarks ? ['모서리 점: 셋째 열은 ' + OP_KO[markOp]] : [])
-      .concat(useLines ? ['선: 셋째 열은 ' + OP_KO[lineOp]] : []).join(' / ');
+
+    const explain = catAttrs.map(function (a) { return ATTR_KO[a] + ': ' + (grid === 2 && spec[a].rule === 'col' ? '왼쪽과 오른쪽이 각각 정해진 값' : RULE_KO[spec[a].rule]); })
+      .concat(progAttrs.map(function (a) { return ATTR_KO[a] + ': ' + (a === 'rot' ? '오른쪽으로 갈수록 ' + (spec[a].step > 0 ? '시계 방향' : '반시계 방향') + '으로 90°씩 돎' : a === 'pos' ? '오른쪽으로 갈수록 시계 방향으로 한 칸씩 이동' : '오른쪽으로 갈수록 한 단계씩 커짐'); }))
+      .concat(flipAttr ? ['좌우: 오른쪽은 왼쪽을 거울처럼 뒤집은 것'] : [])
+      .concat(logicAttrs.map(function (a) { const s = spec[a]; return ATTR_KO[a] + ': ' + (s.kind === 'logic' ? '셋째 열은 ' + OP_KO[s.op] : '오른쪽은 ' + OPK_KO[s.op]); }))
+      .join(' / ');
     return {
-      type: 'choice', part: 'matrix', scored: true, level: level, timeLimit: level >= 5 ? 100 : level === 4 ? 90 : level === 3 ? 80 : 60,
-      prompt: '규칙을 찾아 빈칸에 들어갈 도형을 고르세요.',
-      promptHtml: '<div class="matrix">' + cells.slice(0, 8).map(cellSVG).join('') + '<div class="cell cell-missing"><span>?</span></div></div>',
-      optionsHtml: o.options.map(cellSVG), answer: o.answer, optionCols: 3,
+      type: 'choice', part: 'matrix', scored: true, level: level, timeLimit: [60, 60, 80, 90, 100, 120][level - 1],
+      prompt: (grid === 2 ? '왼쪽에서 오른쪽으로의 변화를 찾아 ' : '규칙을 찾아 ') + '빈칸에 들어갈 도형을 고르세요.',
+      promptHtml: '<div class="matrix' + (grid === 2 ? ' matrix2' : '') + '">' + cells.slice(0, cells.length - 1).map(cellSVG).join('') + '<div class="cell cell-missing"><span>?</span></div></div>',
+      optionsHtml: o.options.map(cellSVG), answer: o.answer, optionCols: 4,
       explain: explain
     };
   }
@@ -218,7 +327,8 @@
   function makeSeries(r, level) {
     const active = r.sample(ATTRS, level);
     const base = {}; ATTRS.forEach(function (a) { base[a] = r.pick(DOMAIN[a]); });
-    base.rot = 0; base.marks = ''; base.lines = '';
+    base.frame = 'none'; base.pos = 'c'; base.rot = 0; base.flip = 0; base.marks = ''; base.lines = '';
+    if (base.count === 4) base.count = 3;
     const rules = {};
     active.forEach(function (a, idx) {
       const n = idx === 0 ? 3 : 2;
@@ -458,7 +568,7 @@
     { key: 'speed', label: '속도·주의', desc: '빠르게 반응하면서도 방해 자극에 흔들리지 않는 능력입니다. 화면과 손가락 사이의 지연이 포함되므로 기기에 따라 수십 ms 차이가 날 수 있습니다.' }
   ];
   const TASKS = {
-    matrix: { label: '도형 행렬', domain: 'fluid', minutes: 7, desc: '3×3 격자의 규칙을 찾아 빈칸에 들어갈 도형을 고릅니다. 뒤로 갈수록 모양·채움·개수·크기에 더해 회전, 모서리 점의 합집합·교집합, 선 겹침 같은 규칙이 겹칩니다.' },
+    matrix: { label: '도형 행렬', domain: 'fluid', minutes: 9, desc: '격자의 규칙을 찾아 빈칸에 들어갈 도형을 보기 8개 중에서 고릅니다. 한 칸은 틀·안쪽 도형·선·모서리 점으로 이루어지고, 뒤로 갈수록 분배·진행·회전·반전·겹침·빼기 규칙이 겹치며 2×2와 3×3이 섞여 나옵니다.' },
     series: { label: '도형 계열', domain: 'fluid', minutes: 3, desc: '왼쪽부터 차례로 변해 가는 도형 네 개를 보고 다섯 번째를 고릅니다.' },
     sequence: { label: '수열', domain: 'fluid', minutes: 5, desc: '숫자 다섯 개의 규칙을 찾아 여섯 번째 숫자를 고릅니다. 뒤로 갈수록 두 규칙이 번갈아 적용되거나 소수·제곱 같은 수의 성질이 쓰입니다.' },
     analogy: { label: '언어 유추', domain: 'verbal', minutes: 4, desc: '앞 단어 쌍의 관계를 파악해, 같은 관계가 되도록 빈칸에 들어갈 단어를 고릅니다.' },
@@ -474,11 +584,11 @@
   };
   const TASK_KEYS = Object.keys(TASKS);
   const QUICK = ['matrix', 'sequence', 'analogy', 'rotation', 'digitF', 'reaction'];
-  const LEVEL_KO = { 1: '쉬움', 2: '보통', 3: '어려움', 4: '매우 어려움', 5: '최상' };
+  const LEVEL_KO = { 1: '쉬움', 2: '보통', 3: '어려움', 4: '매우 어려움', 5: '최상', 6: '극상' };
 
   /* 난이도 단계별 예상 정답률 (문항 설계 기준). 포함된 문항의 평균이 그 과제의 기준 정답률이 된다. */
   const LEVEL_P = {
-    default: { 1: 0.92, 2: 0.80, 3: 0.62, 4: 0.42, 5: 0.25 },
+    default: { 1: 0.92, 2: 0.80, 3: 0.62, 4: 0.42, 5: 0.25, 6: 0.12 },
     rotation: { 1: 0.85, 2: 0.75, 3: 0.60, 4: 0.45, 5: 0.35 },
     series: { 1: 0.90, 2: 0.72, 3: 0.50 }
   };
@@ -504,7 +614,7 @@
 
   /* 과제별 문항 구성: 쉬운 단계부터 어려운 단계로 */
   const LEVELS = {
-    matrix: { full: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5], quick: [1, 2, 3, 4, 5] },
+    matrix: { full: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6], quick: [1, 2, 3, 4, 5, 6] },
     series: { full: [1, 1, 2, 2, 3, 3] },
     sequence: { full: [1, 2, 2, 3, 3, 4, 4, 5], quick: [1, 2, 3, 4, 5] },
     rotation: { full: [1, 2, 3, 4, 5, 5], quick: [1, 2, 4, 5] }
@@ -526,7 +636,7 @@
     stroop: function () { return [{ type: 'stroop', part: 'stroop', scored: true, trials: 16, title: '색-단어 간섭', desc: TASKS.stroop.desc }]; }
   };
   const COUNT_KO = {
-    matrix: function (f) { return (f ? 10 : 5) + '문항 · 60~100초 · 1~5단계'; }, series: function () { return '6문항 · 40~50초 · 1~3단계'; },
+    matrix: function (f) { return (f ? 12 : 6) + '문항 · 60~120초 · 1~6단계 · 보기 8개'; }, series: function () { return '6문항 · 40~50초 · 1~3단계'; },
     sequence: function (f) { return (f ? 8 : 5) + '문항 · 50~60초 · 1~5단계'; }, analogy: function (f) { return (f ? 12 : 6) + '문항 · 40~45초 · 1~5단계'; },
     vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '11문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~50초 · 1~5단계'; }
   };

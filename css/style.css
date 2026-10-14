@@ -196,6 +196,9 @@ p { margin: 0; }
 .options-visual .cell { width: 100%; height: 100%; }
 
 .matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 18px; }
+.matrix.matrix2 { grid-template-columns: repeat(2, 1fr); max-width: 260px; margin-left: auto; margin-right: auto; }
+.options.cols-4.options-visual { gap: 6px; }
+.options-visual .opt { padding: 5px; }
 .cell { display: block; width: 100%; aspect-ratio: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); }
 .cell-missing { display: flex; align-items: center; justify-content: center; border-style: dashed; border-color: var(--accent-line); color: var(--accent); font-size: 28px; font-weight: 700; font-family: var(--mono); }
 .seq { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-family: var(--mono); font-size: 26px; font-weight: 700; margin-bottom: 20px; }
