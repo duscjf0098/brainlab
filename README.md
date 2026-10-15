@@ -87,7 +87,7 @@ node serve.cjs
 - 이미지는 `make-images.ps1`(System.Drawing)로 만들었다. 문구를 바꾸려면 og-text.txt를 고쳐 다시 실행한다.
 - 구글 서치 콘솔 등록은 소유 확인이 필요하다(HTML 태그 방식: 콘솔이 주는 `<meta name="google-site-verification">` 태그를 `index.html` head에 넣고 커밋). 등록 후 sitemap.xml 제출.
 - 카카오톡: 링크 미리보기는 OG 태그로 동작. "카카오톡 공유" 버튼은 `js/config.js`의 `kakaoKey`(developers.kakao.com 앱의 JavaScript 키)가 있을 때만 보인다. 키 없이도 "링크 복사"로 카톡에 붙여 넣을 수 있다.
-  - 콘솔 설정 두 곳이 모두 필요하다 (앱 ID 1608815): ① 앱 > 플랫폼 키 > JavaScript 키 > JavaScript SDK 도메인에 `https://duscjf0098.github.io`(테스트용 `http://localhost:5173`), ② 앱 > 제품 링크 관리 > 웹 도메인에 `https://duscjf0098.github.io`. ②가 없으면 공유 창은 열리지만 메시지의 링크와 "나도 해보기" 버튼이 빠져 카톡에서 눌러도 사이트가 안 열린다 (2026-10-15 확인: ②가 비어 있었음).
+  - 콘솔 설정 두 곳이 모두 필요하다 (앱 ID 1608815): ① 앱 > 플랫폼 키 > JavaScript 키 > JavaScript SDK 도메인에 `https://duscjf0098.github.io`(테스트용 `http://localhost:5173`), ② 앱 > 제품 링크 관리 > 웹 도메인에 `https://duscjf0098.github.io`. 카카오 문서상 ②에 없는 도메인의 링크는 쓸 수 없다("등록되어 있지 않은 도메인 또는 스킴은 사용할 수 없습니다"). 2026-10-15에 ②가 비어 있어 같은 날 `https://duscjf0098.github.io`를 등록했다(기본 웹 도메인). 공유 창(sharer.kakao.com 피커)의 미리보기에는 제목·설명·썸네일만 나오고 링크·버튼은 원래 안 보이므로, 링크가 살아 있는지는 실제로 보낸 메시지(예: 나와의 채팅)를 눌러 봐야 확인된다.
   - 코드: SDK는 결과 화면이 뜰 때 미리 불러 두고(`BL.card.preloadKakao`), 버튼 클릭 핸들러 안에서 `Kakao.Share.sendDefault`를 곧바로 부른다. 누른 뒤에 SDK를 내려받으면 사용자 동작 직후 상태가 끝나 휴대폰에서 첫 탭이 무시된다. 아직 준비 전이면 "1~2초 뒤에 한 번 더 눌러 주세요"를 띄운다.
 
 ## 배포
