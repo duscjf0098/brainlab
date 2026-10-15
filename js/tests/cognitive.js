@@ -614,7 +614,8 @@
     };
   }
 
-  /* ===== 4. 언어: 유추 · 어휘 · 논리 (원본 문항, 1~5단계) ===== */
+  /* ===== 4. 언어: 유추 · 어휘 · 논리 · 공통점 (원본 문항, 1~5단계마다 7개) =====
+     진행 중인 세션이 문항 번호(state.used)를 저장하므로 순서를 바꾸지 말고 새 문항은 뒤에 붙인다. 쉬운 순서는 byLevel이 맞춘다. */
   const VERBAL = [
     { prompt: '손가락 : 손 = 발가락 : ?', options: ['발', '다리', '무릎', '신발'], answer: 0, level: 1, explain: '손가락이 손의 일부이듯 발가락은 발의 일부예요 (부분과 전체).' },
     { prompt: '뜨겁다 : 차갑다 = 넓다 : ?', options: ['길다', '좁다', '얇다', '작다'], answer: 1, level: 1, explain: '반대말 관계예요.' },
@@ -623,26 +624,75 @@
     { prompt: '온도계 : 온도 = 저울 : ?', options: ['길이', '부피', '무게', '속도'], answer: 2, level: 2, explain: '재는 도구와 그 도구로 재는 대상이에요.' },
     { prompt: '섬 : 바다 = 오아시스 : ?', options: ['강', '사막', '숲', '호수'], answer: 1, level: 2, explain: '넓은 공간 한가운데 따로 떨어진 작은 곳이에요.' },
     { prompt: '나무 : 종이 = 모래 : ?', options: ['시멘트', '유리', '벽돌', '흙'], answer: 1, level: 3, explain: '원료와 그 원료로 만드는 물건이에요. 유리는 모래(규사)로 만들어요.' },
-    { prompt: '희소하다 : 흔하다 = 간결하다 : ?', options: ['명확하다', '복잡하다', '장황하다', '짧다'], answer: 2, level: 3, explain: '반대말 관계예요. 간결의 반대는 장황이에요.' },
+    { prompt: '희소하다 : 흔하다 = 간결하다 : ?', options: ['명확하다', '복잡하다', '장황하다', '짤막하다'], answer: 2, level: 3, explain: '반대말 관계예요. 간결의 반대는 장황이에요. 짤막하다는 간결하다와 비슷한 쪽이에요.' },
     { prompt: '지도 : 지형 = 악보 : ?', options: ['음악', '악기', '연주자', '무대'], answer: 0, level: 4, explain: '기호로 옮겨 적은 것과 그 원래 대상이에요. 지도는 지형을, 악보는 음악을 적어요.' },
     { prompt: '증상 : 질병 = 연기 : ?', options: ['불', '공기', '재', '굴뚝'], answer: 0, level: 4, explain: '겉으로 드러나는 신호와 그 원인이에요. 증상은 질병의, 연기는 불의 신호예요.' },
     { prompt: '관대하다 : 엄격하다 = 사치하다 : ?', options: ['검소하다', '인색하다', '빈곤하다', '겸손하다'], answer: 0, level: 5, explain: '반대말 관계예요. 사치의 반대는 검소예요. 인색은 베풀기를 아끼는 것이라 뜻이 달라요.' },
-    { prompt: '암시 : 명시 = 함축 : ?', options: ['직설', '생략', '비유', '축약'], answer: 0, level: 5, explain: '넌지시 드러내는 것과 분명히 드러내는 것의 대비예요. 함축의 반대는 직설이에요.' }
+    { prompt: '암시 : 명시 = 함축 : ?', options: ['직설', '생략', '비유', '축약'], answer: 0, level: 5, explain: '넌지시 드러내는 것과 분명히 드러내는 것의 대비예요. 함축의 반대는 직설이에요.' },
+    { prompt: '송아지 : 소 = 강아지 : ?', options: ['개', '고양이', '토끼', '돼지'], answer: 0, level: 1, explain: '어린 새끼와 다 자란 동물이에요. 송아지는 소의 새끼이고, 강아지는 개의 새끼예요.' },
+    { prompt: '의사 : 병원 = 교사 : ?', options: ['학교', '공장', '은행', '식당'], answer: 0, level: 1, explain: '사람과 그 사람이 일하는 곳이에요. 의사는 병원에서, 교사는 학교에서 일해요.' },
+    { prompt: '모자 : 머리 = 장갑 : ?', options: ['손', '발', '목', '귀'], answer: 0, level: 1, explain: '쓰거나 끼는 물건과 그것을 걸치는 몸의 부분이에요. 모자는 머리에 쓰고, 장갑은 손에 껴요.' },
+    { prompt: '눈 : 보다 = 귀 : ?', options: ['듣다', '먹다', '맡다', '말하다'], answer: 0, level: 1, explain: '몸의 기관과 그 기관이 하는 일이에요. 눈으로 보고 귀로 들어요. 냄새를 맡는 건 코예요.' },
+    { prompt: '애벌레 : 나비 = 올챙이 : ?', options: ['개구리', '물고기', '잠자리', '거북'], answer: 0, level: 2, explain: '어린 모습과 다 자란 모습이에요. 애벌레가 자라 나비가 되고, 올챙이가 자라 개구리가 돼요.' },
+    { prompt: '치즈 : 우유 = 두부 : ?', options: ['콩', '쌀', '밀', '깨'], answer: 0, level: 2, explain: '음식과 그 음식을 만드는 재료예요. 치즈는 우유로, 두부는 콩으로 만들어요.' },
+    { prompt: '선배 : 후배 = 스승 : ?', options: ['제자', '동료', '친구', '부모'], answer: 0, level: 2, explain: '앞서 이끄는 사람과 뒤따르는 사람의 짝이에요. 선배에게 후배가 있듯 스승에게는 제자가 있어요.' },
+    { prompt: '시작 : 끝 = 입구 : ?', options: ['출구', '통로', '문', '계단'], answer: 0, level: 2, explain: '서로 반대되는 짝이에요. 시작의 반대가 끝이고, 입구의 반대는 출구예요.' },
+    { prompt: '북 : 치다 = 피리 : ?', options: ['불다', '켜다', '치다', '뜯다'], answer: 0, level: 3, explain: '악기와 그 악기를 연주하는 동작이에요. 북은 치고 피리는 불어요. 바이올린은 켜고, 가야금은 뜯어요.' },
+    { prompt: '어둠 : 빛 = 고요 : ?', options: ['소리', '평화', '침묵', '밤'], answer: 0, level: 3, explain: '무엇이 없는 상태와 그 없는 것이에요. 어둠은 빛이 없는 상태이고, 고요는 소리가 없는 상태예요.' },
+    { prompt: '탄생 : 죽음 = 개업 : ?', options: ['폐업', '창업', '휴업', '파업'], answer: 0, level: 3, explain: '시작과 끝의 짝이에요. 삶이 탄생으로 시작해 죽음으로 끝나듯, 가게는 개업으로 문을 열고 폐업으로 문을 닫아요. 휴업은 잠시 쉬는 거예요.' },
+    { prompt: '항생제 : 세균 = 제초제 : ?', options: ['잡초', '해충', '곰팡이', '비료'], answer: 0, level: 3, explain: '약과 그 약이 없애는 대상이에요. 항생제는 세균을, 제초제는 잡초를 없애요. 해충을 없애는 건 살충제예요.' },
+    { prompt: '미소 : 폭소 = 이슬비 : ?', options: ['폭우', '안개', '이슬', '가랑비'], answer: 0, level: 3, explain: '같은 것의 약한 정도와 센 정도예요. 미소는 소리 없이 살짝 웃는 것이고 폭소는 크게 터지는 웃음이듯, 이슬비는 아주 가는 비이고 폭우는 세차게 쏟아지는 비예요.' },
+    { prompt: '저자 : 독자 = 화자 : ?', options: ['청자', '작자', '관객', '필자'], answer: 0, level: 4, explain: '전하는 사람과 받는 사람이에요. 글은 저자가 쓰고 독자가 읽으며, 말은 화자가 하고 청자가 들어요. 작자·필자는 글을 쓴 사람이에요.' },
+    { prompt: '정밀하다 : 엉성하다 = 신속하다 : ?', options: ['굼뜨다', '날쌔다', '재빠르다', '서투르다'], answer: 0, level: 4, explain: '반대말 관계예요. 정밀하다의 반대가 엉성하다이듯 신속하다의 반대는 굼뜨다예요. 날쌔다·재빠르다는 신속하다와 비슷한 말이에요.' },
+    { prompt: '은유 : 비유 = 오각형 : ?', options: ['다각형', '정사각형', '꼭짓점', '원'], answer: 0, level: 4, explain: '좁은 개념과 그것을 품는 넓은 개념이에요. 은유는 비유의 한 방법이고, 오각형은 다각형의 한 종류예요. 정사각형은 오각형과 같은 층에 있는 다른 다각형이에요.' },
+    { prompt: '청사진 : 건물 = 각본 : ?', options: ['연극', '배우', '무대', '관객'], answer: 0, level: 4, explain: '미리 짜 둔 계획과 그 계획대로 만들어지는 것이에요. 청사진(설계도)대로 건물을 짓고, 각본대로 연극을 올려요.' },
+    { prompt: '천문학 : 별 = 지질학 : ?', options: ['암석', '날씨', '생물', '바다'], answer: 0, level: 4, explain: '학문과 그 학문이 연구하는 대상이에요. 천문학은 별과 우주를, 지질학은 암석과 땅의 구조를 연구해요. 날씨는 기상학이 다뤄요.' },
+    { prompt: '분노 : 감정 = 귀납 : ?', options: ['추론', '연역', '결론', '가설'], answer: 0, level: 5, explain: '좁은 개념과 그것이 속한 넓은 개념이에요. 분노는 감정의 한 종류이고, 귀납은 추론의 한 방법이에요. 연역은 귀납과 나란한 다른 추론 방법이에요.' },
+    { prompt: '퇴고 : 글 = 조율 : ?', options: ['악기', '음악', '노래', '무대'], answer: 0, level: 5, explain: '바르게 다듬는 일과 그 대상이에요. 퇴고는 글을 여러 번 고쳐 다듬는 일이고, 조율은 악기의 음을 바른 높이로 맞추는 일이에요.' },
+    { prompt: '탁월하다 : 뛰어나다 = 진부하다 : ?', options: ['케케묵다', '참신하다', '새롭다', '흔쾌하다'], answer: 0, level: 5, explain: '뜻이 비슷한 말의 짝이에요. 탁월하다는 뛰어나다와, 진부하다는 낡아서 새롭지 못하다는 뜻이라 케케묵다와 가까워요. 참신하다·새롭다는 반대말이에요.' },
+    { prompt: '박식하다 : 지식 = 노련하다 : ?', options: ['경험', '나이', '재능', '체력'], answer: 0, level: 5, explain: '무엇이 많아서 갖춘 성질이에요. 박식하다는 아는 것이 많다는 뜻이고, 노련하다는 경험이 많아 익숙하고 능란하다는 뜻이에요. 나이가 많다는 뜻은 아니에요.' },
+    { prompt: '구두 : 말 = 서면 : ?', options: ['글', '신발', '얼굴', '서명'], answer: 0, level: 5, explain: '뜻을 전하는 방식이에요. 구두는 입으로 하는 말로, 서면은 종이에 쓴 글로 전한다는 뜻이에요. 여기서 구두는 신발이 아니에요.' }
   ];
+  /* 어휘: 표준국어대사전에 있는 낱말만 쓴다. 동음이의어의 다른 뜻이 오답 보기와 겹치지 않게 골랐다. */
   const VOCAB = [
-    { prompt: '"명료하다"와 뜻이 가장 가까운 말은?', options: ['분명하다', '복잡하다', '느슨하다', '화려하다'], answer: 0, level: 1, explain: '명료하다 = 뚜렷하고 분명하다.' },
-    { prompt: '"빈번하다"와 뜻이 가장 가까운 말은?', options: ['잦다', '드물다', '급하다', '넓다'], answer: 0, level: 1, explain: '빈번하다 = 자주 일어나 잦다.' },
+    { prompt: '"명료하다"와 뜻이 가장 가까운 말은?', options: ['분명하다', '복잡하다', '느슨하다', '화려하다'], answer: 0, level: 1, explain: '명료하다는 뚜렷하고 분명하다는 뜻이에요.' },
+    { prompt: '"빈번하다"와 뜻이 가장 가까운 말은?', options: ['잦다', '드물다', '급하다', '넓다'], answer: 0, level: 1, explain: '빈번하다는 일이 자주 일어나 잦다는 뜻이에요.' },
     { prompt: '"인색하다"의 반대말에 가장 가까운 것은?', options: ['후하다', '검소하다', '무심하다', '성실하다'], answer: 0, level: 2, explain: '인색은 베풀기를 아끼는 것이고, 반대는 "후하다"예요.' },
     { prompt: '"경솔하다"의 반대말에 가장 가까운 것은?', options: ['신중하다', '대담하다', '느리다', '겸손하다'], answer: 0, level: 2, explain: '경솔은 깊이 생각하지 않고 가볍게 행동하는 것이고, 반대는 신중이에요.' },
-    { prompt: '"유보하다"와 뜻이 가장 가까운 말은?', options: ['미루다', '결정하다', '거절하다', '보관하다'], answer: 0, level: 2, explain: '유보하다 = 결정을 나중으로 미루다.' },
-    { prompt: '"미미하다"와 뜻이 가장 가까운 말은?', options: ['보잘것없다', '아름답다', '조용하다', '강하다'], answer: 0, level: 2, explain: '미미하다 = 보잘것없이 작다.' },
-    { prompt: '"완곡하다"와 뜻이 가장 가까운 것은?', options: ['부드럽게 돌려 말하다', '직설적으로 말하다', '단호하게 말하다', '길게 늘여 말하다'], answer: 0, level: 3, explain: '완곡하다 = 듣기 좋게 돌려서 부드럽게 말하다.' },
-    { prompt: '"고루하다"와 뜻이 가장 가까운 것은?', options: ['낡고 융통성이 없다', '고르고 균등하다', '외롭고 쓸쓸하다', '높고 귀하다'], answer: 0, level: 3, explain: '고루하다 = 낡은 생각에 매여 융통성이 없다.' },
-    { prompt: '"서슴다"와 뜻이 가장 가까운 말은?', options: ['망설이다', '서두르다', '숨기다', '다투다'], answer: 0, level: 4, explain: '서슴다 = 결정을 내리지 못하고 머뭇거리다. "서슴지 않고"라고 할 때의 그 말이에요.' },
-    { prompt: '"알음알음"의 뜻으로 가장 알맞은 것은?', options: ['서로 아는 관계를 통해', '아주 천천히 조금씩', '남몰래 은밀하게', '분명하고 뚜렷하게'], answer: 0, level: 4, explain: '알음알음 = 서로 아는 관계나 친분을 통해.' },
-    { prompt: '"미쁘다"와 뜻이 가장 가까운 말은?', options: ['믿음직하다', '예쁘다', '미련하다', '어설프다'], answer: 0, level: 5, explain: '미쁘다 = 믿음성이 있다, 믿음직하다.' },
-    { prompt: '"사위스럽다"와 뜻이 가장 가까운 것은?', options: ['마음에 불길한 느낌이 들다', '사이가 서먹하다', '몹시 까다롭다', '몸가짐이 단정하다'], answer: 0, level: 5, explain: '사위스럽다 = 마음에 꺼림칙하고 불길한 느낌이 있다.' }
+    { prompt: '"유보하다"와 뜻이 가장 가까운 말은?', options: ['미루다', '결정하다', '거절하다', '보관하다'], answer: 0, level: 2, explain: '유보하다는 결정을 나중으로 미룬다는 뜻이에요.' },
+    { prompt: '"미미하다"와 뜻이 가장 가까운 말은?', options: ['보잘것없다', '아름답다', '조용하다', '강하다'], answer: 0, level: 2, explain: '미미하다는 보잘것없이 아주 작다는 뜻이에요.' },
+    { prompt: '"완곡하다"와 뜻이 가장 가까운 것은?', options: ['부드럽게 돌려 말하다', '직설적으로 말하다', '단호하게 말하다', '길게 늘여 말하다'], answer: 0, level: 3, explain: '완곡하다는 듣기 좋게 돌려서 부드럽게 말한다는 뜻이에요.' },
+    { prompt: '"고루하다"와 뜻이 가장 가까운 것은?', options: ['낡고 융통성이 없다', '고르고 균등하다', '외롭고 쓸쓸하다', '높고 귀하다'], answer: 0, level: 3, explain: '고루하다는 낡은 생각에 매여 융통성이 없다는 뜻이에요.' },
+    { prompt: '"서슴다"와 뜻이 가장 가까운 말은?', options: ['망설이다', '서두르다', '숨기다', '다투다'], answer: 0, level: 4, explain: '서슴다는 결정을 내리지 못하고 머뭇거린다는 뜻이에요. "서슴지 않고"라고 할 때의 그 말이에요.' },
+    { prompt: '"알음알음"의 뜻으로 가장 알맞은 것은?', options: ['서로 아는 관계를 통해', '아주 천천히 조금씩', '남몰래 은밀하게', '분명하고 뚜렷하게'], answer: 0, level: 4, explain: '알음알음은 서로 아는 관계나 친분을 통해서라는 뜻이에요.' },
+    { prompt: '"미쁘다"와 뜻이 가장 가까운 말은?', options: ['믿음직하다', '미심쩍다', '어여쁘다', '변덕이 심하다'], answer: 0, level: 5, explain: '미쁘다는 믿음성이 있다, 곧 믿음직하다는 뜻이에요. 미심쩍다는 오히려 반대에 가까워요.' },
+    { prompt: '"사위스럽다"와 뜻이 가장 가까운 것은?', options: ['어쩐지 불길하다', '사이가 서먹하다', '몹시 까다롭다', '몸가짐이 단정하다'], answer: 0, level: 5, explain: '사위스럽다는 마음에 불길한 느낌이 들고 꺼림칙하다는 뜻이에요.' },
+    { prompt: '"부족하다"와 뜻이 가장 가까운 말은?', options: ['모자라다', '넘치다', '가볍다', '여유가 있다'], answer: 0, level: 1, explain: '부족하다는 필요한 만큼 넉넉하지 않다는 뜻이라 "모자라다"와 같아요.' },
+    { prompt: '"느긋하다"와 뜻이 가장 가까운 말은?', options: ['여유롭다', '조급하다', '부지런하다', '쓸쓸하다'], answer: 0, level: 1, explain: '느긋하다는 서두르지 않고 마음에 여유가 있다는 뜻이에요. 조급하다는 반대말이에요.' },
+    { prompt: '"게으르다"의 반대말에 가장 가까운 것은?', options: ['부지런하다', '꾸물꾸물하다', '나른하다', '한가하다'], answer: 0, level: 1, explain: '게으르다는 움직이거나 일하기를 싫어한다는 뜻이고, 반대는 부지런하다예요. 꾸물꾸물하다는 오히려 게으른 모습에 가까워요.' },
+    { prompt: '"흔하다"의 반대말에 가장 가까운 것은?', options: ['드물다', '많다', '평범하다', '자주 있다'], answer: 0, level: 1, explain: '흔하다는 보기 쉽고 자주 있다는 뜻이고, 반대는 드물다예요.' },
+    { prompt: '"정직하다"와 뜻이 가장 가까운 말은?', options: ['솔직하다', '영리하다', '친절하다', '용감하다'], answer: 0, level: 1, explain: '정직하다는 거짓이나 꾸밈이 없이 바르고 곧다는 뜻이라 "솔직하다"와 가까워요.' },
+    { prompt: '"모호하다"와 뜻이 가장 가까운 말은?', options: ['애매하다', '분명하다', '명백하다', '엄격하다'], answer: 0, level: 2, explain: '모호하다는 말이나 태도가 흐릿해서 분명하지 않다는 뜻이라 "애매하다"와 가까워요. 분명하다·명백하다는 반대말이에요.' },
+    { prompt: '"단념하다"와 뜻이 가장 가까운 말은?', options: ['포기하다', '결심하다', '기대하다', '집중하다'], answer: 0, level: 2, explain: '단념하다는 품었던 생각을 아주 끊어 버린다는 뜻이라 "포기하다"와 가까워요.' },
+    { prompt: '"낙관하다"의 반대말에 가장 가까운 것은?', options: ['비관하다', '기대하다', '확신하다', '안심하다'], answer: 0, level: 2, explain: '낙관하다는 앞일을 밝고 희망적으로 본다는 뜻이고, 반대는 어둡게 보는 "비관하다"예요.' },
+    { prompt: '"만류하다"와 뜻이 가장 가까운 말은?', options: ['말리다', '권하다', '허락하다', '재촉하다'], answer: 0, level: 3, explain: '만류하다는 붙들고 못 하게 말린다는 뜻이에요. 권하다·재촉하다는 오히려 하라고 미는 쪽이에요.' },
+    { prompt: '"간과하다"와 뜻이 가장 가까운 것은?', options: ['대충 보아 넘기다', '자세히 살펴보다', '간단히 정리하다', '사이를 띄워 두다'], answer: 0, level: 3, explain: '간과하다는 큰 관심 없이 대강 보아 넘긴다는 뜻이에요. "중요한 점을 간과했다"처럼 써요.' },
+    { prompt: '"모름지기"의 뜻으로 가장 알맞은 것은?', options: ['마땅히', '아마도', '도무지', '어쩌다가'], answer: 0, level: 3, explain: '모름지기는 사리를 따져 보면 마땅히라는 뜻이에요. "모르다"와는 관계없는 말이에요.' },
+    { prompt: '"겸연쩍다"와 뜻이 가장 가까운 것은?', options: ['쑥스럽고 어색하다', '겸손하고 공손하다', '넉넉하고 여유롭다', '지루하고 따분하다'], answer: 0, level: 3, explain: '겸연쩍다는 쑥스럽거나 미안해서 어색하다는 뜻이에요. "겸손하다"와는 다른 말이에요.' },
+    { prompt: '"숙고하다"와 뜻이 가장 가까운 것은?', options: ['곰곰이 생각하다', '잠을 푹 자다', '익숙하게 다루다', '서둘러서 바로 결정하다'], answer: 0, level: 3, explain: '숙고하다는 곰곰이 잘 생각한다는 뜻이에요. 서둘러 정하는 것과는 반대예요.' },
+    { prompt: '"시나브로"의 뜻으로 가장 알맞은 것은?', options: ['모르는 사이에 조금씩', '한꺼번에 아주 갑작스럽게', '몹시 서둘러서', '일부러 꾸며서'], answer: 0, level: 4, explain: '시나브로는 모르는 사이에 조금씩 조금씩이라는 뜻이에요. "쌓인 눈이 시나브로 녹았다"처럼 써요.' },
+    { prompt: '"막역하다"와 뜻이 가장 가까운 것은?', options: ['허물없이 아주 친하다', '앞일이 보이지 않아 막막하다', '넓고 끝이 없다', '서로 사이가 나쁘다'], answer: 0, level: 4, explain: '막역하다는 허물없이 아주 친하다는 뜻이에요. "막역한 친구"처럼 써요.' },
+    { prompt: '"갈음하다"와 뜻이 가장 가까운 것은?', options: ['다른 것으로 대신하다', '숫돌에 칼을 갈아 날을 세우다', '서로 나누어 가지다', '갈라서서 따로 가다'], answer: 0, level: 4, explain: '갈음하다는 다른 것으로 바꾸어 대신한다는 뜻이에요. "짧은 인사로 축사를 갈음했다"처럼 써요.' },
+    { prompt: '"답습하다"와 뜻이 가장 가까운 것은?', options: ['옛 방식을 그대로 따르다', '전에 없던 새로운 방법을 찾아내다', '대답을 뒤로 미루다', '나쁜 습관을 바로 고치다'], answer: 0, level: 4, explain: '답습하다는 예로부터 해 오던 방식을 그대로 따라 한다는 뜻이에요. "관행을 답습하다"처럼 써요.' },
+    { prompt: '"짐짓"의 뜻으로 가장 알맞은 것은?', options: ['마음과 달리 일부러', '짐을 진 것처럼 아주 무겁게', '한참 동안', '서로 번갈아 가며'], answer: 0, level: 4, explain: '짐짓은 마음으로는 그렇지 않으면서 일부러 그렇게라는 뜻이에요. "짐짓 모른 체했다"처럼 써요.' },
+    { prompt: '"자발없다"와 뜻이 가장 가까운 것은?', options: ['가볍고 참을성이 없다', '시키지 않아도 스스로 나서다', '몹시 게으르다', '말수가 적다'], answer: 0, level: 5, explain: '자발없다는 행동이 가볍고 참을성이 없다는 뜻이에요. 스스로 나선다는 "자발적"과는 다른 말이에요.' },
+    { prompt: '"미증유"의 뜻으로 가장 알맞은 것은?', options: ['일찍이 없었던 일', '눈에 띄지 않을 만큼 작은 차이', '흔히 있는 일', '뚜렷한 증거가 없음'], answer: 0, level: 5, explain: '미증유는 지금까지 한 번도 있어 본 적이 없음이라는 뜻이에요. "미증유의 사태"처럼 써요.' },
+    { prompt: '"천착하다"와 뜻이 가장 가까운 것은?', options: ['깊이 파고들어 연구하다', '겉만 대강 훑어보다', '천천히 자리를 잡다', '하늘 높이 힘차게 솟아오르다'], answer: 0, level: 5, explain: '천착하다는 원인이나 내용을 깊이 파고들어 알아내거나 연구한다는 뜻이에요. "한 주제에 천착하다"처럼 써요.' },
+    { prompt: '"가없다"와 뜻이 가장 가까운 것은?', options: ['끝이 없다', '불쌍하다', '값어치가 없다', '가장자리가 있다'], answer: 0, level: 5, explain: '가없다는 끝이 없다는 뜻이에요. "가없는 사랑"처럼 써요. 불쌍하다는 뜻의 "가엾다"와 헷갈리기 쉬워요.' },
+    { prompt: '"느껍다"와 뜻이 가장 가까운 것은?', options: ['느낌이 북받쳐 벅차다', '움직임이 몹시 느릿하다', '두껍고 무겁다', '싫증이 나다'], answer: 0, level: 5, explain: '느껍다는 어떤 느낌이 마음에 북받쳐서 벅차다는 뜻이에요. "느꺼운 마음"처럼 써요.' }
   ];
+  /* 논리: 정답은 전제에서 "반드시" 따라 나오는 것 하나뿐이고, 오답은 거짓이거나 참일 수도 있을 뿐인 문장이다.
+     전제에 "거짓말"이 들어가면 질문이 "거짓말을 하는 사람은 누구일까요?"로 바뀐다(choiceItems). */
   const LOGIC = [
     { premise: '모든 고래는 포유류다. 모든 포유류는 폐로 숨 쉰다.', options: ['모든 고래는 폐로 숨 쉰다', '폐로 숨 쉬는 동물은 모두 고래다', '어떤 포유류는 고래가 아니다', '고래는 물고기다'], answer: 0, level: 1, explain: '고래 → 포유류 → 폐호흡이니까 모든 고래는 폐로 숨 쉬어요.' },
     { premise: '민수는 지호보다 키가 크다. 지호는 수아보다 키가 크다.', options: ['민수는 수아보다 키가 크다', '수아는 민수보다 키가 크다', '지호가 가장 크다', '셋의 키는 같다'], answer: 0, level: 1, explain: '민수 > 지호 > 수아니까 민수 > 수아예요.' },
@@ -654,9 +704,33 @@
     { premise: '어떤 새는 날지 못한다. 모든 새는 알을 낳는다.', options: ['알을 낳는 동물 중에 날지 못하는 것이 있다', '날지 못하는 동물은 모두 새다', '알을 낳지 않는 새가 있다', '모든 새는 날지 못한다'], answer: 0, level: 4, explain: '날지 못하는 새가 적어도 하나 있고 그 새도 알을 낳으니까, 알을 낳으면서 날지 못하는 동물이 있어요.' },
     { premise: '회의에 참석한 사람은 모두 보고서를 읽었다. 지수는 보고서를 읽지 않았다.', options: ['지수는 회의에 참석하지 않았다', '지수는 회의에 참석했다', '보고서를 읽은 사람은 모두 회의에 참석했다', '알 수 없다'], answer: 0, level: 4, explain: '참석했다면 읽었어야 하는데 읽지 않았으니까 참석하지 않은 거예요 (후건 부정).' },
     { premise: '모든 B는 C다. 어떤 A는 B가 아니다.', options: ['A와 C의 관계는 알 수 없다', '어떤 A는 C가 아니다', '모든 A는 C다', '어떤 A는 C다'], answer: 0, level: 5, explain: 'B가 아닌 A가 C인지 아닌지는 전제에 없어요. "B가 아니면 C도 아니다"로 읽기 쉬운 함정이에요.' },
-    { premise: '진우, 민아, 서준 중 한 명만 거짓말을 한다. 진우: "민아는 거짓말쟁이다." 민아: "서준은 거짓말쟁이다." 서준: "나는 거짓말쟁이가 아니다."', options: ['민아', '진우', '서준', '알 수 없다'], answer: 0, level: 5, explain: '민아가 거짓말쟁이라면 진우의 말도 참, 서준의 말도 참이라 거짓말쟁이가 한 명뿐이라는 조건에 맞아요. 다른 경우에는 거짓말쟁이가 둘이 돼요.' }
+    { premise: '진우, 민아, 서준 중 한 명만 거짓말을 한다. 진우: "민아는 거짓말쟁이다." 민아: "서준은 거짓말쟁이다." 서준: "나는 거짓말쟁이가 아니다."', options: ['민아', '진우', '서준', '알 수 없다'], answer: 0, level: 5, explain: '민아가 거짓말쟁이라면 진우의 말도 참, 서준의 말도 참이라 거짓말쟁이가 한 명뿐이라는 조건에 맞아요. 다른 경우에는 거짓말쟁이가 둘이 돼요.' },
+    { premise: '비가 오면 소풍은 취소된다. 오늘은 비가 온다.', options: ['오늘 소풍은 취소된다', '오늘 소풍을 간다', '내일은 맑다', '소풍은 늘 취소된다'], answer: 0, level: 1, explain: '"비가 오면 취소"이고 오늘 비가 오니까 오늘 소풍은 취소돼요.' },
+    { premise: '모든 장미는 꽃이다. 이 식물은 장미다.', options: ['이 식물은 꽃이다', '모든 꽃은 장미다', '이 식물은 빨간색이다', '이 식물은 장미가 아니다'], answer: 0, level: 1, explain: '장미는 모두 꽃이고 이 식물은 장미니까 꽃이에요. 꽃이 모두 장미인 것은 아니에요.' },
+    { premise: '이 가게는 월요일에만 문을 닫는다. 오늘은 수요일이다.', options: ['오늘 가게는 문을 연다', '오늘은 가게가 쉰다', '가게는 일주일 내내 문을 연다', '내일은 가게가 문을 닫는다'], answer: 0, level: 1, explain: '월요일에만 닫으니까 수요일인 오늘은 문을 열어요. 내일인 목요일에도 열어요.' },
+    { premise: '지민이는 영호보다 나이가 많다. 영호는 지민이보다 키가 크다.', options: ['영호는 지민이보다 어리다', '지민이가 키가 더 크다', '영호가 나이가 더 많다', '둘은 동갑이다'], answer: 0, level: 1, explain: '지민이가 영호보다 나이가 많다는 말은 영호가 지민이보다 어리다는 말과 같아요. 키는 영호가 더 커요.' },
+    { premise: '세 사람이 한 줄로 섰다. 가은이는 맨 앞에 있고, 나래는 다온이 바로 앞에 있다.', options: ['다온이는 맨 뒤에 있다', '나래는 맨 앞에 있다', '가은이는 맨 뒤에 있다', '다온이는 가은이 바로 뒤에 있다'], answer: 0, level: 1, explain: '가은이가 맨 앞이고 나래가 다온이 바로 앞이니까 순서는 가은, 나래, 다온이에요.' },
+    { premise: '출입증이 있는 사람만 이 건물에 들어올 수 있다. 은지는 이 건물에 들어왔다.', options: ['은지는 출입증이 있다', '출입증이 있으면 누구나 들어온다', '은지는 이 건물 직원이다', '은지는 출입증이 없다'], answer: 0, level: 2, explain: '출입증이 있는 사람"만" 들어올 수 있으니까 들어온 은지는 출입증이 있어요. 출입증이 있다고 모두 들어오는 것은 아니에요.' },
+    { premise: '네 사람이 달리기를 했다. 하준이는 시우보다 빨랐고, 시우는 도윤이보다 빨랐고, 도윤이는 유준이보다 빨랐다.', options: ['하준이가 가장 빨랐다', '유준이는 시우보다 빨랐다', '도윤이가 가장 빨랐다', '시우가 가장 느렸다'], answer: 0, level: 2, explain: '빠른 차례가 하준, 시우, 도윤, 유준이니까 하준이가 가장 빨랐어요.' },
+    { premise: '이 상자에 든 사과는 하나도 썩지 않았다.', options: ['이 상자의 사과는 모두 썩지 않았다', '이 상자의 사과 중 몇 개는 썩었다', '이 상자에는 배도 들어 있다', '썩은 사과는 다른 상자에 있다'], answer: 0, level: 2, explain: '"하나도 썩지 않았다"는 "모두 썩지 않았다"와 같은 말이에요. 배나 다른 상자에 대해서는 알 수 없어요.' },
+    { premise: '어제는 월요일이었다.', options: ['모레는 목요일이다', '오늘은 수요일이다', '내일은 화요일이다', '그저께는 토요일이다'], answer: 0, level: 2, explain: '어제가 월요일이면 오늘은 화요일, 내일은 수요일, 모레는 목요일이에요. 그저께는 일요일이고요.' },
+    { premise: '수빈이의 엄마는 외동딸이다.', options: ['수빈이에게는 이모가 없다', '수빈이에게는 고모가 없다', '수빈이는 형제자매가 없는 외동이다', '수빈이에게는 삼촌이 없다'], answer: 0, level: 2, explain: '엄마가 외동딸이면 엄마에게는 형제자매가 없으니 이모(엄마의 언니나 여동생)가 없어요. 고모와 삼촌은 아빠 쪽이라 알 수 없어요.' },
+    { premise: '이 반 학생이 모두 안경을 쓴 것은 아니다.', options: ['안경을 쓰지 않은 학생이 있다', '이 반 학생은 모두 안경을 쓰지 않았다', '안경을 쓴 학생이 적어도 한 명 있다', '이 반 학생은 안경을 싫어한다'], answer: 0, level: 3, explain: '"모두 그런 것은 아니다"는 그렇지 않은 사람이 적어도 한 명 있다는 뜻이에요. 안경을 쓴 학생이 있는지는 알 수 없어요. 아무도 안 썼을 수도 있거든요.' },
+    { premise: '이 정원의 꽃은 모두 장미 아니면 튤립이다. 이 정원의 튤립은 모두 노랗다. 정원에 핀 이 꽃은 노랗지 않다.', options: ['정원에 핀 이 꽃은 장미다', '정원에 핀 이 꽃은 튤립이다', '이 정원의 장미는 모두 빨갛다', '정원의 꽃은 모두 노랗다'], answer: 0, level: 3, explain: '튤립이라면 노래야 하는데 노랗지 않으니 튤립이 아니에요. 장미 아니면 튤립이니까 이 꽃은 장미예요.' },
+    { premise: '어떤 운동선수는 채식주의자다. 채식주의자는 아무도 고기를 먹지 않는다.', options: ['고기를 먹지 않는 운동선수가 있다', '운동선수는 모두 고기를 먹지 않는다', '고기를 먹지 않는 사람은 모두 채식주의자다', '채식주의자는 모두 운동선수다'], answer: 0, level: 3, explain: '채식주의자인 운동선수가 적어도 한 명 있고, 그 사람은 고기를 먹지 않아요. 그러니 고기를 먹지 않는 운동선수가 있어요.' },
+    { premise: '서랍에 검은 양말과 흰 양말이 여러 짝 섞여 있다. 불을 끈 채로 양말을 꺼낸다.', options: ['세 짝을 꺼내면 같은 색 두 짝이 꼭 있다', '두 짝만 꺼내도 반드시 같은 색이다', '같은 색 두 짝을 얻으려면 네 짝은 꺼내야 한다', '검은 양말이 흰 양말보다 많다'], answer: 0, level: 3, explain: '색이 두 가지뿐이라 세 짝을 꺼내면 적어도 두 짝은 색이 같아요. 두 짝만 꺼내면 색이 다를 수 있어요.' },
+    { premise: '공연표가 매진되면 추가 공연을 연다. 추가 공연을 열면 배우들은 휴가를 미룬다. 배우들은 휴가를 미루지 않았다.', options: ['공연표는 매진되지 않았다', '추가 공연을 열었다', '공연표가 매진되었다', '배우들은 휴가 중이다'], answer: 0, level: 4, explain: '휴가를 미루지 않았으니 추가 공연은 없었고, 추가 공연이 없었으니 표도 매진되지 않았어요. 뒤에서부터 거꾸로 따지면 돼요.' },
+    { premise: '책 다섯 권을 한 줄로 꽂았다. 국어책은 맨 왼쪽, 과학책은 맨 오른쪽에 있다. 사회책은 국어책 바로 오른쪽에 있고, 수학책은 영어책 바로 오른쪽에 있다.', options: ['영어책은 한가운데에 있다', '수학책은 사회책 바로 오른쪽에 있다', '영어책은 과학책 바로 왼쪽에 있다', '사회책은 한가운데에 있다'], answer: 0, level: 4, explain: '왼쪽부터 국어, 사회가 오고 과학이 맨 오른쪽이니 남은 셋째·넷째 자리에 영어, 수학이 차례로 들어가요. 그래서 영어책이 한가운데예요.' },
+    { premise: '이 동아리에서 기타를 치는 회원은 모두 노래도 한다. 노래를 하는 회원은 아무도 피아노를 치지 않는다.', options: ['기타를 치는 회원은 피아노를 치지 않는다', '노래를 하는 회원은 모두 기타를 친다', '피아노를 치지 않는 회원은 모두 기타를 친다', '피아노를 치는 회원도 노래를 한다'], answer: 0, level: 4, explain: '기타를 치면 노래를 하고, 노래를 하면 피아노를 치지 않으니 기타를 치는 회원은 피아노를 치지 않아요. 문장을 거꾸로 뒤집은 것은 따라 나오지 않아요.' },
+    { premise: '이 자격시험에 합격하려면 필기와 실기를 모두 통과해야 한다. 윤서는 이 시험에 합격했다.', options: ['윤서는 실기를 통과했다', '필기와 실기를 통과하면 반드시 합격한다', '윤서는 필기만 통과했다', '윤서는 실기에서 떨어졌다'], answer: 0, level: 4, explain: '합격하려면 둘 다 통과해야 하니까 합격한 윤서는 실기도 통과했어요. 둘을 통과하면 꼭 합격한다는 말은 없어요. 다른 조건이 더 있을 수도 있거든요.' },
+    { premise: '가람, 나리, 다빈은 빨강, 파랑, 초록 우산을 하나씩 썼고 셋의 색은 모두 달랐다. 가람이는 빨간 우산을 쓰지 않았고, 나리는 파란 우산을 썼다.', options: ['다빈이는 빨간 우산을 썼다', '가람이는 파란 우산을 썼다', '다빈이는 초록 우산을 썼다', '나리와 다빈이는 같은 색 우산을 썼다'], answer: 0, level: 4, explain: '나리가 파랑이니 가람이는 빨강도 파랑도 아닌 초록이에요. 남은 빨강은 다빈이 차지예요.' },
+    { premise: '가온, 나은, 다올 중 한 명만 거짓말을 한다. 가온: "나은이는 진실을 말한다." 나은: "다올이는 거짓말을 한다." 다올: "가온이는 거짓말을 한다."', options: ['다올', '가온', '나은', '알 수 없다'], answer: 0, level: 5, explain: '다올이가 거짓말을 한다면 가온이와 나은이의 말은 참이고 다올이의 말만 거짓이라 조건에 맞아요. 가온이나 나은이가 거짓말을 한다고 두면 거짓말하는 사람이 둘이 돼요.' },
+    { premise: '다섯 명이 시험을 봤고 점수는 모두 달랐다. 가영이는 나영이보다, 나영이는 라영이보다, 라영이는 다영이보다 점수가 높다. 마영이는 1등도 꼴찌도 아니다.', options: ['다영이가 꼴찌다', '마영이는 나영이보다 높다', '가영이는 2등이다', '라영이는 4등이다'], answer: 0, level: 5, explain: '가영, 나영, 라영, 다영 차례는 정해져 있고, 마영이는 맨 위도 맨 아래도 아니니 그 사이 어딘가에 들어가요. 그래서 1등은 가영이, 꼴찌는 다영이예요. 라영이의 등수는 마영이 자리에 따라 달라져요.' },
+    { premise: '토요일이 아니면 도서관은 문을 연다. 도서관이 문을 열면 지호는 도서관에 간다. 오늘 지호는 도서관에 가지 않았다.', options: ['오늘은 토요일이다', '오늘 도서관은 문을 열었다', '토요일에는 도서관이 늘 쉰다', '지호는 토요일마다 도서관에 안 간다'], answer: 0, level: 5, explain: '지호가 가지 않았으니 도서관은 문을 열지 않았어요. 토요일이 아니었다면 문을 열었을 테니 오늘은 토요일이에요. 토요일마다 쉰다는 말은 없어요.' },
+    { premise: '모임에 온 20명은 모두 커피와 차 가운데 적어도 하나를 마셨다. 커피를 마신 사람은 12명, 차를 마신 사람은 10명이다.', options: ['둘 다 마신 사람은 2명이다', '차만 마신 사람은 10명이다', '커피만 마신 사람은 12명이다', '둘 다 마신 사람은 한 명도 없다'], answer: 0, level: 5, explain: '12명과 10명을 더하면 22명인데 실제로는 20명이에요. 두 번 센 2명이 커피와 차를 모두 마신 사람이에요.' },
+    { premise: '모든 A는 B이거나 C다. 어떤 A는 B가 아니다.', options: ['어떤 A는 C다', '모든 A는 C다', '어떤 A는 B이면서 C다', 'B가 아닌 것은 모두 C다'], answer: 0, level: 5, explain: 'B가 아닌 A가 적어도 하나 있고, A는 모두 B나 C이니 그 A는 C예요. A가 모두 C인지, A가 아닌 것은 어떤지는 알 수 없어요.' }
   ];
-  /* 공통점 찾기: 두 낱말의 본질적 공통점(범주·기능)을 고른다. 보기 길이는 정답과 무관하게 섞었다. */
+  /* 공통점 찾기: 두 낱말의 본질적 공통점(범주·기능)을 고른다. 오답은 한쪽에만 맞거나 둘 다에 틀린 것이고, 보기 길이는 정답과 무관하게 섞었다. */
   const SIMILAR = [
     { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 껍질째 먹는다', '둘 다 씨가 하나도 없다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"이에요. 노란색과 껍질째 먹는 것은 한쪽에만 해당하고, 사과에는 씨가 있어요.' },
     { pair: ['개', '고양이'], options: ['네 발 달린 포유류다', '사람을 보면 짖는다', '주인을 따라다닌다', '주로 밤에 활동한다'], answer: 0, level: 1, explain: '둘 다 포유류예요. 나머지는 한쪽에만 해당해요.' },
@@ -668,9 +742,35 @@
     { pair: ['뿌리', '기초'], options: ['전체를 떠받치는 바탕이다', '위로 갈수록 두꺼워진다', '시간이 지나면 저절로 사라진다', '식물에게만 있는 것이다'], answer: 0, level: 4, explain: '보이지 않는 곳에서 전체를 받친다는 점이 핵심이에요.' },
     { pair: ['민주주의', '독재'], options: ['사회를 다스리는 방식이다', '국민이 직접 투표한다', '권력이 한 사람에게 있다', '현대에 와서 생긴 제도다'], answer: 0, level: 5, explain: '정반대의 체제지만 둘 다 "나라를 다스리는 방식"이라는 범주에 속해요.' },
     { pair: ['희망', '두려움'], options: ['앞일에 대한 감정이다', '마음이 편해지는 감정이다', '주로 밤에 생기는 감정이다', '남에게 숨기는 감정이다'], answer: 0, level: 5, explain: '둘 다 아직 오지 않은 일을 향한 감정이에요.' },
-    { pair: ['소문', '뉴스'], options: ['사람들에게 퍼지는 정보다', '언제나 사실에 근거한다', '신문과 방송에만 실린다', '며칠 지나면 모두 잊힌다'], answer: 0, level: 5, explain: '사실인지와 퍼지는 경로는 다르지만 둘 다 사람들 사이에 퍼지는 정보예요.' }
+    { pair: ['소문', '뉴스'], options: ['사람들에게 퍼지는 정보다', '언제나 사실에 근거한다', '신문과 방송에만 실린다', '며칠 지나면 모두 잊힌다'], answer: 0, level: 5, explain: '사실인지와 퍼지는 경로는 다르지만 둘 다 사람들 사이에 퍼지는 정보예요.' },
+    { pair: ['셔츠', '바지'], options: ['몸에 입는 옷이다', '다리를 넣어 입는다', '단추가 꼭 달려 있다', '추운 겨울에만 입는다'], answer: 0, level: 1, explain: '둘 다 몸에 입는 옷이에요. 다리를 넣어 입는 것은 바지뿐이고, 단추나 계절과는 상관없어요.' },
+    { pair: ['피아노', '기타'], options: ['소리를 내는 악기다', '줄을 손가락으로 튕긴다', '건반을 눌러 연주한다', '전기가 있어야 소리가 난다'], answer: 0, level: 1, explain: '둘 다 연주해서 소리를 내는 악기예요. 줄을 튕기는 것은 기타, 건반을 누르는 것은 피아노예요.' },
+    { pair: ['버스', '기차'], options: ['사람이 타는 탈것이다', '도로로만 다닌다', '철길로만 달린다', '하늘을 난다'], answer: 0, level: 1, explain: '둘 다 사람을 태워 나르는 탈것이에요. 도로로 다니는 것은 버스, 철길로 다니는 것은 기차예요.' },
+    { pair: ['숟가락', '젓가락'], options: ['밥 먹을 때 쓰는 도구다', '국물을 떠먹기에 알맞다', '두 짝이 모여야 한 벌이 된다', '반드시 나무로만 만든다'], answer: 0, level: 1, explain: '둘 다 밥을 먹을 때 쓰는 도구예요. 국물을 뜨는 것은 숟가락, 두 짝이 한 벌인 것은 젓가락이에요.' },
+    { pair: ['비', '눈'], options: ['하늘에서 내리는 물이다', '얼음 알갱이로 되어 있다', '여름에 많이 내린다', '땅에서 솟아오른다'], answer: 0, level: 1, explain: '둘 다 구름에서 땅으로 떨어지는 물이에요. 눈은 얼어서, 비는 물방울로 내린다는 것만 달라요.' },
+    { pair: ['간장', '식초'], options: ['음식에 맛을 내는 재료다', '짠맛이 강하게 난다', '신맛이 강하게 난다', '과일을 그대로 짜서 만든 즙이다'], answer: 0, level: 2, explain: '둘 다 음식의 맛을 내는 조미료예요. 짠맛은 간장, 신맛은 식초에만 해당해요.' },
+    { pair: ['의자', '침대'], options: ['몸을 쉬게 하는 가구다', '누워서 잠을 잔다', '등받이가 꼭 있다', '바퀴가 달려 있다'], answer: 0, level: 2, explain: '둘 다 몸을 올려 쉬게 하는 가구예요. 누워 자는 것은 침대의 쓰임이고, 등받이가 없는 의자도 있어요.' },
+    { pair: ['꿀벌', '나비'], options: ['꽃가루를 옮기는 곤충이다', '꿀을 모아 저장한다', '꽁무니의 침으로 쏜다', '날개에 화려한 무늬가 있다'], answer: 0, level: 2, explain: '둘 다 꽃을 찾아다니며 꽃가루를 옮기는 곤충이에요. 꿀을 모으고 침이 있는 것은 꿀벌, 화려한 날개는 나비의 특징이에요.' },
+    { pair: ['항구', '공항'], options: ['탈것이 드나드는 곳이다', '배가 닻을 내린다', '비행기가 하늘로 뜨고 내린다', '바닷가에만 있다'], answer: 0, level: 2, explain: '둘 다 탈것이 사람과 짐을 싣고 드나드는 곳이에요. 배는 항구로, 비행기는 공항으로 드나들어요.' },
+    { pair: ['소방관', '경찰관'], options: ['사람들의 안전을 지킨다', '불이 나면 출동해 불을 끈다', '범인을 쫓아가 붙잡는다', '밤에는 일하지 않는다'], answer: 0, level: 2, explain: '둘 다 사람들의 안전을 지키는 일을 해요. 불을 끄는 것은 소방관, 범인을 잡는 것은 경찰관의 일이에요.' },
+    { pair: ['물', '공기'], options: ['생물이 사는 데 꼭 필요하다', '눈에 전혀 보이지 않는다', '목마를 때 마신다', '불을 붙이면 잘 탄다'], answer: 0, level: 3, explain: '둘 다 생물이 살아가는 데 꼭 있어야 해요. 눈에 안 보이는 것은 공기, 마시는 것은 물이에요.' },
+    { pair: ['고래', '박쥐'], options: ['새끼를 낳아 젖을 먹인다', '물속에서 헤엄쳐 다닌다', '날개를 펴고 밤하늘을 날아다닌다', '알을 낳아 품는다'], answer: 0, level: 3, explain: '사는 곳은 바다와 하늘로 다르지만, 둘 다 새끼를 낳아 젖을 먹이는 포유류예요.' },
+    { pair: ['일기', '사진'], options: ['지난 일을 기록해 남긴다', '날마다 글로 적어서 남긴다', '카메라로 찍어서 남긴다', '반드시 남에게 보여 준다'], answer: 0, level: 3, explain: '둘 다 지나간 일을 기록으로 남겨요. 글로 적는 것은 일기, 카메라로 찍는 것은 사진이에요.' },
+    { pair: ['박물관', '도서관'], options: ['자료를 모아 두고 보여 준다', '책을 집으로 빌려 가게 해 준다', '옛 유물을 전시한다', '돈을 내야만 들어갈 수 있다'], answer: 0, level: 3, explain: '둘 다 자료를 모아 두고 사람들이 보거나 쓰게 하는 곳이에요. 책을 빌려주는 것은 도서관, 유물을 전시하는 것은 박물관이에요.' },
+    { pair: ['등대', '신호등'], options: ['불빛으로 안전을 돕는다', '바닷가 높은 곳에 서 있다', '세 가지 색으로 바뀐다', '낮에만 불을 밝힌다'], answer: 0, level: 3, explain: '둘 다 불빛으로 신호를 보내 사고를 막아요. 바닷가에 서 있는 것은 등대, 색이 바뀌는 것은 신호등이에요.' },
+    { pair: ['소금', '냉장고'], options: ['음식이 상하는 것을 늦춘다', '음식에 짠맛을 더해 준다', '전기를 꽂아야 움직인다', '음식을 달고 부드럽게 만든다'], answer: 0, level: 4, explain: '하나는 양념이고 하나는 가전제품이지만, 둘 다 음식이 쉽게 상하지 않게 해요. 소금에 절이거나 차갑게 두면 오래가요.' },
+    { pair: ['관절', '경첩'], options: ['이어진 부분을 움직이게 한다', '몸속에서 뼈와 뼈를 잇는다', '문짝과 문틀 사이에 붙어 있다', '닳아도 저절로 다시 낫는다'], answer: 0, level: 4, explain: '둘 다 두 부분을 이어 주면서 굽히거나 돌 수 있게 해요. 관절은 몸에서, 경첩은 문에서 그 일을 해요.' },
+    { pair: ['백신', '안전띠'], options: ['위험에 미리 대비하게 한다', '주사기로 몸속에 넣어 준다', '자동차 좌석마다 달려 있다', '다친 다음에 상처를 치료한다'], answer: 0, level: 4, explain: '둘 다 일이 생기기 전에 미리 몸을 지켜 줘요. 백신은 병에, 안전띠는 사고에 대비해요. 다친 뒤에 치료하는 것과는 달라요.' },
+    { pair: ['나침반', '북극성'], options: ['방향을 찾게 도와준다', '밤하늘에서 빛난다', '자석의 힘을 이용한다', '동쪽을 가리킨다'], answer: 0, level: 4, explain: '둘 다 길을 잃었을 때 북쪽, 곧 방향을 알려 줘요. 밤하늘에서 빛나는 것은 북극성, 자석을 쓰는 것은 나침반이에요.' },
+    { pair: ['시험', '체온계'], options: ['상태를 재서 알려 준다', '정해진 시간에 문제를 푼다', '열이 나는지 알려 준다', '숫자가 높을수록 좋다'], answer: 0, level: 4, explain: '둘 다 눈에 안 보이는 상태를 재서 알려 줘요. 시험은 실력을, 체온계는 몸의 열을 재요.' },
+    { pair: ['사막', '남극'], options: ['비나 눈이 아주 적게 내린다', '낮이면 숨이 막힐 만큼 덥다', '온통 두꺼운 얼음으로 덮여 있다', '사람이 많이 모여 산다'], answer: 0, level: 5, explain: '하나는 덥고 하나는 춥지만, 둘 다 비나 눈이 아주 적게 내리는 메마른 곳이에요. 그래서 남극을 추운 사막이라고도 해요.' },
+    { pair: ['문', '눈꺼풀'], options: ['열고 닫아 안쪽을 지킨다', '손잡이를 돌려 연다', '깜빡여 눈물을 고루 퍼뜨린다', '잠잘 때도 늘 열려 있다'], answer: 0, level: 5, explain: '둘 다 열었다 닫았다 하며 안쪽을 지켜요. 문은 집 안을, 눈꺼풀은 눈을 보호해요.' },
+    { pair: ['화폐', '언어'], options: ['사람들이 함께 정한 약속이다', '물건을 사고팔 때 주고받는다', '입으로 소리 내어 뜻을 전한다', '어느 나라에서나 다 똑같다'], answer: 0, level: 5, explain: '종이돈이 값을 갖고 낱말이 뜻을 갖는 것은 사람들이 그렇게 쓰자고 약속했기 때문이에요. 둘 다 그 약속 위에서 주고받는 수단이에요.' },
+    { pair: ['미끼', '광고'], options: ['상대를 끌어들이려고 쓴다', '물고기를 잡을 때 쓴다', '텔레비전이나 신문에 실려 나온다', '늘 사실만을 알려 준다'], answer: 0, level: 5, explain: '둘 다 상대의 관심을 끌어 다가오게 만드는 수단이에요. 물고기를 낚는 것은 미끼, 매체에 실리는 것은 광고예요.' }
   ].map(function (it) { it.prompt = U.josa('"' + it.pair[0] + '"', '과', '와') + ' "' + it.pair[1] + '"의 공통점으로 가장 알맞은 것은?'; return it; });
-  const QUICK_VERBAL = [0, 3, 6, 8, 10, 11];
+  /* 연습 문제로 쓰는 문항 번호(모두 1단계). 연습에서 정답과 해설을 보여 주므로 점수 문항으로는 다시 내지 않는다. */
+  const PRACTICE_ITEM = { analogy: 0, logic: 1, similar: 0 };
+  function practiceUsed(key) { return PRACTICE_ITEM[key] != null ? [PRACTICE_ITEM[key]] : []; }
   /* 기호 찾기용 글리프 12종 (세 가지 비대칭 모양 × 네 방향) */
   function glyphSVG(i) {
     const kind = ['triangle', 'arrow', 'lshape'][Math.floor(i / 4) % 3], rot = (i % 4) * 90;
@@ -687,6 +787,20 @@
         options: o.options, answer: o.answer, optionCols: cols, explain: v.explain
       };
     });
+  }
+
+  /* 고정 문항 풀에서 level에 가장 가까운 단계의 안 쓴 문항 번호를 무작위로 고른다 (남은 문항이 없으면 -1) */
+  function pickFromPool(r, pool, level, used) {
+    let cand = [];
+    for (let d = 0; d <= 5 && !cand.length; d++) {
+      cand = pool.map(function (it, i) { return i; }).filter(function (i) { return used.indexOf(i) < 0 && (pool[i].level === level - d || pool[i].level === level + d); });
+    }
+    return cand.length ? r.pick(cand) : -1;
+  }
+  /* 정밀·빠른 검사: 단계 목록대로 한 문항씩 겹치지 않게 뽑는다 (연습 문항은 빼고) */
+  function drawPool(r, key, levels) {
+    const pool = POOL[key], used = practiceUsed(key);
+    return levels.map(function (l) { const i = pickFromPool(r, pool, l, used); used.push(i); return pool[i]; });
   }
 
   /* ===== 5. 도형 회전 (1~5단계) ===== */
@@ -884,21 +998,26 @@
     weights: { full: [1, 2, 2, 3, 3, 4, 4, 5] },
     series: { full: [1, 1, 2, 2, 3, 3] },
     sequence: { full: [1, 2, 2, 3, 3, 4, 4, 5], quick: [1, 2, 3, 4, 5] },
-    rotation: { full: [1, 2, 3, 4, 5, 5], quick: [1, 2, 4, 5] }
+    rotation: { full: [1, 2, 3, 4, 5, 5], quick: [1, 2, 4, 5] },
+    /* 언어 4과제: 문항 풀(단계마다 7개)에서 단계마다 2~3개씩 뽑는다 */
+    analogy: { full: [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5], quick: [1, 2, 3, 4, 5, 5] },
+    vocab: { full: [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5] },
+    logic: { full: [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5] },
+    similar: { full: [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5] }
   };
   const byLevel = function (list) { return list.slice().sort(function (a, b) { return a.level - b.level; }); };
   const BUILD = {
     matrix: function (r, full) { return (full ? LEVELS.matrix.full : LEVELS.matrix.quick).map(function (l) { return makeMatrix(r, l); }); },
     figAnalogy: function (r) { return LEVELS.figAnalogy.full.map(function (l) { return makeFigAnalogy(r, l); }); },
     weights: function (r) { return LEVELS.weights.full.map(function (l) { return makeWeights(r, l); }); },
-    similar: function (r) { return choiceItems(r, byLevel(SIMILAR), 'similar', 35, 1); },
+    similar: function (r) { return choiceItems(r, byLevel(drawPool(r, 'similar', LEVELS.similar.full)), 'similar', 35, 1); },
     lns: function () { return [{ type: 'seqspan', part: 'lns', scored: true, start: 2, max: 8, title: '숫자-문자 순서', desc: TASKS.lns.desc }]; },
     symbol: function () { return [{ type: 'symsearch', part: 'symbol', scored: true, seconds: 60, title: '기호 찾기', desc: TASKS.symbol.desc }]; },
     series: function (r) { return LEVELS.series.full.map(function (l) { return makeSeries(r, l); }); },
     sequence: function (r, full) { return (full ? LEVELS.sequence.full : LEVELS.sequence.quick).map(function (l) { return makeSequence(r, l); }); },
-    analogy: function (r, full) { return choiceItems(r, byLevel(full ? VERBAL : QUICK_VERBAL.map(function (i) { return VERBAL[i]; })), 'analogy', function (l) { return l >= 4 ? 45 : 40; }, 2); },
-    vocab: function (r) { return choiceItems(r, byLevel(VOCAB), 'vocab', 35, 1); },
-    logic: function (r) { return choiceItems(r, byLevel(LOGIC), 'logic', function (l) { return l >= 4 ? 75 : 60; }, 1, true); },
+    analogy: function (r, full) { return choiceItems(r, byLevel(drawPool(r, 'analogy', full ? LEVELS.analogy.full : LEVELS.analogy.quick)), 'analogy', function (l) { return l >= 4 ? 45 : 40; }, 2); },
+    vocab: function (r) { return choiceItems(r, byLevel(drawPool(r, 'vocab', LEVELS.vocab.full)), 'vocab', 35, 1); },
+    logic: function (r) { return choiceItems(r, byLevel(drawPool(r, 'logic', LEVELS.logic.full)), 'logic', function (l) { return l >= 4 ? 75 : 60; }, 1, true); },
     rotation: function (r, full) { return (full ? LEVELS.rotation.full : LEVELS.rotation.quick).map(function (l) { return makeRotation(r, l); }); },
     digitF: function () { return [{ type: 'digitspan', part: 'digitF', scored: true, mode: 'forward', start: 3, max: 9, title: '숫자 앞으로 외우기', desc: TASKS.digitF.desc }]; },
     digitB: function () { return [{ type: 'digitspan', part: 'digitB', scored: true, mode: 'backward', start: 2, max: 8, title: '숫자 거꾸로 외우기', desc: TASKS.digitB.desc }]; },
@@ -909,9 +1028,9 @@
   };
   const COUNT_KO = {
     matrix: function (f) { return (f ? 12 : 6) + '문항 · 60~120초 · 1~6단계 · 보기 8개'; }, series: function () { return '6문항 · 40~50초 · 1~3단계'; },
-    figAnalogy: function () { return '10문항 · 45~60초 · 1~5단계'; }, weights: function () { return '8문항 · 60~90초 · 1~5단계'; }, similar: function () { return '11문항 · 35초 · 1~5단계'; },
+    figAnalogy: function () { return '10문항 · 45~60초 · 1~5단계'; }, weights: function () { return '8문항 · 60~90초 · 1~5단계'; }, similar: function () { return '12문항 · 35초 · 1~5단계'; },
     sequence: function (f) { return (f ? 8 : 5) + '문항 · 50~60초 · 1~5단계'; }, analogy: function (f) { return (f ? 12 : 6) + '문항 · 40~45초 · 1~5단계'; },
-    vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '11문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~50초 · 1~5단계'; }
+    vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '12문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~50초 · 1~5단계'; }
   };
 
   /* 처음 보는 과제 앞에 붙는 연습 문제 (시간 제한 없음, 점수 없음, 풀고 나면 정답과 규칙을 보여 준다) */
@@ -919,12 +1038,12 @@
     matrix: function (r) { return makeMatrix(r, 1); },
     figAnalogy: function (r) { return makeFigAnalogy(r, 1); },
     weights: function (r) { return makeWeights(r, 1); },
-    similar: function (r) { return choiceItems(r, [SIMILAR[0]], 'similar', 0, 1)[0]; },
+    similar: function (r) { return choiceItems(r, [SIMILAR[PRACTICE_ITEM.similar]], 'similar', 0, 1)[0]; },
     series: function (r) { return makeSeries(r, 1); },
     sequence: function (r) { return makeSequence(r, 1); },
     rotation: function (r) { return makeRotation(r, 1); },
-    analogy: function (r) { return choiceItems(r, [VERBAL[0]], 'analogy', 0, 2)[0]; },
-    logic: function (r) { return choiceItems(r, [LOGIC[1]], 'logic', 0, 1, true)[0]; }
+    analogy: function (r) { return choiceItems(r, [VERBAL[PRACTICE_ITEM.analogy]], 'analogy', 0, 2)[0]; },
+    logic: function (r) { return choiceItems(r, [LOGIC[PRACTICE_ITEM.logic]], 'logic', 0, 1, true)[0]; }
   };
   function practiceItem(r, key) {
     const it = PRACTICE[key](r);
@@ -952,7 +1071,7 @@
   const POOL_OPTS = { analogy: [40, 2, false], vocab: [35, 1, false], logic: [60, 1, true], similar: [35, 1, false] };
   function adaptStub(key) {
     const a = ADAPT[key];
-    return { type: 'adaptive', part: key, scored: false, count: a.n, state: { done: 0, level: a.start, max: a.max, used: [], levels: [], oks: [] } };
+    return { type: 'adaptive', part: key, scored: false, count: a.n, state: { done: 0, level: a.start, max: a.max, used: practiceUsed(key), levels: [], oks: [] } };
   }
   function adaptNext(stub) {
     if (!stub || stub.type !== 'adaptive') return null;
@@ -963,15 +1082,11 @@
     if (GEN[key]) item = GEN[key](r, st.level);
     else {
       const pool = POOL[key];
-      const all = pool.map(function (it, i) { return { it: it, i: i }; }).filter(function (x) { return st.used.indexOf(x.i) < 0; });
-      let cand = [];
-      for (let d = 0; d <= 5 && !cand.length; d++) cand = all.filter(function (x) { return x.it.level === st.level - d || x.it.level === st.level + d; });
-      if (!cand.length) cand = all;
-      if (!cand.length) return null;
-      const pick = r.pick(cand);
-      st.used.push(pick.i);
+      const i = pickFromPool(r, pool, st.level, st.used);
+      if (i < 0) return null;
+      st.used.push(i);
       const o = POOL_OPTS[key];
-      item = choiceItems(r, [pick.it], key, o[0], o[1], o[2])[0];
+      item = choiceItems(r, [pool[i]], key, o[0], o[1], o[2])[0];
     }
     item.adaptive = true;
     return item;
