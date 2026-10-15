@@ -194,23 +194,31 @@
     }
     return [logicRow(r, op, order), logicRow(r, op, order), logicRow(r, op, order)];
   }
-  /* 2×2: 오른쪽 = 왼쪽 op K (K는 고정 집합). 두 행 모두 결과가 달라지고, 첫 행만으로 연산이 구별되도록 */
+  /* 2×2: 오른쪽 = 왼쪽 op K (K는 숨은 고정 집합). 예시 행이 하나뿐이라 K를 완전히 알 수 없으므로,
+     예시에 맞는 모든 (연산, K') 가설이 질문 행에서 같은 답을 내야 정답이 유일하다. 네 연산 × K'의 모든 부분집합을 확인한다. */
+  function allSubsets(order) {
+    const out = [];
+    for (let m = 1; m < (1 << order.length); m++) { let s = ''; for (let i = 0; i < order.length; i++) if (m & (1 << i)) s += order[i]; out.push(s); }
+    return out;
+  }
+  function kUnique(left0, c0, left1, answer, order) {
+    const subs = allSubsets(order);
+    return Object.keys(OPS).every(function (o) {
+      return subs.every(function (K2) { return OPS[o](left0, K2, order) !== c0 || OPS[o](left1, K2, order) === answer; });
+    });
+  }
   function logicK(r, op, order) {
-    const others = Object.keys(OPS).filter(function (o) { return o !== op; });
-    for (let t = 0; t < 120; t++) {
+    for (let t = 0; t < 300; t++) {
       const K = randomSet(r, order, 1, 2);
-      const rows = [];
-      for (let i = 0; i < 2; i++) {
-        let a = null;
-        for (let u = 0; u < 40; u++) { const cand = randomSet(r, order, 1, 3); const c = OPS[op](cand, K, order); if (c && c !== cand) { a = [cand, c]; break; } }
-        if (!a) break;
-        rows.push(a);
-      }
-      if (rows.length !== 2 || rows[0][0] === rows[1][0]) continue;
-      const distinct = others.every(function (o) { return OPS[o](rows[0][0], K, order) !== rows[0][1]; });
-      if (distinct) return { K: K, rows: rows };
+      const left0 = randomSet(r, order, 1, 3), c0 = OPS[op](left0, K, order);
+      if (!c0 || c0 === left0) continue;
+      const left1 = randomSet(r, order, 1, 3), c1 = OPS[op](left1, K, order);
+      if (!c1 || c1 === left1 || left1 === left0) continue;
+      if (!kUnique(left0, c0, left1, c1, order)) continue;
+      return { K: K, rows: [[left0, c0], [left1, c1]] };
     }
-    return { K: order.slice(0, 1), rows: [[order.slice(1, 2), OPS.union(order.slice(1, 2), order.slice(0, 1), order)], [order.slice(2, 3), OPS.union(order.slice(2, 3), order.slice(0, 1), order)]] };
+    // 검증된 안전한 기본값: K={첫째}, 둘째 → 첫째+둘째, 둘째셋째 → 첫째둘째셋째 (합집합)
+    return { K: order.slice(0, 1), rows: [[order.slice(1, 2), order.slice(0, 2)], [order.slice(1, 3), order.slice(0, 3)]] };
   }
   function logicFoils(r, a, b, op, order, answer, n) {
     n = n || 3;
@@ -462,11 +470,15 @@
     shapes.slice(1).forEach(function (s, i) { w[s] = others[i]; });
     const givens = [];
     shapes.slice(1).forEach(function (s, i) {
-      const k = level >= 4 ? r.int(1, 2) : 1;
-      const left = []; for (let j = 0; j < k; j++) left.push(s);
+      // 오른쪽 접시에는 최대 5개만 올릴 수 있으므로, 2개를 올리는 것은 2·무게 ≤ 5일 때만 (안 그러면 접시가 모자라 잘못된 저울이 그려진다)
+      let k = level >= 4 && 2 * w[s] <= 5 ? r.int(1, 2) : 1;
       const allowed = level >= 3 && i > 0 ? shapes.slice(0, i + 1) : [shapes[0]];
-      const cands = bagsOfWeight(bagWeight(left, w), allowed, w, 5).filter(function (b) { return bagKey(b) !== bagKey(left); });
-      const right = cands.length ? r.pick(cands) : [shapes[0]];
+      let left = [], cands = [];
+      for (; k >= 1 && !cands.length; k--) {
+        left = []; for (let j = 0; j < k; j++) left.push(s);
+        cands = bagsOfWeight(bagWeight(left, w), allowed, w, 5).filter(function (b) { return bagKey(b) !== bagKey(left); });
+      }
+      const right = cands.length ? r.pick(cands) : bagsOfWeight(w[s], [shapes[0]], w, 5)[0];   // w[s] ≤ 5 이므로 항상 있다
       givens.push([left, right]);
     });
     // 질문: 왼쪽 무게를 보기 중에서 찾기
@@ -544,6 +556,9 @@
     if (s[2] - s[0] === s[4] - s[2] && (s[3] - s[1]) !== undefined) out.push(s[3] + (s[3] - s[1]));
     if (d[0] === d[2] && d[1] === d[3]) out.push(s[4] + d[0]);
     if (s[0] === s[1] && s[2] === s[3]) out.push(s[4]);
+    // 뒤쪽 세 차이가 같으면(예: 2, 5, 11, 17, 23) "계속 같은 만큼 더한다"로도 읽히므로 그 예측도 포함한다
+    if (d[1] === d[2] && d[2] === d[3]) out.push(s[4] + d[3]);
+    if (s.slice(1, 4).every(function (x) { return x !== 0; })) { const q2 = s[2] / s[1]; if (s[3] / s[2] === q2 && s[4] / s[3] === q2) out.push(s[4] * q2); }
     return out.filter(function (v, i, arr) { return isFinite(v) && arr.indexOf(v) === i; });
   }
   function makeSequence(r, level) {
@@ -599,7 +614,7 @@
     { prompt: '손가락 : 손 = 발가락 : ?', options: ['발', '다리', '무릎', '신발'], answer: 0, level: 1, explain: '손가락이 손의 일부이듯 발가락은 발의 일부입니다 (부분과 전체).' },
     { prompt: '뜨겁다 : 차갑다 = 넓다 : ?', options: ['길다', '좁다', '얇다', '작다'], answer: 1, level: 1, explain: '반대말 관계입니다.' },
     { prompt: '연필 : 쓰다 = 가위 : ?', options: ['붙이다', '자르다', '재다', '그리다'], answer: 1, level: 1, explain: '도구와 그 도구의 기능입니다.' },
-    { prompt: '새 : 날개 = 물고기 : ?', options: ['비늘', '아가미', '지느러미', '꼬리'], answer: 2, level: 2, explain: '이동에 쓰는 기관입니다. 날개로 날듯 지느러미로 헤엄칩니다.' },
+    { prompt: '새 : 날개 = 물고기 : ?', options: ['비늘', '아가미', '지느러미', '눈'], answer: 2, level: 2, explain: '이동에 쓰는 기관입니다. 날개로 날듯 지느러미로 헤엄칩니다.' },
     { prompt: '온도계 : 온도 = 저울 : ?', options: ['길이', '부피', '무게', '속도'], answer: 2, level: 2, explain: '측정 도구와 측정 대상입니다.' },
     { prompt: '섬 : 바다 = 오아시스 : ?', options: ['강', '사막', '숲', '호수'], answer: 1, level: 2, explain: '넓은 공간 속에 고립된 작은 장소입니다.' },
     { prompt: '나무 : 종이 = 모래 : ?', options: ['시멘트', '유리', '벽돌', '흙'], answer: 1, level: 3, explain: '원료와 그 원료로 만드는 제품입니다. 유리는 모래(규사)로 만듭니다.' },
@@ -638,9 +653,9 @@
   ];
   /* 공통점 찾기: 두 낱말의 본질적 공통점(범주·기능)을 고른다. 보기 길이는 정답과 무관하게 섞었다. */
   const SIMILAR = [
-    { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 나무에서 자란다', '둘 다 씨가 하나도 없다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"입니다. 바나나는 풀에서 열리고, 사과에는 씨가 있습니다.' },
+    { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 껍질째 먹는다', '둘 다 씨가 하나도 없다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"입니다. 노란색과 껍질째 먹는 것은 한쪽에만 해당하고, 사과에는 씨가 있습니다.' },
     { pair: ['개', '고양이'], options: ['네 발 달린 포유류다', '사람을 보면 짖는다', '주인을 따라다닌다', '주로 밤에 활동한다'], answer: 0, level: 1, explain: '둘 다 포유류입니다. 나머지는 한쪽에만 해당합니다.' },
-    { pair: ['시계', '달력'], options: ['시간을 재는 도구다', '벽에 걸어 둔다', '숫자가 적혀 있다', '매일 아침 확인한다'], answer: 0, level: 2, explain: '둘 다 시간을 측정·표시하는 도구입니다. 숫자가 있다는 것은 겉모습일 뿐입니다.' },
+    { pair: ['시계', '달력'], options: ['시간을 재는 도구다', '바늘이 돌아간다', '한 해가 지나면 새것으로 바꾼다', '전기가 있어야 움직인다'], answer: 0, level: 2, explain: '둘 다 시간을 재고 알려 주는 도구입니다. 바늘은 시계에만, 해마다 바꾸는 것은 달력에만 해당합니다.' },
     { pair: ['연필', '붓'], options: ['그리거나 쓰는 도구다', '글씨를 쓰는 데만 쓴다', '잉크를 묻혀 쓴다', '지우개로 지울 수 있다'], answer: 0, level: 2, explain: '기능(그리기·쓰기)이 본질적 공통점입니다. 나머지는 한쪽에만 해당합니다.' },
     { pair: ['증기', '얼음'], options: ['물의 다른 상태다', '만지면 차갑다', '사람이 만들어 낸 것이다', '하늘 위에 떠 있다'], answer: 0, level: 3, explain: '둘 다 물이 상태만 바뀐 것입니다.' },
     { pair: ['칭찬', '벌'], options: ['행동을 바꾸는 수단이다', '받으면 기분이 좋다', '아이에게만 쓰는 것이다', '말로만 할 수 있다'], answer: 0, level: 3, explain: '정반대로 보이지만 둘 다 행동을 조절하려는 수단입니다.' },
@@ -1075,7 +1090,7 @@
       const iq = iqOf(z);
       scales.push({ key: d.key, label: d.label, value: iq, range: IQ_RANGE, raw: '상위 ' + topPct(z) + '%',
         children: keys.map(function (k) { return { key: k, label: TASKS[k].label, value: iqOf(tasks[k].z), range: IQ_RANGE, raw: tasks[k].raw }; }) });
-      sections.push({ title: d.label + ' · 추정 IQ ' + iq, body: d.what + ' 일상에서는 ' + d.where + ' 과제별 결과: ' + keys.map(function (k) { return TASKS[k].label + ' ' + tasks[k].raw + (tasks[k].detail ? ' (' + tasks[k].detail + ')' : '') + (tasks[k].meanP ? ' · 기준 정답률 ' + tasks[k].meanP + '%' : ''); }).join(', ') + '.' });
+      sections.push({ title: d.label + ' · 추정 IQ ' + iq, body: '과제별 결과: ' + keys.map(function (k) { return TASKS[k].label + ' ' + tasks[k].raw + (tasks[k].detail ? ' (' + tasks[k].detail + ')' : '') + (tasks[k].meanP ? ' · 기준 정답률 ' + tasks[k].meanP + '%' : ''); }).join(', ') + '.' });
     });
     const keys = Object.keys(tasks);
     const single = keys.length === 1 ? keys[0] : null;
@@ -1161,7 +1176,7 @@
     glyphSVG: glyphSVG,
     adaptNext: adaptNext,
     adaptRecord: adaptRecord,
-    _internals: { OPS: OPS, logicRows: logicRows, logicK: logicK, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },
+    _internals: { OPS: OPS, logicRows: logicRows, logicK: logicK, kUnique: kUnique, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },
     tasks: TASK_KEYS.map(function (k) { return { key: k, label: TASKS[k].label, domain: TASKS[k].domain, domainLabel: DOMAINS.filter(function (d) { return d.key === TASKS[k].domain; })[0].label, minutes: TASKS[k].minutes }; }),
     domains: DOMAINS.map(function (d) { return { key: d.key, label: d.label }; }),
     explain: DOMAINS.map(function (d) { return { label: d.label, what: d.what, where: d.where, tasks: TASK_KEYS.filter(function (k) { return TASKS[k].domain === d.key; }).map(function (k) { return TASKS[k].label; }).join(', ') }; }),

@@ -93,9 +93,18 @@
           }).join('') + '</div></div>';
       }).join('');
   }
-  function explainHtml(t) {
+  /* 결과 화면: 이 검사가 잰 능력·성향이 무엇이고 일상 어디에 쓰이는지. 결과에 나온 영역만 보여 준다. */
+  function explainHtml(t, result) {
     if (!t.explain || !t.explain.length) return '';
-    return '<section class="explain"><h3>무엇을 재고, 어디에 쓰일까요</h3>' + t.explain.map(function (x) {
+    const scales = (result && result.scales) || [];
+    const labels = [];
+    scales.forEach(function (s) { labels.push(s.label); (s.children || []).forEach(function (c) { labels.push(c.label); }); });
+    const rows = t.explain.filter(function (x) {
+      const parts = x.tasks ? x.tasks.split(', ') : [];
+      return !labels.length || labels.some(function (l) { return l === x.label || l.indexOf(x.label + ' ') === 0 || parts.indexOf(l) >= 0; });
+    });
+    if (!rows.length) return '';
+    return '<section class="explain"><h3>무엇을 잰 걸까요, 어디에 쓰일까요</h3>' + rows.map(function (x) {
       return '<div class="explain-row"><h4>' + U.esc(x.label) + '</h4><p>' + U.esc(x.what) + '</p>' +
         '<p class="explain-where"><span class="mono">일상에서</span>' + U.esc(x.where) + '</p>' +
         (x.tasks ? '<p class="explain-tasks">과제: ' + U.esc(x.tasks) + '</p>' : '') + '</div>';
@@ -125,7 +134,6 @@
       '<h1 class="title">' + U.esc(t.title) + '</h1>' +
       '<p class="lead">' + U.esc(t.subtitle) + '</p>' +
       '<ul class="intro-list">' + t.intro.map(function (s) { return '<li>' + U.esc(s) + '</li>'; }).join('') + '</ul>' +
-      explainHtml(t) +
       '<div class="spec"><div><span class="mono">소요 시간</span>' + U.esc(t.duration) + '</div><div><span class="mono">구성</span>' + U.esc(t.length) + '</div><div><span class="mono">저장</span>이 브라우저</div></div>' +
       resumeHtml + timeHtml + startHtml +
       '<p class="notice">참고용 자기평가예요. 전문가의 심리검사나 의학적 진단을 대신하지는 않아요.</p>' +
@@ -708,6 +716,7 @@
       '<button class="btn" id="share">공유</button><button class="btn" id="copy">링크 복사</button><button class="btn" id="save">이미지 저장</button></div>' +
       '<p class="action-note muted small" id="note"></p>' +
       (t.merge && !opts.profile ? '<a class="btn btn-block profile-link" href="#/profile/' + t.id + '">종합 프로필 보기 · 따로 푼 과제를 합친 결과</a>' : '') +
+      explainHtml(t, result) +
       sections +
       reviewHtml(result.review) +
       '<div class="actions"><a class="btn btn-primary" href="#/test/' + t.id + '">' + (opts.profile ? '다른 과제 풀기' : '다시 하기') + '</a><a class="btn" href="#/">다른 실험</a></div>' +

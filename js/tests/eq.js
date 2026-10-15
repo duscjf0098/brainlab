@@ -174,7 +174,7 @@
       mid: '영역별로 차이가 있어요. 강한 영역은 살리고, 약한 세부 항목의 습관을 하나만 바꿔도 체감이 커요.',
       low: '감정보다 사실과 행동에 집중하는 스타일이에요. 상대의 신호를 읽는 연습부터 시작하면 좋아요.'
     }[lvl];
-    const sections = scales.map(function (s) { return { title: s.label + ' ' + s.value, body: BRANCH[s.key][U.level(s.value, 70, 40)] + ' 이 힘은 ' + BRANCH[s.key].where }; });
+    const sections = scales.map(function (s) { return { title: s.label + ' ' + s.value, body: BRANCH[s.key][U.level(s.value, 70, 40)] }; });
     sections.push({ title: '세부 능력 중 강점', body: hiF.length
       ? hiF.map(function (f) { return FACET[f].label + '(' + facetVal[f] + '): ' + FACET[f].hi; }).join(' ')
       : '아직 뚜렷하게 높은 세부 능력은 없어요. 가장 높은 건 ' + FACET[facetsSorted[0]].label + ' ' + facetVal[facetsSorted[0]] + '점이에요.' });

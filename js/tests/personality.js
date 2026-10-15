@@ -147,7 +147,7 @@
       const v = facetVal[fc.key];
       return fc.label + '(' + v + '): ' + (v >= 65 ? fc.hi : v <= 35 ? fc.lo : '보통 수준이에요.');
     };
-    const sections = scales.map(function (s) { return { title: s.label + ' ' + s.value, body: F[s.key][U.level(s.value)] + ' ' + F[s.key].where }; });
+    const sections = scales.map(function (s) { return { title: s.label + ' ' + s.value, body: F[s.key][U.level(s.value)] }; });
     sections.push({ title: '가장 높은 세부 특성', body: hi.map(facetText).join(' ') });
     sections.push({ title: '가장 낮은 세부 특성', body: lo.map(facetText).join(' ') });
     const summary = (balanced

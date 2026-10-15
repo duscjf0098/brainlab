@@ -131,7 +131,6 @@
       ],
       plot: plot,
       sections: [
-        { title: '두 축이 연애에서 하는 일', body: '불안 ' + anx + '점: ' + DIMS.anx.where + ' 회피 ' + avo + '점: ' + DIMS.avo.where },
         { title: '세부 패턴', body: pattern },
         { title: '강점', body: T.strength },
         { title: '주의할 점', body: T.caution },
