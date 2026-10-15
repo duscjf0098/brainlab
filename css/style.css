@@ -14,8 +14,11 @@
   --ok: #16a34a;
   --bad: #dc2626;
   --warn: #d97706;
-  --radius: 16px;
-  --radius-s: 10px;
+  --accent-2: #f59e0b;
+  --accent-2-soft: #fff3d6;
+  --accent-2-ink: #b45309;
+  --radius: 20px;
+  --radius-s: 12px;
   --shadow: 0 1px 2px rgba(17, 24, 39, .04), 0 10px 30px rgba(17, 24, 39, .06);
   --font: "Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, "D2Coding", monospace;
@@ -25,12 +28,14 @@
     --bg: #0f1115; --surface: #161a21; --ink: #f3f4f6; --ink-2: #d1d5db; --muted: #9ca3af;
     --line: #262b35; --line-2: #343a46; --accent: #2dd4bf; --accent-ink: #06211e;
     --accent-soft: #12302d; --accent-line: #1f5f58; --shadow: none;
+    --accent-2-soft: #3a2a0a; --accent-2-ink: #fbbf24;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0f1115; --surface: #161a21; --ink: #f3f4f6; --ink-2: #d1d5db; --muted: #9ca3af;
   --line: #262b35; --line-2: #343a46; --accent: #2dd4bf; --accent-ink: #06211e;
   --accent-soft: #12302d; --accent-line: #1f5f58; --shadow: none;
+  --accent-2-soft: #3a2a0a; --accent-2-ink: #fbbf24;
 }
 
 * { box-sizing: border-box; }
@@ -58,16 +63,12 @@ p { margin: 0; }
 .topnav a:hover { color: var(--ink); }
 
 /* ---------- 홈 ---------- */
-.hero {
-  padding: 44px 0 28px;
-  background-image: radial-gradient(var(--line-2) 1px, transparent 1px);
-  background-size: 18px 18px;
-  background-position: 0 0;
-  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
-  mask-image: linear-gradient(to bottom, #000 60%, transparent);
-}
+.hero { padding: 22px 0 26px; }
+.hero-banner { display: block; width: 100%; height: auto; border-radius: var(--radius); margin-bottom: 20px; box-shadow: var(--shadow); }
 .eyebrow { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
 .hero h1 { font-size: 34px; line-height: 1.2; font-weight: 800; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero h1 .wave { display: inline-block; }
 .lead { color: var(--muted); margin-top: 12px; font-size: 16px; }
 .title { font-size: 28px; line-height: 1.25; font-weight: 800; }
 .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
@@ -82,8 +83,9 @@ p { margin: 0; }
 .num { font-size: 12px; color: var(--muted); letter-spacing: 0.08em; }
 .tag { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; letter-spacing: 0.04em; }
 .tag-measure { background: var(--accent-soft); color: var(--accent); }
-.tag-trait { background: var(--line); color: var(--ink-2); }
-.test-card h2 { font-size: 18px; font-weight: 700; }
+.tag-trait { background: var(--accent-2-soft); color: var(--accent-2-ink); }
+.test-icon { font-size: 30px; line-height: 1; margin: 2px 0 6px; }
+.test-card h2 { font-size: 18px; font-weight: 800; }
 .test-card p { font-size: 14px; color: var(--muted); flex: 1; }
 .test-card-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
 
@@ -132,7 +134,7 @@ p { margin: 0; }
 .run-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); }
 .run-title:hover { color: var(--ink); }
 .progress { height: 3px; background: var(--line); border-radius: 2px; margin: 8px 0 24px; overflow: hidden; }
-.progress-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; }
+.progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 2px; transition: width .3s; }
 .item { animation: rise .22s ease-out; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
@@ -240,7 +242,7 @@ p { margin: 0; }
 
 /* ---------- 결과 ---------- */
 .result .headline { font-size: 38px; line-height: 1.15; font-weight: 800; margin-bottom: 12px; }
-.badge { display: inline-block; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 700; padding: 5px 12px; border-radius: 999px; margin-bottom: 16px; }
+.badge { display: inline-block; background: linear-gradient(90deg, var(--accent), #14b8a6); color: var(--accent-ink); font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 999px; margin-bottom: 16px; }
 .summary { font-size: 16px; color: var(--ink-2); line-height: 1.65; }
 .scales { margin: 24px 0 16px; display: flex; flex-direction: column; gap: 14px; }
 .scale-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: 600; margin-bottom: 6px; }

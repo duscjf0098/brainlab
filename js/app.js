@@ -39,10 +39,12 @@
   }
 
   /* ---------- 홈 ---------- */
+  const ICONS = { cognitive: '🧠', eq: '🎭', personality: '🌿', attachment: '💞' };
   function testCard(id) {
     const t = BL.tests[id];
     return '<a class="test-card" href="#/test/' + id + '">' +
       '<div class="test-card-top"><span class="mono num">' + U.pad2(t.num) + '</span><span class="tag tag-' + t.kind + '">' + U.esc(t.kindLabel) + '</span></div>' +
+      '<div class="test-icon" aria-hidden="true">' + (ICONS[id] || '🔬') + '</div>' +
       '<h2>' + U.esc(t.title) + '</h2>' +
       '<p>' + U.esc(t.subtitle) + '</p>' +
       '<div class="test-card-meta mono">' + U.esc(t.duration) + ' · ' + U.esc(t.length) + '</div>' +
@@ -63,9 +65,10 @@
     setScreen(
       '<div class="wrap">' +
       '<section class="hero">' +
+      '<img class="hero-banner" src="banner.svg" alt="두뇌실험실 배너" width="1200" height="420">' +
       '<p class="eyebrow mono">LAB NOTE · 자기평가 실험실</p>' +
-      '<h1>나를 측정하는<br>네 가지 실험</h1>' +
-      '<p class="lead">인지 능력부터 애착 유형까지. 문항은 직접 만들었고, 결과는 당신의 브라우저에만 남습니다.</p>' +
+      '<h1>나를 측정하는<br><em>네 가지 실험</em> <span class="wave" aria-hidden="true">🔬</span></h1>' +
+      '<p class="lead">인지 능력부터 애착 유형까지, 로그인 없이 바로 시작해요. 문항은 직접 만들었고 결과는 당신의 브라우저에만 남아요.</p>' +
       '</section>' +
       '<section class="grid">' + ORDER.map(testCard).join('') + '</section>' +
       profileHtml +
