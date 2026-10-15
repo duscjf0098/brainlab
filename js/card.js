@@ -113,7 +113,10 @@ BL.card = (function () {
         buttons: [{ title: '나도 해보기', link: { mobileWebUrl: url, webUrl: url } }]
       });
       return 'shared';
-    }).catch(function (e) { return e && e.message === 'nokey' ? 'nokey' : 'error'; });
+    }).catch(function (e) {
+      const m = e && e.message ? e.message : '';
+      return m === 'nokey' ? 'nokey' : /focus|popup|open/i.test(m) ? 'popup' : 'error';
+    });
   }
   function copyLink(result, test) {
     const text = shareText(result, test);

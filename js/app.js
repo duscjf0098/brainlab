@@ -721,7 +721,7 @@
     const kakao = document.getElementById('kakao');
     if (kakao) kakao.addEventListener('click', function () {
       BL.card.kakaoShare(result, t).then(function (how) {
-        note.textContent = how === 'shared' ? '' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았습니다.' : '카카오톡 공유를 불러오지 못했습니다. 링크 복사를 이용해 주세요.';
+        note.textContent = how === 'shared' ? '' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았습니다.' : how === 'popup' ? '공유 창이 팝업 차단으로 열리지 않았습니다. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.' : '카카오톡 공유를 불러오지 못했습니다. 링크 복사를 이용해 주세요.';
       });
     });
   }
