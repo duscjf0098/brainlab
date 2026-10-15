@@ -157,35 +157,62 @@ BL.card = (function () {
       (result.scales || []).map(function (s) { return s.label + ' ' + s.value; }).join(' · ') + '\n' + url;
   }
 
-  function toBlob(canvas) {
-    return new Promise(function (res) { canvas.toBlob(function (b) { res(b); }, 'image/png'); });
-  }
-
   function fileName(test) { return '두뇌실험실_' + test.id + '_' + new Date().toISOString().slice(0, 10) + '.png'; }
 
+  /* 이미지는 버튼을 누른 그 순간에 동기로 만든다 (toDataURL). 예전처럼 toBlob을 기다린 뒤 다운로드·공유를 부르면
+     "사용자가 누른 직후" 상태가 끝나 휴대폰 브라우저와 카카오톡 안 브라우저에서 아무 일도 안 일어났다.
+     blob 주소를 2초 뒤에 지우던 것도 iPhone에서 "다운로드" 확인을 누르기 전에 파일이 사라지게 했다. */
+  function dataUrl(result, test) { return draw(result, test).toDataURL('image/png'); }
+  function dataUrlToFile(url, name) {
+    const bin = atob(url.split(',')[1]);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new File([arr], name, { type: 'image/png' });
+  }
+  /* 앱 안 브라우저(카카오톡·네이버·인스타그램 등)는 파일 다운로드를 대부분 막는다 */
+  function inApp() { return /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|Line\/|DaumApps|everytimeApp|; wv\)/i.test(navigator.userAgent || ''); }
+  function touchDevice() { return inApp() || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') || !!(window.matchMedia && matchMedia('(pointer: coarse)').matches); }
+  function triggerDownload(url, name) {
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  /* 'downloaded'(PC에서 바로 내려받음) | 'preview'(휴대폰: 이미지를 띄워 길게 눌러 저장) | 'error' */
+  function saveImage(result, test) {
+    let url;
+    try { url = dataUrl(result, test); } catch (e) { return { how: 'error' }; }
+    const name = fileName(test);
+    if (!touchDevice()) { triggerDownload(url, name); return { how: 'downloaded', url: url, name: name }; }
+    return { how: 'preview', url: url, name: name, inApp: inApp(), canDownload: !inApp(), canShareFile: canShareFile(url, name) };
+  }
+  function canShareFile(url, name) {
+    try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: [dataUrlToFile(url, name)] })); } catch (e) { return false; }
+  }
+  function shareFile(url, name, text) {
+    try {
+      return navigator.share({ files: [dataUrlToFile(url, name)], title: '두뇌실험실', text: text || '' })
+        .then(function () { return 'shared'; }, function (e) { return e && e.name === 'AbortError' ? 'cancel' : 'error'; });
+    } catch (e) { return Promise.resolve('error'); }
+  }
   function download(result, test) {
-    return toBlob(draw(result, test)).then(function (blob) {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName(test);
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-    });
+    const r = saveImage(result, test);
+    return Promise.resolve(r.how);
   }
 
   function share(result, test) {
     const text = shareText(result, test);
-    return toBlob(draw(result, test)).then(function (blob) {
-      const file = new File([blob], fileName(test), { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        return navigator.share({ files: [file], title: '두뇌실험실', text: text }).then(function () { return 'shared'; });
-      }
-      if (navigator.share) return navigator.share({ title: '두뇌실험실', text: text }).then(function () { return 'shared'; });
-      if (navigator.clipboard) return navigator.clipboard.writeText(text).then(function () { return 'copied'; });
-      return 'none';
-    }).catch(function (e) { return e && e.name === 'AbortError' ? 'cancel' : 'error'; });
+    const done = function () { return 'shared'; };
+    const fail = function (e) { return e && e.name === 'AbortError' ? 'cancel' : 'error'; };
+    try {
+      let url = null;
+      try { url = dataUrl(result, test); } catch (e) { url = null; }
+      if (url && canShareFile(url, fileName(test))) return shareFile(url, fileName(test), text);
+      if (navigator.share) return navigator.share({ title: '두뇌실험실', text: text }).then(done, fail);
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return 'copied'; }, function () { return 'none'; });
+      return Promise.resolve('none');
+    } catch (e) { return Promise.resolve(fail(e)); }
   }
 
   function hasKakao() { return !!kakaoKey() && !/claude\.ai$/.test(location.hostname); }
-  return { draw: draw, download: download, share: share, shareText: shareText, kakaoShare: kakaoShare, kakaoReady: kakaoReady, preloadKakao: preloadKakao, kakaoTemplate: kakaoTemplate, copyLink: copyLink, hasKakao: hasKakao };
+  return { draw: draw, download: download, saveImage: saveImage, shareFile: shareFile, triggerDownload: triggerDownload, share: share, shareText: shareText, kakaoShare: kakaoShare, kakaoReady: kakaoReady, preloadKakao: preloadKakao, kakaoTemplate: kakaoTemplate, copyLink: copyLink, hasKakao: hasKakao };
 })();

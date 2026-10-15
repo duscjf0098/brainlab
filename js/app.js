@@ -124,7 +124,7 @@
       ? '<div class="time-set"><span class="modes-label">제한 시간</span><div class="seg">' + [[1, '표준'], [1.5, '여유 ×1.5'], [0, '무제한']].map(function (o) { return '<button class="seg-btn' + (tf === o[0] ? ' on' : '') + '" data-tf="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div><span class="muted small">여유나 무제한으로 풀면 점수가 조금 높게 나올 수 있어서, 결과에 그렇게 풀었다고 표시돼요.</span></div>'
       : '';
     const startHtml = modes
-      ? '<p class="modes-label">한 번에 풀기</p><div class="modes">' + modes.map(function (m) {
+      ? '<p class="modes-label">' + (t.tasks ? '한 번에 풀기' : '검사 길이 고르기') + '</p><div class="modes">' + modes.map(function (m) {
         return '<button class="mode" data-mode="' + m.id + '"><span class="mode-title">' + U.esc(m.label) + '</span><span class="mode-desc">' + U.esc(m.desc) + '</span><span class="mode-meta mono">' + U.esc(m.duration) + ' · ' + U.esc(m.length) + '</span></button>';
       }).join('') + '</div>' + taskGridHtml(t)
       : '<button class="btn btn-primary btn-block" id="start">시작하기</button>';
@@ -750,10 +750,33 @@
       '<p class="notice">이 결과는 참고용 자기평가예요. 전문가의 심리검사나 의학적 진단을 대신하지 않고, 점수는 그날의 상태와 환경에 따라 달라질 수 있어요.</p>' +
       '</div>';
   }
+  /* 휴대폰용 이미지 저장 창: 결과 이미지를 띄우고 길게 눌러 저장하게 한다. 가능하면 파일 받기·공유로 저장 버튼도 준다. */
+  function openImageSheet(r, result, t) {
+    const old = document.querySelector('.sheet'); if (old) old.remove();
+    const sheet = document.createElement('div');
+    sheet.className = 'sheet';
+    sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', '결과 이미지 저장');
+    sheet.innerHTML = '<div class="sheet-card"><h3>결과 이미지</h3>' +
+      '<img src="' + r.url + '" alt="' + U.esc(t.title + ' 결과 이미지') + '">' +
+      '<p>이미지를 <strong>길게 눌러</strong> "사진에 저장"이나 "이미지 저장"을 고르세요.' + (r.inApp ? ' 카카오톡 같은 앱 안에서는 파일 내려받기가 막혀 있어서 이 방법이 가장 확실해요.' : '') + '</p>' +
+      '<div class="sheet-btns">' + (r.canShareFile ? '<button class="btn" id="sheet-share">공유로 저장</button>' : '') + (r.canDownload ? '<button class="btn" id="sheet-dl">파일로 받기</button>' : '') +
+      '<button class="btn btn-primary" id="sheet-close">닫기</button></div></div>';
+    const close = function () { sheet.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = function (e) { if (!document.body.contains(sheet)) { document.removeEventListener('keydown', onKey); return; } if (e.key === 'Escape') close(); };
+    sheet.addEventListener('click', function (e) { if (e.target === sheet) close(); });
+    document.addEventListener('keydown', onKey);
+    (document.querySelector('.result') || app).appendChild(sheet);
+    sheet.querySelector('#sheet-close').addEventListener('click', close);
+    const dl = sheet.querySelector('#sheet-dl'); if (dl) dl.addEventListener('click', function () { BL.card.triggerDownload(r.url, r.name); });
+    const sh = sheet.querySelector('#sheet-share'); if (sh) sh.addEventListener('click', function () { BL.card.shareFile(r.url, r.name, BL.card.shareText(result, t)); });
+    sheet.querySelector('#sheet-close').focus();
+  }
   function mountResult(t, result) {
     const note = document.getElementById('note');
     document.getElementById('save').addEventListener('click', function () {
-      BL.card.download(result, t).then(function () { note.textContent = '이미지를 저장했어요.'; });
+      const r = BL.card.saveImage(result, t);
+      note.textContent = r.how === 'downloaded' ? '이미지를 내려받았어요. 다운로드 폴더를 확인해 주세요.' : r.how === 'preview' ? '' : '이미지를 만들지 못했어요. 화면을 캡처해서 저장해 주세요.';
+      if (r.how === 'preview') openImageSheet(r, result, t);
     });
     document.getElementById('share').addEventListener('click', function () {
       BL.card.share(result, t).then(function (how) {

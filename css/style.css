@@ -123,6 +123,13 @@ p { margin: 0; }
 .explain-row .explain-tasks { font-size: 12px; color: var(--muted); margin-top: 6px; }
 .section-card .where { font-size: 14px; color: var(--muted); }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: calc(100vw - 32px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); z-index: 50; text-align: center; }
+.sheet { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+.sheet-card { background: var(--surface); color: var(--ink); width: 100%; max-width: 420px; border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; margin: auto 0; }
+.sheet-card h3 { font-size: 16px; font-weight: 800; }
+.sheet-card img { display: block; width: 100%; height: auto; max-height: 62vh; object-fit: contain; border-radius: 12px; border: 1px solid var(--line); -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
+.sheet-card p { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+.sheet-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.sheet-btns .btn { flex: 1 1 30%; }
 .gal-item { margin: 18px 0 30px; padding-top: 14px; border-top: 1px dashed var(--line-2); }
 .gal-item > p { margin-bottom: 8px; line-height: 1.5; }
 .banner { background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; padding: 10px 12px; border-radius: var(--radius-s); margin-top: 16px; }

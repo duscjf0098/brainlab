@@ -23,26 +23,50 @@
     ['aband', '헤어지자는 말을 들을까 봐 조마조마할 때가 있다.', false],
     ['aband', '상대가 나를 떠날 거라는 걱정은 거의 하지 않는다.', true],
     ['aband', '우리 관계가 안정적이라고 느끼며, 앞날을 불안해하지 않는다.', true],
+    ['aband', '연인이 나보다 더 좋은 사람을 만날까 봐 불안하다.', false],
+    ['aband', '연인이 나에게 싫증을 낼까 봐 걱정된다.', false],
+    ['aband', '연인이 내 곁에 계속 있을 거라고 믿는다.', true],
+    ['aband', '다투더라도 관계가 끝날까 봐 겁나지는 않는다.', true],
     ['reass', '연인이 나를 정말 좋아하는지 자주 확인하고 싶다.', false],
     ['reass', '사랑한다는 말을 자주 들어야 안심이 된다.', false],
     ['reass', '답장이 늦어도 크게 신경 쓰지 않는다.', true],
     ['reass', '상대의 마음을 굳이 확인하지 않아도 안심이 된다.', true],
+    ['reass', '연인에게 나를 사랑하는지 묻고 싶을 때가 자주 있다.', false],
+    ['reass', '연인의 연락이나 SNS를 자꾸 확인하게 된다.', false],
+    ['reass', '하루쯤 연락이 없어도 마음이 편하다.', true],
+    ['reass', '애정 표현이 적은 날에도 상대의 마음을 의심하지 않는다.', true],
     ['hyper', '상대의 사소한 말투 변화에도 마음이 흔들린다.', false],
     ['hyper', '상대가 나를 충분히 아껴 주지 않는다고 느낄 때가 많다.', false],
     ['hyper', '상대의 말투가 조금 달라져도 별 의미를 두지 않는다.', true],
     ['hyper', '상대가 바빠서 연락이 뜸해도 마음이 편하다.', true],
+    ['hyper', '상대의 표정이 조금만 어두워도 나 때문인지 걱정된다.', false],
+    ['hyper', '작은 다툼에도 감정이 크게 요동친다.', false],
+    ['hyper', '상대가 기분이 안 좋아 보여도 나 때문이라고 단정하지 않는다.', true],
+    ['hyper', '사소한 다툼은 금방 잊고 넘어간다.', true],
     ['close', '상대가 너무 가까워지려 하면 거리를 두고 싶어진다.', false],
     ['close', '관계가 깊어질수록 오히려 마음이 닫히는 느낌이 든다.', false],
     ['close', '상대와 가까워지는 것이 편안하고 자연스럽다.', true],
     ['close', '연인과 많은 시간을 함께 보내는 것이 좋다.', true],
+    ['close', '연인이 내 일상에 깊이 들어오면 답답하다.', false],
+    ['close', '관계가 진지해지려 하면 한발 물러서게 된다.', false],
+    ['close', '연인과 일상을 많이 나누는 것이 좋다.', true],
+    ['close', '관계가 깊어지는 것이 기대된다.', true],
     ['depend', '누군가에게 기대는 것이 어렵다.', false],
     ['depend', '연인에게 도움을 청하는 것이 불편하다.', false],
     ['depend', '힘들 때 연인에게 기대는 것이 어렵지 않다.', true],
     ['depend', '중요한 결정은 상대와 상의하는 편이다.', true],
+    ['depend', '힘든 일은 연인에게 말하지 않고 혼자 해결하려 한다.', false],
+    ['depend', '연인이 나를 챙겨 주면 고맙기보다 부담스럽다.', false],
+    ['depend', '연인이 나를 도와주면 편하게 받아들인다.', true],
+    ['depend', '내가 약해졌을 때 연인이 곁에 있어 주기를 바란다.', true],
     ['express', '감정 이야기를 길게 하는 것이 부담스럽다.', false],
     ['express', '연인 앞에서 약한 모습을 보이고 싶지 않다.', false],
     ['express', '속마음을 연인에게 털어놓는 것이 편하다.', true],
-    ['express', '애정 표현이 자연스럽게 나온다.', true]
+    ['express', '애정 표현이 자연스럽게 나온다.', true],
+    ['express', '서운한 일이 있어도 말하지 않고 그냥 넘어간다.', false],
+    ['express', '"사랑해"라는 말을 하기가 쑥스럽고 어렵다.', false],
+    ['express', '서운한 감정도 차분하게 말로 전하는 편이다.', true],
+    ['express', '좋아하는 마음을 자주 표현한다.', true]
   ];
 
   const TYPES = {
@@ -72,20 +96,26 @@
       match: '안정형과 가장 잘 맞아요. 서두르지 않고 천천히 신뢰를 쌓는 상대가 좋아요.' }
   };
 
-  function build() {
+  /* 기본 검사: 세부마다 8문항(정 4·역 4) 중 정 2·역 2를 무작위로 골라 24문항. 정밀 검사: 48문항 전부.
+     정·역이 항상 반반이라 "그렇다"만 고르거나 "보통이다"만 골라도 한쪽 유형으로 기울지 않는다. */
+  function build(mode) {
     const r = U.rng();
+    const full = mode === 'full';
     const by = {};
-    ITEMS.forEach(function (it) { (by[it[0]] = by[it[0]] || []).push({ type: 'likert', scored: true, facet: it[0], reverse: it[2], text: it[1] }); });
+    ITEMS.forEach(function (it) { const g = by[it[0]] = by[it[0]] || { f: [], r: [] }; g[it[2] ? 'r' : 'f'].push({ type: 'likert', scored: true, facet: it[0], reverse: it[2], text: it[1] }); });
+    const chosen = {};
+    FACETS.forEach(function (fc) { const g = by[fc.key]; chosen[fc.key] = r.shuffle(full ? g.f.concat(g.r) : r.sample(g.f, 2).concat(r.sample(g.r, 2))); });
+    const per = full ? 8 : 4;
     const items = [];
-    for (let i = 0; i < 4; i++) FACETS.forEach(function (fc) { items.push(by[fc.key][i]); });
-    // 세부가 뭉치지 않도록 4개 단위 블록 안에서만 섞는다
+    for (let i = 0; i < per; i++) FACETS.forEach(function (fc) { items.push(chosen[fc.key][i]); });
+    // 세부가 뭉치지 않도록 세부 수(6개) 단위 블록 안에서만 섞는다
     const out = [];
-    for (let i = 0; i < items.length; i += 6) out.push.apply(out, r.shuffle(items.slice(i, i + 6)));
-    out.unshift({ type: 'section', num: 1, title: '연애에서의 나', desc: '연애할 때 평소 느끼는 것과 얼마나 가까운지 골라요. 지금 연애 중이 아니라면 가장 최근의 관계나 보통의 나를 떠올려 주세요.', count: '24문항 · 약 4분' });
+    for (let i = 0; i < items.length; i += FACETS.length) out.push.apply(out, r.shuffle(items.slice(i, i + FACETS.length)));
+    out.unshift({ type: 'section', num: 1, title: '연애에서의 나', desc: '연애할 때 평소 느끼는 것과 얼마나 가까운지 골라요. 지금 연애 중이 아니라면 가장 최근의 관계나 보통의 나를 떠올려 주세요.', count: items.length + '문항 · 약 ' + Math.round(items.length / 6) + '분' });
     return out;
   }
 
-  function score(answers, items) {
+  function score(answers, items, meta) {
     const sums = {}, counts = {};
     items.forEach(function (it, i) {
       if (it.type !== 'likert') return;
@@ -121,6 +151,7 @@
       ? topF.map(function (fc) { return fc.label + '(' + fv[fc.key] + '): ' + fc.hi; }).join(' ')
       : '여섯 가지 세부 항목이 모두 낮은 편이에요. 불안과 회피 어느 쪽으로도 크게 기울지 않은, 전형적인 안정형 패턴이에요.';
     return {
+      modeLabel: meta && meta.mode === 'full' ? '정밀 검사' : '기본 검사',
       headline: T.name,
       value: anx,
       label: T.nick,
@@ -147,8 +178,12 @@
     kindLabel: '성향',
     title: '연애 애착 유형 검사',
     subtitle: '연애할 때 불안해지는 편인지, 거리를 두는 편인지. 내 연애 패턴이 네 가지 유형 중 어디에 가까운지 알아봐요.',
-    duration: '약 4분',
-    length: '24문항 · 6세부',
+    duration: '약 4~8분',
+    length: '24·48문항 · 6세부',
+    modes: [
+      { id: 'standard', label: '기본 검사', desc: '세부 패턴마다 4문항씩 24문항이에요. 48개 문장 중에서 골라 나와서 다시 해도 문항이 조금씩 바뀌어요.', duration: '약 4분', length: '24문항' },
+      { id: 'full', label: '정밀 검사', desc: '48개 문장을 모두 풀어요. 세부 패턴마다 8문항이라 결과가 더 안정적이에요.', duration: '약 8분', length: '48문항' }
+    ],
     explain: ['anx', 'avo'].map(function (d) { return { label: DIMS[d].label, what: DIMS[d].what, where: DIMS[d].where, tasks: FACETS.filter(function (fc) { return fc.dim === d; }).map(function (fc) { return fc.label; }).join(', ') }; }),
     intro: [
       '연애에서 사람마다 다른 두 가지, "불안"과 "회피"를 재요. 심리학에서 어른의 애착을 볼 때 쓰는 틀이에요.',
