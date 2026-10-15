@@ -68,7 +68,6 @@ p { margin: 0; }
 .eyebrow { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
 .hero h1 { font-size: 34px; line-height: 1.2; font-weight: 800; }
 .hero h1 em { font-style: normal; color: var(--accent); }
-.hero h1 .wave { display: inline-block; }
 .lead { color: var(--muted); margin-top: 12px; font-size: 16px; }
 .title { font-size: 28px; line-height: 1.25; font-weight: 800; }
 .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
@@ -84,7 +83,6 @@ p { margin: 0; }
 .tag { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; letter-spacing: 0.04em; }
 .tag-measure { background: var(--accent-soft); color: var(--accent); }
 .tag-trait { background: var(--accent-2-soft); color: var(--accent-2-ink); }
-.test-icon { font-size: 30px; line-height: 1; margin: 2px 0 6px; }
 .test-card h2 { font-size: 18px; font-weight: 800; }
 .test-card p { font-size: 14px; color: var(--muted); flex: 1; }
 .test-card-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
@@ -114,6 +112,16 @@ p { margin: 0; }
 .spec > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 10px 12px; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
 .spec span { font-size: 11px; color: var(--muted); font-weight: 500; letter-spacing: 0.06em; }
 .notice { font-size: 12px; color: var(--muted); border: 1px dashed var(--line-2); border-radius: var(--radius-s); padding: 10px 12px; margin-top: 20px; line-height: 1.5; }
+.explain { margin-top: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 18px 6px; }
+.explain h3 { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+.explain-row { padding: 12px 0; border-top: 1px solid var(--line); }
+.explain h3 + .explain-row { border-top: 0; }
+.explain-row h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.explain-row p { font-size: 14px; color: var(--ink-2); line-height: 1.6; }
+.explain-where { margin-top: 6px; }
+.explain-where .mono, .where .mono { display: inline-block; font-size: 11px; color: var(--accent); letter-spacing: .08em; margin-right: 6px; vertical-align: 1px; }
+.explain-row .explain-tasks { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.section-card .where { font-size: 14px; color: var(--muted); }
 .banner { background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; padding: 10px 12px; border-radius: var(--radius-s); margin-top: 16px; }
 
 /* ---------- 버튼 ---------- */

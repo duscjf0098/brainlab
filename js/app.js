@@ -39,12 +39,10 @@
   }
 
   /* ---------- 홈 ---------- */
-  const ICONS = { cognitive: '🧠', eq: '🎭', personality: '🌿', attachment: '💞' };
   function testCard(id) {
     const t = BL.tests[id];
     return '<a class="test-card" href="#/test/' + id + '">' +
       '<div class="test-card-top"><span class="mono num">' + U.pad2(t.num) + '</span><span class="tag tag-' + t.kind + '">' + U.esc(t.kindLabel) + '</span></div>' +
-      '<div class="test-icon" aria-hidden="true">' + (ICONS[id] || '🔬') + '</div>' +
       '<h2>' + U.esc(t.title) + '</h2>' +
       '<p>' + U.esc(t.subtitle) + '</p>' +
       '<div class="test-card-meta mono">' + U.esc(t.duration) + ' · ' + U.esc(t.length) + '</div>' +
@@ -66,9 +64,9 @@
       '<div class="wrap">' +
       '<section class="hero">' +
       '<img class="hero-banner" src="banner.svg" alt="두뇌실험실 배너" width="1200" height="420">' +
-      '<p class="eyebrow mono">LAB NOTE · 자기평가 실험실</p>' +
-      '<h1>나를 측정하는<br><em>네 가지 실험</em> <span class="wave" aria-hidden="true">🔬</span></h1>' +
-      '<p class="lead">인지 능력부터 애착 유형까지, 로그인 없이 바로 시작해요. 문항은 직접 만들었고 결과는 당신의 브라우저에만 남아요.</p>' +
+      '<p class="eyebrow mono">무료 · 로그인 없음</p>' +
+      '<h1>나를 측정하는<br><em>네 가지 실험</em></h1>' +
+      '<p class="lead">머리가 얼마나 잘 돌아가는지, 남의 기분을 얼마나 잘 읽는지, 나는 어떤 성격이고 연애할 때는 어떤 사람인지. 검사마다 그 능력이 생활 어디에 쓰이는지도 같이 알려 드려요. 결과는 내 폰이나 컴퓨터에만 남아요.</p>' +
       '</section>' +
       '<section class="grid">' + ORDER.map(testCard).join('') + '</section>' +
       profileHtml +
@@ -86,7 +84,7 @@
     t.tasks.forEach(function (k) { (groups[k.domainLabel] = groups[k.domainLabel] || []).push(k); });
     const doneCount = Object.keys(done).length;
     return '<div class="task-head"><p class="modes-label">과제별로 따로 풀기</p>' +
-      (merged ? '<a class="link" href="#/profile/' + t.id + '">종합 프로필 보기 (' + doneCount + '/' + t.tasks.length + ')</a>' : '<span class="muted small">따로 푼 결과는 종합 프로필에 합쳐집니다</span>') + '</div>' +
+      (merged ? '<a class="link" href="#/profile/' + t.id + '">종합 프로필 보기 (' + doneCount + '/' + t.tasks.length + ')</a>' : '<span class="muted small">따로 푼 결과는 알아서 하나로 합쳐져요</span>') + '</div>' +
       Object.keys(groups).map(function (g) {
         return '<div class="task-group"><span class="task-group-label mono">' + U.esc(g) + '</span><div class="task-chips">' +
           groups[g].map(function (k) {
@@ -95,17 +93,25 @@
           }).join('') + '</div></div>';
       }).join('');
   }
+  function explainHtml(t) {
+    if (!t.explain || !t.explain.length) return '';
+    return '<section class="explain"><h3>무엇을 재고, 어디에 쓰일까요</h3>' + t.explain.map(function (x) {
+      return '<div class="explain-row"><h4>' + U.esc(x.label) + '</h4><p>' + U.esc(x.what) + '</p>' +
+        '<p class="explain-where"><span class="mono">일상에서</span>' + U.esc(x.where) + '</p>' +
+        (x.tasks ? '<p class="explain-tasks">과제: ' + U.esc(x.tasks) + '</p>' : '') + '</div>';
+    }).join('') + '</section>';
+  }
   function renderIntro(id) {
     const t = BL.tests[id];
     const modes = t.modes;
     const savedSession = U.sstore.get(SESSION_KEY, null);
     const canResume = savedSession && savedSession.id === id && Array.isArray(savedSession.items) && savedSession.index < savedSession.items.length;
     const resumeHtml = canResume
-      ? '<div class="resume"><div><strong>진행 중인 검사가 있습니다</strong><span class="muted small">' + savedSession.items.slice(0, savedSession.index).filter(function (x) { return x.scored; }).length + ' / ' + savedSession.items.filter(function (x) { return x.scored; }).length + ' 문항 완료</span></div><div class="resume-btns"><a class="btn btn-primary" href="#/run/' + id + '">이어서 하기</a><button class="btn" id="discard">새로 시작</button></div></div>'
+      ? '<div class="resume"><div><strong>진행 중인 검사가 있어요</strong><span class="muted small">' + savedSession.items.slice(0, savedSession.index).filter(function (x) { return x.scored; }).length + ' / ' + savedSession.items.filter(function (x) { return x.scored; }).length + ' 문항 완료</span></div><div class="resume-btns"><a class="btn btn-primary" href="#/run/' + id + '">이어서 하기</a><button class="btn" id="discard">새로 시작</button></div></div>'
       : '';
     const tf = getTimeFactor();
     const timeHtml = t.timed
-      ? '<div class="time-set"><span class="modes-label">제한 시간</span><div class="seg">' + [[1, '표준'], [1.5, '여유 ×1.5'], [0, '무제한']].map(function (o) { return '<button class="seg-btn' + (tf === o[0] ? ' on' : '') + '" data-tf="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div><span class="muted small">여유·무제한으로 풀면 추정 IQ가 조금 높게 나올 수 있다고 결과에 표시됩니다.</span></div>'
+      ? '<div class="time-set"><span class="modes-label">제한 시간</span><div class="seg">' + [[1, '표준'], [1.5, '여유 ×1.5'], [0, '무제한']].map(function (o) { return '<button class="seg-btn' + (tf === o[0] ? ' on' : '') + '" data-tf="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div><span class="muted small">여유나 무제한으로 풀면 점수가 조금 높게 나올 수 있어서, 결과에 그렇게 풀었다고 표시돼요.</span></div>'
       : '';
     const startHtml = modes
       ? '<p class="modes-label">한 번에 풀기</p><div class="modes">' + modes.map(function (m) {
@@ -119,9 +125,10 @@
       '<h1 class="title">' + U.esc(t.title) + '</h1>' +
       '<p class="lead">' + U.esc(t.subtitle) + '</p>' +
       '<ul class="intro-list">' + t.intro.map(function (s) { return '<li>' + U.esc(s) + '</li>'; }).join('') + '</ul>' +
+      explainHtml(t) +
       '<div class="spec"><div><span class="mono">소요 시간</span>' + U.esc(t.duration) + '</div><div><span class="mono">구성</span>' + U.esc(t.length) + '</div><div><span class="mono">저장</span>이 브라우저</div></div>' +
       resumeHtml + timeHtml + startHtml +
-      '<p class="notice">참고용 자기평가입니다. 전문가의 심리검사나 의학적 진단을 대체하지 않습니다.</p>' +
+      '<p class="notice">참고용 자기평가예요. 전문가의 심리검사나 의학적 진단을 대신하지는 않아요.</p>' +
       '</div>',
       function () {
         const start = function (mode) {
@@ -192,8 +199,8 @@
       result.timeFactor = session.timeFactor;
       result.modeLabel = (result.modeLabel || '') + (session.timeFactor === 0 ? ' · 시간 무제한' : ' · 시간 여유 ×' + session.timeFactor);
       (result.sections = result.sections || []).push({ title: '시간 설정', body: session.timeFactor === 0
-        ? '제한 시간 없이 풀었습니다. 기준값은 표준 시간 기준이라 추정 IQ가 실제보다 높게 나올 수 있습니다.'
-        : '제한 시간을 표준의 ' + session.timeFactor + '배로 두고 풀었습니다. 기준값은 표준 시간 기준이라 추정 IQ가 조금 높게 나올 수 있습니다.' });
+        ? '제한 시간 없이 풀었어요. 기준값은 표준 시간 기준이라 추정 IQ가 실제보다 높게 나올 수 있어요.'
+        : '제한 시간을 표준의 ' + session.timeFactor + '배로 두고 풀었어요. 기준값은 표준 시간 기준이라 추정 IQ가 조금 높게 나올 수 있어요.' });
     }
     result.testId = session.id;
     result.mode = session.mode;
@@ -223,6 +230,7 @@
         '<p class="eyebrow mono">' + (it.sub ? 'TASK' : 'PART ' + it.num) + '</p>' +
         '<h2>' + U.esc(it.title) + '</h2>' +
         '<p>' + U.esc(it.desc) + '</p>' +
+        (it.where ? '<p class="where"><span class="mono">일상에서</span>' + U.esc(it.where) + '</p>' : '') +
         (it.count ? '<p class="mono muted small">' + U.esc(it.count) + '</p>' : '') +
         '<button class="btn btn-primary btn-block" id="go">' + (it.sub ? '시작' : '다음') + '</button></div>';
       el.querySelector('#go').addEventListener('click', function () { done(null); });
@@ -235,7 +243,7 @@
       const opts = it.optionsHtml ? it.optionsHtml : it.options.map(function (o) { return '<span class="opt-text">' + U.esc(o) + '</span>'; });
       el.innerHTML =
         (limit ? '<div class="timer-row"><div class="timer"><div class="timer-bar" id="tbar"></div></div><span class="timer-num mono" id="tnum">' + limit + '</span></div>' : '') +
-        (it.practice ? '<div class="practice-tag">연습 문제 · 점수에 들어가지 않습니다</div>' : '') +
+        (it.practice ? '<div class="practice-tag">연습 문제 · 점수에 안 들어가요</div>' : '') +
         (it.level ? '<div class="q-meta"><span class="level-dots" aria-hidden="true">' + '●'.repeat(it.level) + '○'.repeat(Math.max(0, 6 - it.level)) + '</span><span class="mono">' + it.level + '단계' + (it.level >= 4 ? ' · 상위 문항' : '') + '</span></div>' : '') +
         (it.scenario ? '<div class="scenario">' + U.esc(it.scenario) + '</div>' : '') +
         '<p class="q-prompt">' + U.esc(it.prompt) + '</p>' +
@@ -248,7 +256,7 @@
         const ok = i === it.answer;
         const box = document.createElement('div');
         box.className = 'practice-fb ' + (ok ? 'ok' : 'bad');
-        box.innerHTML = '<p class="practice-title">' + (ok ? '정답입니다.' : '아쉽네요. 정답은 ' + (it.answer + 1) + '번입니다.') + '</p>' +
+        box.innerHTML = '<p class="practice-title">' + (ok ? '정답이에요.' : '아쉽네요. 정답은 ' + (it.answer + 1) + '번이에요.') + '</p>' +
           (it.optionsHtml ? '<div class="rv-opt">' + it.optionsHtml[it.answer] + '</div>' : '') +
           '<p class="practice-explain">' + U.esc(it.explain || '') + '</p>' +
           '<button class="btn btn-primary btn-block" id="pnext">본 문항 시작</button>';
@@ -703,28 +711,28 @@
       sections +
       reviewHtml(result.review) +
       '<div class="actions"><a class="btn btn-primary" href="#/test/' + t.id + '">' + (opts.profile ? '다른 과제 풀기' : '다시 하기') + '</a><a class="btn" href="#/">다른 실험</a></div>' +
-      '<p class="notice">이 결과는 참고용 자기평가입니다. 전문가의 심리검사나 의학적 진단을 대체하지 않으며, 점수는 응답 당시의 상태와 환경에 따라 달라질 수 있습니다.</p>' +
+      '<p class="notice">이 결과는 참고용 자기평가예요. 전문가의 심리검사나 의학적 진단을 대신하지 않고, 점수는 그날의 상태와 환경에 따라 달라질 수 있어요.</p>' +
       '</div>';
   }
   function mountResult(t, result) {
     const note = document.getElementById('note');
     document.getElementById('save').addEventListener('click', function () {
-      BL.card.download(result, t).then(function () { note.textContent = '이미지를 저장했습니다.'; });
+      BL.card.download(result, t).then(function () { note.textContent = '이미지를 저장했어요.'; });
     });
     document.getElementById('share').addEventListener('click', function () {
       BL.card.share(result, t).then(function (how) {
-        note.textContent = { shared: '공유했습니다.', copied: '공유 기능이 없는 브라우저라 결과 텍스트를 복사했습니다.', cancel: '', none: '이 브라우저에서는 공유를 지원하지 않습니다. 링크 복사나 이미지 저장을 이용해 주세요.', error: '공유에 실패했습니다. 링크 복사나 이미지 저장을 이용해 주세요.' }[how] || '';
+        note.textContent = { shared: '공유했어요.', copied: '공유 기능이 없는 브라우저라 결과 텍스트를 복사했어요.', cancel: '', none: '이 브라우저에서는 공유를 지원하지 않아요. 링크 복사나 이미지 저장을 이용해 주세요.', error: '공유에 실패했어요. 링크 복사나 이미지 저장을 이용해 주세요.' }[how] || '';
       });
     });
     document.getElementById('copy').addEventListener('click', function () {
       BL.card.copyLink(result, t).then(function (how) {
-        note.textContent = how === 'copied' ? '결과와 사이트 링크를 복사했습니다. 카카오톡 대화창에 붙여 넣으세요.' : '복사하지 못했습니다. 주소창의 주소를 직접 복사해 주세요.';
+        note.textContent = how === 'copied' ? '결과와 사이트 링크를 복사했어요. 카카오톡 대화창에 붙여 넣으세요.' : '복사하지 못했어요. 주소창의 주소를 직접 복사해 주세요.';
       });
     });
     const kakao = document.getElementById('kakao');
     if (kakao) kakao.addEventListener('click', function () {
       BL.card.kakaoShare(result, t).then(function (how) {
-        note.textContent = how === 'shared' ? '' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았습니다.' : how === 'popup' ? '공유 창이 팝업 차단으로 열리지 않았습니다. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.' : '카카오톡 공유를 불러오지 못했습니다. 링크 복사를 이용해 주세요.';
+        note.textContent = how === 'shared' ? '' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았어요.' : how === 'popup' ? '공유 창이 팝업 차단으로 열리지 않았어요. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.' : '카카오톡 공유를 불러오지 못했어요. 링크 복사를 이용해 주세요.';
       });
     });
   }
@@ -732,7 +740,7 @@
     const t = BL.tests[id];
     if (idx === 'last') {
       if (!lastResult || lastResult.testId !== id) { go('#/test/' + id); return; }
-      setScreen(resultHtml(t, lastResult, { banner: '이 브라우저는 저장이 꺼져 있어 결과가 기록에 남지 않습니다. 창을 닫기 전에 이미지로 저장해 두세요.' }), function () { mountResult(t, lastResult); });
+      setScreen(resultHtml(t, lastResult, { banner: '이 브라우저는 저장이 꺼져 있어 결과가 기록에 남지 않아요. 창을 닫기 전에 이미지로 저장해 두세요.' }), function () { mountResult(t, lastResult); });
       return;
     }
     const all = results();
@@ -771,11 +779,11 @@
     const t = BL.tests[id];
     const merged = t.merge(results());
     if (!merged) {
-      setScreen('<div class="wrap"><a class="back" href="#/test/' + id + '">← ' + U.esc(t.title) + '</a><p class="eyebrow mono">PROFILE</p><h1 class="title">종합 프로필</h1><p class="empty">아직 합칠 결과가 없습니다. 과제를 하나라도 풀면 여기에 모입니다.</p><a class="btn btn-primary btn-block" href="#/test/' + id + '">과제 고르러 가기</a></div>');
+      setScreen('<div class="wrap"><a class="back" href="#/test/' + id + '">← ' + U.esc(t.title) + '</a><p class="eyebrow mono">PROFILE</p><h1 class="title">종합 프로필</h1><p class="empty">아직 합칠 결과가 없어요. 과제를 하나라도 풀면 여기에 모여요.</p><a class="btn btn-primary btn-block" href="#/test/' + id + '">과제 고르러 가기</a></div>');
       return;
     }
     merged.testId = id; merged.at = Date.now();
-    setScreen(resultHtml(t, merged, { profile: true, banner: '종합 프로필 · 과제별 가장 최근 결과를 합친 값입니다. 과제를 다시 풀면 자동으로 갱신됩니다.' }), function () { mountResult(t, merged); });
+    setScreen(resultHtml(t, merged, { profile: true, banner: '종합 프로필 · 과제별 가장 최근 결과를 합친 값이에요. 과제를 다시 풀면 자동으로 갱신돼요.' }), function () { mountResult(t, merged); });
   }
 
   function randomAnswer(it, r) {
@@ -801,7 +809,7 @@
     }
     const result = t.score(answers, items, { times: items.map(function () { return r.int(4000, 20000); }), mode: mode });
     result.testId = id; result.at = Date.now();
-    setScreen(resultHtml(t, result, { banner: '미리보기 · 무작위 응답으로 만든 결과입니다. 저장되지 않습니다.' }), function () { mountResult(t, result); });
+    setScreen(resultHtml(t, result, { banner: '미리보기 · 무작위 응답으로 만든 결과예요. 저장되지 않아요.' }), function () { mountResult(t, result); });
   }
 
   /* ---------- 기록 ---------- */
@@ -812,13 +820,13 @@
       '<div class="wrap">' +
       '<a class="back" href="#/">← 실험 목록</a>' +
       '<p class="eyebrow mono">ARCHIVE</p><h1 class="title">내 기록</h1>' +
-      (rows ? '<div class="rows">' + rows + '</div><button class="btn btn-ghost btn-block" id="clear">기록 모두 삭제</button>' : '<p class="empty">아직 기록이 없습니다. 첫 실험을 시작해 보세요.</p>') +
-      '<p class="notice">기록은 이 브라우저의 저장 공간에만 있습니다. 브라우저 데이터를 지우면 함께 사라집니다.</p>' +
+      (rows ? '<div class="rows">' + rows + '</div><button class="btn btn-ghost btn-block" id="clear">기록 모두 삭제</button>' : '<p class="empty">아직 기록이 없어요. 첫 실험을 시작해 보세요.</p>') +
+      '<p class="notice">기록은 이 브라우저의 저장 공간에만 있어요. 브라우저 데이터를 지우면 함께 사라져요.</p>' +
       '</div>',
       function () {
         const btn = document.getElementById('clear');
         if (btn) btn.addEventListener('click', function () {
-          if (confirm('모든 기록을 삭제할까요? 되돌릴 수 없습니다.')) { U.store.remove(STORE_KEY); renderHistory(); }
+          if (confirm('모든 기록을 삭제할까요? 되돌릴 수 없어요.')) { U.store.remove(STORE_KEY); renderHistory(); }
         });
       }
     );
@@ -830,10 +838,11 @@
       '<div class="wrap about">' +
       '<a class="back" href="#/">← 실험 목록</a>' +
       '<p class="eyebrow mono">ABOUT</p><h1 class="title">두뇌실험실 안내</h1>' +
-      '<section class="rs"><h3>무엇을 하는 곳인가요</h3><p>인지 능력, 정서 지능, 성격, 연애 애착 유형을 스스로 측정해 보는 자기평가 실험실입니다. 문항은 전부 이 사이트를 위해 직접 만들었거나, 누구나 쓸 수 있도록 공개된 문항을 한국어로 옮긴 것입니다.</p></section>' +
-      '<section class="rs"><h3>각 실험의 근거</h3><p>인지 능력 검사는 유동 추론(도형 행렬·도형 계열·수열), 언어(유추·어휘·논리), 공간(도형 회전), 기억(숫자·위치 폭), 속도·주의(단순 반응·선택 반응·색-단어 간섭)라는, 지능 연구에서 오래 쓰여 온 과제 형식을 따릅니다. 도형과 수열 문항은 규칙 기반으로 매번 새로 생성됩니다.</p><p>정서 지능 검사는 감정의 인식·활용·이해·조절이라는 네 영역 모델을 틀로 삼고, 영역마다 두 가지 세부 능력을 상황 판단 문항으로 측정합니다.</p><p>성격 검사는 빅파이브(다섯 요인) 모델과 요인별 세부 특성을 따르며, 문항은 공개 도메인인 국제 성격 문항 풀(IPIP)을 바탕으로 번역·각색했습니다.</p><p>연애 애착 유형 검사는 성인 애착의 2차원(불안·회피) 모델을 바탕으로, 축마다 세 가지 세부 패턴을 봅니다.</p></section>' +
-      '<section class="rs"><h3>한계</h3><p>모든 결과는 참고용입니다. 표준화 표본으로 검증된 공인 검사가 아니며, 지능지수(IQ)나 임상 진단을 제공하지 않습니다. 점수는 응답 당시의 컨디션, 기기, 환경에 따라 달라집니다. 정신건강과 관련해 걱정되는 점이 있다면 전문가와 상담하세요.</p></section>' +
-      '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않습니다. 응답과 결과는 이 브라우저의 저장 공간에만 보관되고 서버로 전송되지 않습니다. "내 기록"에서 언제든 삭제할 수 있습니다.</p></section>' +
+      '<section class="rs"><h3>무엇을 하는 곳인가요</h3><p>머리 쓰는 힘, 감정 다루는 힘, 성격, 연애 패턴을 스스로 재 보는 곳이에요. 돈을 받지 않고 로그인도 없어요. 문항은 전부 이 사이트를 위해 직접 만들었거나, 누구나 쓸 수 있게 공개된 문항을 우리말로 옮긴 거예요.</p></section>' +
+      '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따르고, 문항은 공개된 국제 성격 문항(IPIP)을 번역해서 손봤어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p></section>' +
+      '<section class="rs"><h3>점수는 어디에 쓰면 좋나요</h3><p>검사마다 소개 페이지에 그 능력이나 성향이 생활 어디에 쓰이고 어떤 영향을 주는지 적어 두었어요. 결과는 "내가 뭘 잘하고 뭘 연습하면 좋은지" 감을 잡는 용도로 보면 딱 좋아요. 사람을 평가하거나 줄 세우는 데 쓰라고 만든 게 아니에요.</p></section>' +
+      '<section class="rs"><h3>한계</h3><p>모든 결과는 참고용이에요. 많은 사람에게 실시해서 검증한 공인 검사가 아니고, 공식 IQ나 진단을 내주지 않아요. 점수는 그날 컨디션, 기기, 환경에 따라 달라져요. 마음 건강이 걱정된다면 전문가와 상담하세요.</p></section>' +
+      '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 답과 결과는 이 브라우저 안에만 저장되고 서버로 보내지 않아요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +
       '</div>'
     );
   }

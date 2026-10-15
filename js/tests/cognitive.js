@@ -1,5 +1,6 @@
 /* 실험 01 · 인지 능력 검사
-   5개 영역(유동 추론 · 언어 · 공간 · 기억 · 속도·주의), 13개 과제.
+   5개 영역(규칙 찾기(유동 추론) · 언어 · 공간 · 기억 · 속도·주의), 18개 과제.
+   사용자에게 보이는 설명은 쉬운 말, 해요체. 영역·과제마다 what(무엇을 재나)·where(일상에서 어디에 쓰이나)를 둔다.
    빠른 검사(6과제) · 정밀 검사(13과제) · 과제별 단독 검사(task:<key>)를 지원하고,
    따로 본 과제들은 merge()로 종합 프로필에 합쳐진다.
 
@@ -775,31 +776,41 @@
 
   /* ===== 구성 ===== */
   const DOMAINS = [
-    { key: 'fluid', label: '유동 추론', desc: '처음 보는 규칙을 찾아내는 힘입니다. 새로운 문제를 푸는 능력과 가장 관련이 깊습니다.' },
-    { key: 'verbal', label: '언어', desc: '단어의 뜻과 관계, 문장의 논리를 다루는 능력입니다.' },
-    { key: 'spatial', label: '공간', desc: '머릿속에서 도형을 돌리고 겹쳐 보는 능력입니다.' },
-    { key: 'memory', label: '기억', desc: '정보를 잠시 붙들고 조작하는 작업 기억입니다. 성인은 보통 숫자 앞으로 5~9자리, 거꾸로 4~7자리, 위치 5~8칸 범위입니다.' },
-    { key: 'speed', label: '속도·주의', desc: '빠르게 반응하면서도 방해 자극에 흔들리지 않는 능력입니다. 화면과 손가락 사이의 지연이 포함되므로 기기에 따라 수십 ms 차이가 날 수 있습니다.' }
+    { key: 'fluid', label: '규칙 찾기',
+      what: '처음 보는 문제에서 숨은 규칙을 찾아내는 힘이에요. 지능검사에서 가장 중요하게 보는 능력이고, 전문 용어로는 "유동 추론"이라고 불러요.',
+      where: '새 일을 배울 때, 처음 보는 기계나 앱을 만질 때, 보드게임 규칙을 익힐 때, 뭔가 고장 났을 때 원인을 찾는 데 쓰여요. 이게 좋은 사람은 설명서 없이도 금방 감을 잡아요.' },
+    { key: 'verbal', label: '언어',
+      what: '단어의 뜻을 알고, 말과 글의 앞뒤를 따져서 맞는 결론을 내는 힘이에요.',
+      where: '글을 빨리 정확하게 읽기, 내 생각을 말이나 글로 전하기, 계약서나 안내문에서 중요한 조건 골라내기, 시험 공부에 바로 쓰여요. 외국어를 배우는 속도와도 관계가 있어요.' },
+    { key: 'spatial', label: '공간',
+      what: '머릿속에서 모양을 돌리고 뒤집어 보는 힘이에요.',
+      where: '주차할 때, 지도를 보고 길을 찾을 때, 가구를 어디에 놓을지 그려 볼 때, 뭔가 조립할 때 쓰여요. 그림, 설계, 운동처럼 손과 눈을 함께 쓰는 일에서 특히 중요해요.' },
+    { key: 'memory', label: '기억',
+      what: '방금 본 것을 머릿속에 잠깐 붙들어 두고, 그대로 떠올리거나 순서를 바꾸는 힘이에요. "작업 기억"이라고 하는데, 오래 기억하는 것과는 달라요. 성인은 보통 숫자를 앞으로 5~9개, 거꾸로 4~7개쯤 외워요.',
+      where: '암산, 전화번호나 주문 외우기, 여러 지시를 한 번에 듣고 처리하기, 긴 대화에서 요점을 놓치지 않기에 쓰여요. 이게 약하면 여러 일을 같이 할 때 자꾸 뭔가를 빠뜨려요.' },
+    { key: 'speed', label: '속도·주의',
+      what: '빨리 반응하면서도 방해되는 것에 흔들리지 않는 힘이에요. 기기나 터치 반응 속도에 따라 조금씩 다르게 나올 수 있어요.',
+      where: '운전 중 급브레이크, 게임, 서류에서 오타 찾기, 시끄러운 곳에서 할 일에 집중하기에 쓰여요. 피곤하거나 잠이 부족하면 가장 먼저 떨어지는 능력이기도 해요.' }
   ];
   const TASKS = {
-    matrix: { label: '도형 행렬', domain: 'fluid', minutes: 9, desc: '격자의 규칙을 찾아 빈칸에 들어갈 도형을 보기 8개 중에서 고릅니다. 한 칸은 틀·안쪽 도형·선·모서리 점으로 이루어지고, 뒤로 갈수록 분배·진행·회전·반전·겹침·빼기 규칙이 겹치며 2×2와 3×3이 섞여 나옵니다.' },
-    figAnalogy: { label: '도형 유추', domain: 'fluid', minutes: 5, desc: 'A가 B로 바뀐 방식을 찾아 C에 똑같이 적용한 결과를 고릅니다. 뒤로 갈수록 바뀌는 요소가 늘고, C는 A와 다른 모양이라 변화 규칙만 뽑아내야 합니다.' },
-    series: { label: '도형 계열', domain: 'fluid', minutes: 3, desc: '왼쪽부터 차례로 변해 가는 도형 네 개를 보고 다섯 번째를 고릅니다.' },
-    sequence: { label: '수열', domain: 'fluid', minutes: 5, desc: '숫자 다섯 개의 규칙을 찾아 여섯 번째 숫자를 고릅니다. 뒤로 갈수록 두 규칙이 번갈아 적용되거나 소수·제곱 같은 수의 성질이 쓰입니다.' },
-    weights: { label: '저울 추론', domain: 'fluid', minutes: 6, desc: '평형을 이룬 저울들을 보고 도형들의 무게 관계를 알아낸 뒤, 마지막 저울을 평형으로 만드는 보기를 고릅니다. 뒤로 갈수록 도형이 세 종류가 되고 두 저울을 이어서 풀어야 합니다.' },
-    analogy: { label: '언어 유추', domain: 'verbal', minutes: 4, desc: '앞 단어 쌍의 관계를 파악해, 같은 관계가 되도록 빈칸에 들어갈 단어를 고릅니다.' },
-    vocab: { label: '어휘', domain: 'verbal', minutes: 4, desc: '제시된 낱말과 뜻이 가장 가까운 말, 또는 반대말을 고릅니다. 뒤로 갈수록 드문 낱말이 나옵니다.' },
-    logic: { label: '논리 추론', domain: 'verbal', minutes: 6, desc: '문장이 참이라고 할 때 반드시 참인 결론을 고릅니다. 그럴듯한 것이 아니라 "반드시" 참인 것을 찾습니다.' },
-    similar: { label: '공통점 찾기', domain: 'verbal', minutes: 4, desc: '두 낱말이 공통으로 속하는 범주나 기능을 고릅니다. 겉모습이 아니라 본질적인 공통점을 찾아야 합니다.' },
-    rotation: { label: '도형 회전', domain: 'spatial', minutes: 3, desc: '위 도형을 돌리기만 해서 만들 수 있는 것을 고릅니다. 거울처럼 뒤집은 것은 정답이 아닙니다.' },
-    digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타납니다. 보이는 순서 그대로 입력하세요.' },
-    digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '보이는 순서를 거꾸로 뒤집어 입력하세요. 예: 3 7 1 → 1 7 3' },
-    grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 차례로 켜집니다. 켜진 순서 그대로 탭하세요.' },
-    lns: { label: '숫자-문자 순서', domain: 'memory', minutes: 3, desc: '숫자와 한글 자음이 섞여 하나씩 나타납니다. 다 본 뒤 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 탭하세요. 예: 7 ㄷ 2 ㄱ → 2 7 ㄱ ㄷ' },
-    reaction: { label: '단순 반응', domain: 'speed', minutes: 1, desc: '화면이 초록색으로 바뀌는 순간 최대한 빨리 탭합니다.' },
-    choicert: { label: '선택 반응', domain: 'speed', minutes: 1, desc: '화살표가 나타나면 같은 방향의 버튼을 최대한 빨리 누릅니다. PC에서는 방향키도 됩니다.' },
-    stroop: { label: '색-단어 간섭', domain: 'speed', minutes: 1, desc: '글자의 "색"을 고릅니다. 글자가 뜻하는 색 이름은 무시하세요. 예: 파란색으로 쓰인 "주황" → 파랑.' },
-    symbol: { label: '기호 찾기', domain: 'speed', minutes: 2, desc: '왼쪽의 기호 두 개 중 하나라도 오른쪽 다섯 개 안에 있으면 "있음", 없으면 "없음"을 60초 동안 최대한 많이, 정확하게 고릅니다.' }
+    matrix: { label: '도형 행렬', domain: 'fluid', minutes: 9, desc: '칸들이 어떤 규칙으로 바뀌는지 찾아서, 빈칸에 들어갈 도형을 보기 8개 중에서 골라요. 칸 하나에는 테두리, 안쪽 모양, 선, 모서리 점이 들어가고, 뒤로 갈수록 여러 규칙이 한꺼번에 섞여요.', where: '처음 보는 규칙을 빨리 알아채는 힘을 봐요. 새 프로그램이나 보드게임을 금방 익히는 사람이 잘해요.' },
+    figAnalogy: { label: '도형 유추', domain: 'fluid', minutes: 5, desc: 'A가 B로 바뀐 방식을 보고, C를 똑같이 바꾸면 뭐가 되는지 골라요. 뒤로 갈수록 바뀌는 게 늘어나요.', where: '"A가 B로 됐으니 C는 이렇게 되겠네"를 찾는 힘이에요. 남이 하는 방법을 보고 내 상황에 그대로 적용할 때 쓰여요.' },
+    series: { label: '도형 계열', domain: 'fluid', minutes: 3, desc: '왼쪽부터 차례로 변해 가는 도형 네 개를 보고 다섯 번째를 골라요.', where: '변화의 흐름을 읽고 다음을 내다보는 힘이에요. 추세를 보고 앞일을 짐작하는 일에 쓰여요.' },
+    sequence: { label: '수열', domain: 'fluid', minutes: 5, desc: '숫자 다섯 개의 규칙을 찾아 여섯 번째 숫자를 골라요. 뒤로 가면 규칙 두 개가 번갈아 나오거나 소수, 제곱수 같은 게 쓰여요.', where: '숫자 속 규칙을 찾는 힘이에요. 수학, 코딩, 돈 흐름 읽기처럼 숫자를 다루는 일과 관계가 깊어요.' },
+    weights: { label: '저울 추론', domain: 'fluid', minutes: 6, desc: '균형 잡힌 저울들을 보고 도형들의 무게 관계를 알아낸 뒤, 마지막 저울의 균형을 맞추는 보기를 골라요. 뒤로 가면 도형이 세 종류가 되고 저울 두 개를 이어서 풀어야 해요.', where: '조건 여러 개를 동시에 맞춰 보는 힘이에요. 예산 맞추기, 시간표 짜기, 공평하게 나누기 같은 일에 쓰여요.' },
+    analogy: { label: '언어 유추', domain: 'verbal', minutes: 4, desc: '앞 단어 쌍이 어떤 관계인지 보고, 같은 관계가 되게 빈칸에 들어갈 단어를 골라요.', where: '단어 사이의 관계를 알아채는 힘이에요. 비유를 이해하고, 설명을 잘하고, 농담의 포인트를 빨리 잡는 데 쓰여요.' },
+    vocab: { label: '어휘', domain: 'verbal', minutes: 4, desc: '주어진 낱말과 뜻이 가장 가까운 말, 또는 반대말을 골라요. 뒤로 갈수록 보기 드문 낱말이 나와요.', where: '아는 단어가 얼마나 많고 정확한지 봐요. 글을 빨리 읽고 정확하게 쓰는 힘의 바탕이에요.' },
+    logic: { label: '논리 추론', domain: 'verbal', minutes: 6, desc: '문장이 참이라고 칠 때 반드시 참인 결론을 골라요. 그럴듯한 게 아니라 "반드시" 맞는 걸 찾는 게 포인트예요.', where: '말이 되는지 아닌지 따지는 힘이에요. 계약서나 규정 읽기, 토론, 가짜 뉴스 걸러내기에 쓰여요.' },
+    similar: { label: '공통점 찾기', domain: 'verbal', minutes: 4, desc: '두 낱말이 공통으로 속하는 묶음이나 하는 일을 골라요. 겉모습이 아니라 본질적인 공통점을 찾아야 해요.', where: '서로 다른 것에서 공통점을 찾는 힘이에요. 개념을 정리하고 분류하고 요약하는 데 쓰여요.' },
+    rotation: { label: '도형 회전', domain: 'spatial', minutes: 3, desc: '위 도형을 돌리기만 해서 만들 수 있는 걸 골라요. 거울처럼 뒤집은 건 정답이 아니에요.', where: '머릿속에서 모양을 돌리는 힘이에요. 주차, 지도 읽기, 조립, 그림 그리기에 쓰여요.' },
+    digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 보이는 순서 그대로 입력해요.', where: '들은 걸 그대로 잠깐 기억하는 힘이에요. 전화번호나 주문을 외우는 데 쓰여요.' },
+    digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '보이는 순서를 거꾸로 뒤집어 입력해요. 예: 3 7 1 → 1 7 3', where: '기억한 걸 머릿속에서 뒤집는 힘이에요. 암산이나 순서를 거꾸로 따져 보는 일에 쓰여요.' },
+    grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 차례로 켜져요. 켜진 순서 그대로 눌러요.', where: '위치를 순서대로 기억하는 힘이에요. 길을 기억하거나 물건 둔 자리를 떠올릴 때 쓰여요.' },
+    lns: { label: '숫자-문자 순서', domain: 'memory', minutes: 3, desc: '숫자와 한글 자음이 섞여 하나씩 나타나요. 다 본 뒤 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 눌러요. 예: 7 ㄷ 2 ㄱ → 2 7 ㄱ ㄷ', where: '기억하면서 동시에 정리하는 힘이에요. 여러 지시를 한 번에 받아 순서대로 처리하는 일에 쓰여요.' },
+    reaction: { label: '단순 반응', domain: 'speed', minutes: 1, desc: '화면이 초록색으로 바뀌는 순간 최대한 빨리 눌러요.', where: '신호에 얼마나 빨리 반응하는지 봐요. 운전 중 급브레이크, 공 받기 같은 순발력이에요.' },
+    choicert: { label: '선택 반응', domain: 'speed', minutes: 1, desc: '화살표가 나타나면 같은 방향 버튼을 최대한 빨리 눌러요. PC에서는 방향키도 돼요.', where: '보고 판단해서 맞는 쪽으로 반응하는 속도예요. 게임, 운동, 신호 보고 움직이기에 쓰여요.' },
+    stroop: { label: '색-단어 간섭', domain: 'speed', minutes: 1, desc: '글자의 "색"을 골라요. 글자가 뜻하는 색 이름은 무시해요. 예: 파란색으로 쓰인 "주황" → 파랑.', where: '습관적인 반응을 참고 필요한 것에 집중하는 힘이에요. 딴생각 누르고 할 일 하기, 실수 줄이기에 쓰여요.' },
+    symbol: { label: '기호 찾기', domain: 'speed', minutes: 2, desc: '왼쪽 기호 두 개 중 하나라도 오른쪽 다섯 개 안에 있으면 "있음", 없으면 "없음"을 골라요. 60초 동안 최대한 많이, 정확하게요.', where: '많은 것 중에서 찾는 걸 빨리 골라내는 힘이에요. 명단에서 이름 찾기, 오타 찾기, 서류 검토에 쓰여요.' }
   };
   const TASK_KEYS = Object.keys(TASKS);
   const QUICK = ['matrix', 'sequence', 'analogy', 'rotation', 'digitF', 'reaction'];
@@ -899,7 +910,7 @@
   }
   function taskItems(r, key, full, withPractice) {
     const items = [];
-    if (COUNT_KO[key]) items.push({ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' 쉬운 문항부터 나오고 뒤로 갈수록 어려워집니다.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 봅니다. 연습은 점수에 들어가지 않습니다.' : ''), count: COUNT_KO[key](full) });
+    if (COUNT_KO[key]) items.push({ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' 쉬운 것부터 나오고 뒤로 갈수록 어려워져요.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 볼게요. 연습은 점수에 안 들어가요.' : ''), where: TASKS[key].where, count: COUNT_KO[key](full) });
     if (withPractice && PRACTICE[key]) items.push(practiceItem(r, key));
     return items.concat(BUILD[key](r, full));
   }
@@ -949,7 +960,7 @@
   }
   function taskItemsAdaptive(r, key, withPractice) {
     const a = ADAPT[key];
-    const items = [{ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' 적응형입니다. ' + a.start + '단계에서 시작해 맞히면 한 단계 올라가고 틀리면 내려갑니다.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 봅니다. 연습은 점수에 들어가지 않습니다.' : ''), count: a.n + '문항 · 적응형 · 1~' + a.max + '단계' }];
+    const items = [{ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' ' + a.start + '단계에서 시작해서 맞히면 한 단계 올라가고 틀리면 내려가요.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 볼게요. 연습은 점수에 안 들어가요.' : ''), where: TASKS[key].where, count: a.n + '문항 · 적응형 · 1~' + a.max + '단계' }];
     if (withPractice && PRACTICE[key]) items.push(practiceItem(r, key));
     items.push(adaptStub(key));
     return items;
@@ -978,14 +989,14 @@
     const part = function (num, d, desc, keys) {
       const use = keys.filter(function (k) { return full || QUICK.indexOf(k) >= 0; });
       if (!use.length) return;
-      items.push({ type: 'section', num: num, title: d.label, desc: desc, count: use.length + '과제 · ' + use.map(function (k) { return TASKS[k].label; }).join(', ') });
+      items.push({ type: 'section', num: num, title: d.label, desc: desc, where: d.where, count: use.length + '과제 · ' + use.map(function (k) { return TASKS[k].label; }).join(', ') });
       use.forEach(function (k) { items.push.apply(items, make(k, full)); });
     };
-    part(1, DOMAINS[0], '도형과 숫자에 숨은 규칙을 찾습니다. 문항마다 제한 시간이 있고, 시간이 끝나면 자동으로 넘어갑니다.', ['matrix', 'figAnalogy', 'series', 'sequence', 'weights']);
-    part(2, DOMAINS[1], '단어의 관계와 뜻, 문장의 논리를 다룹니다.', ['analogy', 'vocab', 'logic', 'similar']);
-    part(3, DOMAINS[2], '머릿속에서 도형을 돌려 봅니다.', ['rotation']);
-    part(4, DOMAINS[3], '숫자와 위치를 잠시 기억했다가 그대로, 거꾸로, 또는 정렬해서 떠올립니다. 틀리면 같은 길이로 한 번 더 기회가 있습니다.', ['digitF', 'digitB', 'grid', 'lns']);
-    part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응합니다. 조용한 곳에서 화면을 정면으로 보고 진행하세요.', ['reaction', 'choicert', 'stroop', 'symbol']);
+    part(1, DOMAINS[0], '도형과 숫자에 숨은 규칙을 찾아요. 문제마다 제한 시간이 있고, 시간이 다 되면 자동으로 넘어가요.', ['matrix', 'figAnalogy', 'series', 'sequence', 'weights']);
+    part(2, DOMAINS[1], '단어의 뜻과 관계, 문장의 앞뒤를 따져요.', ['analogy', 'vocab', 'logic', 'similar']);
+    part(3, DOMAINS[2], '머릿속에서 도형을 돌려 봐요.', ['rotation']);
+    part(4, DOMAINS[3], '숫자와 위치를 잠깐 기억했다가 그대로, 거꾸로, 또는 정리해서 떠올려요. 틀려도 같은 길이로 한 번 더 기회가 있어요.', ['digitF', 'digitB', 'grid', 'lns']);
+    part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응해요. 조용한 곳에서 화면을 똑바로 보고 해 주세요.', ['reaction', 'choicert', 'stroop', 'symbol']);
     return items;
   }
 
@@ -1064,7 +1075,7 @@
       const iq = iqOf(z);
       scales.push({ key: d.key, label: d.label, value: iq, range: IQ_RANGE, raw: '상위 ' + topPct(z) + '%',
         children: keys.map(function (k) { return { key: k, label: TASKS[k].label, value: iqOf(tasks[k].z), range: IQ_RANGE, raw: tasks[k].raw }; }) });
-      sections.push({ title: d.label + ' · 추정 IQ ' + iq, body: d.desc + ' ' + keys.map(function (k) { return TASKS[k].label + ' ' + tasks[k].raw + (tasks[k].detail ? ' (' + tasks[k].detail + ')' : '') + (tasks[k].meanP ? ' · 기준 정답률 ' + tasks[k].meanP + '%' : ''); }).join(', ') + '.' });
+      sections.push({ title: d.label + ' · 추정 IQ ' + iq, body: d.what + ' 일상에서는 ' + d.where + ' 과제별 결과: ' + keys.map(function (k) { return TASKS[k].label + ' ' + tasks[k].raw + (tasks[k].detail ? ' (' + tasks[k].detail + ')' : '') + (tasks[k].meanP ? ' · 기준 정답률 ' + tasks[k].meanP + '%' : ''); }).join(', ') + '.' });
     });
     const keys = Object.keys(tasks);
     const single = keys.length === 1 ? keys[0] : null;
@@ -1073,25 +1084,26 @@
     const rel = keys.length * 0.45 / (1 + (keys.length - 1) * 0.45);
     const sem = Math.round(15 * Math.sqrt(1 - rel));
     const bandText = {
-      '매우 우수': '같은 기준으로 100명 중 두세 명 안에 드는 수행입니다.',
-      '우수': '대부분의 사람보다 빠르고 정확했습니다.',
-      '평균 상': '평균보다 조금 높은 범위입니다.',
-      '평균': '일반 성인의 평균 범위 안에 있습니다.',
-      '평균 하': '평균보다 조금 낮은 범위입니다. 형식에 익숙해지면 오르는 경우가 많습니다.',
-      '경계선': '시간 압박이나 환경의 영향이 컸을 수 있습니다. 조용한 곳에서 다시 해보는 것을 권합니다.',
-      '낮음': '집중하기 어려운 환경이었거나 과제 형식이 낯설었을 수 있습니다. 조용한 곳에서 다시 해보는 것을 권합니다.'
+      '매우 우수': '같은 기준으로 100명 중 두세 명 안에 드는 결과예요.',
+      '우수': '대부분의 사람보다 빠르고 정확했어요.',
+      '평균 상': '평균보다 조금 높은 범위예요.',
+      '평균': '보통 성인의 평균 범위 안에 있어요.',
+      '평균 하': '평균보다 조금 낮은 범위예요. 문제 형식에 익숙해지면 오르는 경우가 많아요.',
+      '경계선': '시간에 쫓겼거나 주변 환경의 영향이 컸을 수 있어요. 조용한 곳에서 다시 해 보길 권해요.',
+      '낮음': '집중하기 어려운 환경이었거나 문제 형식이 낯설었을 수 있어요. 조용한 곳에서 다시 해 보길 권해요.'
     }[bd];
     let summary, headline;
     if (single) {
       headline = TASKS[single].label + ' 추정 IQ ' + iq;
-      summary = bandText + ' ' + TASKS[single].label + ' 과제 하나만으로 환산한 값이라 종합 검사보다 오차가 큽니다. 다른 과제도 따로 풀면 종합 프로필에 합쳐집니다.';
+      summary = bandText + ' ' + TASKS[single].label + ' 과제 하나만으로 낸 점수라 전체 검사보다 오차가 커요. 다른 과제도 풀면 하나로 합쳐져요.';
     } else {
       const sorted = scales.slice().sort(function (a, b) { return b.value - a.value; });
       headline = (opts.merged ? '종합 ' : '') + '추정 IQ ' + iq;
-      summary = bandText + ' 가장 강한 영역은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + sorted[sorted.length - 1].label + ' ' + sorted[sorted.length - 1].value + '은 연습 여지가 있습니다.' +
-        (keys.length < TASK_KEYS.length ? ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했습니다.' : '');
+      const weak = sorted[sorted.length - 1];
+      summary = bandText + ' 가장 강한 쪽은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + weak.label + ' ' + U.josa(weak.value, '은', '는') + ' 연습하면 더 오를 여지가 있어요.' +
+        (keys.length < TASK_KEYS.length ? ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했어요.' : '');
     }
-    sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균 100, 표준편차 15인 IQ 척도로 환산한 값이고, "상위 %"는 그 척도에서의 위치입니다. ±' + sem + '은 측정 오차 범위로, 실제 값이 그 안에 있을 확률이 약 68%입니다. 과제를 많이 풀수록 범위가 좁아집니다. 문항은 1~6단계 난이도로 설계되었고, 점수는 몇 개를 맞혔는지가 아니라 어느 단계를 맞혔는지를 반영한 능력 추정값(문항반응이론 방식)입니다. 각 단계의 난이도는 설계상 일반 성인의 예상 정답률에서 정한 것이라, 실제 응시 자료로 보정되기 전까지는 공인 지능검사의 IQ와 같지 않습니다. 85~115가 평균 범위이며, 같은 과제를 여러 번 하면 익숙해져 점수가 오릅니다.' });
+    sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균이 100인 IQ 눈금으로 바꾼 점수예요. 열 명 중 일곱 명쯤이 85~115 사이에 들어가요. "상위 %"는 그 눈금에서 내 위치고, ±' + U.josa(sem, '은', '는') + ' 오차 범위예요. 실제 값이 그 안에 있을 확률이 70% 정도고, 과제를 많이 풀수록 범위가 좁아져요. 점수는 몇 개를 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 각 단계의 난이도는 설계할 때 정한 예상 정답률이라, 실제 응시 데이터로 보정하기 전까지는 공인 지능검사의 IQ와 같다고 볼 수 없어요. 같은 과제를 여러 번 하면 익숙해져서 점수가 올라요.' });
     return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: tasks, z: z };
   }
 
@@ -1127,7 +1139,7 @@
     const missing = TASK_KEYS.filter(function (k) { return !tasks[k]; });
     res.modeLabel = '종합 프로필';
     res.coverage = { done: keys.length, total: TASK_KEYS.length, missing: missing.map(function (k) { return TASKS[k].label; }) };
-    res.sections.unshift({ title: '합친 범위', body: TASK_KEYS.length + '개 과제 중 ' + keys.length + '개의 가장 최근 결과를 합쳤습니다.' + (missing.length ? ' 아직 안 한 과제: ' + res.coverage.missing.join(', ') + '.' : ' 모든 과제가 반영되었습니다.') + ' 과제를 다시 풀면 그 과제의 최신 결과로 바뀝니다.' });
+    res.sections.unshift({ title: '합친 범위', body: TASK_KEYS.length + '개 과제 중 ' + keys.length + '개의 가장 최근 결과를 합쳤어요.' + (missing.length ? ' 아직 안 한 과제: ' + res.coverage.missing.join(', ') + '.' : ' 모든 과제가 들어갔어요.') + ' 과제를 다시 풀면 그 과제의 최신 결과로 바뀌어요.' });
     return res;
   }
 
@@ -1137,14 +1149,14 @@
     kind: 'measure',
     kindLabel: '측정',
     title: '인지 능력 검사',
-    subtitle: '유동 추론, 언어, 공간, 기억, 속도·주의. 다섯 영역 18개 과제를 한 번에, 또는 하나씩 풀고 추정 IQ로 봅니다.',
+    subtitle: '규칙 찾기, 언어, 공간 감각, 기억력, 반응 속도와 집중. 머리 쓰는 힘 다섯 가지를 18개 과제로 재서 추정 IQ로 보여 줘요. 한 번에 다 풀어도 되고 하나씩 해도 돼요.',
     duration: '과제당 1~9분',
     length: '18과제',
     timed: true,
     modes: [
-      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 어려워지고 틀리면 쉬워져서 실력에 맞는 단계에서 집중 측정합니다. 과제당 5~8문항이라 정밀 검사보다 짧으면서 상위 단계까지 올라갑니다. 추천.', duration: '약 35분', length: '18과제' },
-      { id: 'quick', label: '빠른 검사', desc: '핵심 과제 6개로 다섯 영역을 한 번씩 훑어봅니다. 문항은 1~6단계에서 하나씩 나옵니다.', duration: '약 12분', length: '6과제' },
-      { id: 'full', label: '정밀 검사', desc: '18개 과제의 모든 단계를 순서대로 다 풉니다. 쉬운 단계부터 실제 지능검사 상위 문항 수준까지 올라가며, 난이도별 정답률과 틀린 문항 복기까지 보여줍니다.', duration: '약 50분', length: '18과제' }
+      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 다음 문제가 어려워지고 틀리면 쉬워져요. 내 실력 근처에서 집중해서 재니까 짧아도 정확해요. 처음이면 이걸 추천해요.', duration: '약 35분', length: '18과제' },
+      { id: 'quick', label: '빠른 검사', desc: '대표 과제 6개만 골라 다섯 영역을 한 번씩 훑어요. 시간이 없을 때 맛보기로 좋아요.', duration: '약 12분', length: '6과제' },
+      { id: 'full', label: '정밀 검사', desc: '18개 과제의 모든 단계를 처음부터 끝까지 다 풀어요. 가장 길지만, 단계별 정답률과 틀린 문제 다시 보기까지 볼 수 있어요.', duration: '약 50분', length: '18과제' }
     ],
     glyphSVG: glyphSVG,
     adaptNext: adaptNext,
@@ -1152,12 +1164,13 @@
     _internals: { OPS: OPS, logicRows: logicRows, logicK: logicK, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },
     tasks: TASK_KEYS.map(function (k) { return { key: k, label: TASKS[k].label, domain: TASKS[k].domain, domainLabel: DOMAINS.filter(function (d) { return d.key === TASKS[k].domain; })[0].label, minutes: TASKS[k].minutes }; }),
     domains: DOMAINS.map(function (d) { return { key: d.key, label: d.label }; }),
+    explain: DOMAINS.map(function (d) { return { label: d.label, what: d.what, where: d.where, tasks: TASK_KEYS.filter(function (k) { return TASKS[k].domain === d.key; }).map(function (k) { return TASKS[k].label; }).join(', ') }; }),
     intro: [
-      '점수는 평균 100, 표준편차 15인 IQ 척도로 환산한 "추정 IQ"입니다. 공인 지능검사의 IQ가 아니라 참고용 추정치입니다.',
-      '문항은 1~5단계로 쉬운 것부터 나오며, 4~5단계는 실제 지능검사의 상위 문항 유형(회전·논리 연산 규칙, 다단계 수열, 고난도 어휘·삼단논법)을 따릅니다.',
-      '도형 행렬, 도형 계열, 수열, 도형 회전 문항은 매번 새로 생성되므로 같은 문제가 두 번 나오지 않습니다.',
-      '한 번에 다 풀어도 되고, 과제를 하나씩 따로 풀어도 됩니다. 따로 푼 결과는 종합 프로필에 자동으로 합쳐집니다. 과제별 검사는 적응형으로 진행됩니다.',
-      '점수는 몇 개를 맞혔는지가 아니라 어느 단계의 문항을 맞혔는지를 반영해 계산합니다. 어려운 문항을 맞히면 더 크게 오릅니다.'
+      '결과는 IQ 점수로 나와요. 보통 사람 평균이 100이고, 열 명 중 일곱 명쯤이 85에서 115 사이에 들어가요. 병원이나 기관에서 받는 공인 검사의 IQ는 아니고 참고용 추정치예요.',
+      '문제는 쉬운 것부터 시작해서 점점 어려워져요. 뒤쪽 단계는 실제 지능검사에서 어려운 문제로 나오는 유형이에요.',
+      '도형과 숫자 문제는 할 때마다 새로 만들어져서 같은 문제가 두 번 나오지 않아요.',
+      '한 번에 다 풀어도 되고, 오늘은 기억력만, 내일은 수열만 이렇게 따로 풀어도 돼요. 따로 푼 결과는 알아서 하나로 합쳐져요.',
+      '점수는 몇 개 맞혔는지가 아니라 어느 단계까지 맞혔는지로 계산해요. 어려운 문제를 맞히면 더 크게 올라가요.'
     ],
     build: build,
     score: score,
