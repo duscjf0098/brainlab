@@ -446,19 +446,31 @@
         });
         T(function () { ask(g); }, 500 + g.seq.length * 1000 + 150);
       }
+      /* 응답은 전체 키패드(숫자 1~9, 자음 ㄱ~ㅅ)에서 고른다. 방금 본 것만 버튼으로 주면 외울 필요 없이 정렬만 하면 되어
+         기억 과제가 아니게 된다 (실제로 점수가 부풀었던 원인). */
       function ask(g) {
-        const btns = sampleN(g.seq, g.seq.length);
-        el.innerHTML = '<div class="span-stage"><p class="q-prompt">숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 탭하세요</p><div class="lns-picked mono" id="picked">&nbsp;</div>' +
-          '<div class="lns-btns">' + btns.map(function (b) { return '<button class="lns-btn mono" data-v="' + b + '">' + b + '</button>'; }).join('') + '</div></div>';
+        const n = g.seq.length;
+        const btn = function (k) { return '<button class="lns-btn mono" data-v="' + k + '">' + k + '</button>'; };
+        el.innerHTML = '<div class="span-stage"><p class="q-prompt">본 것을 떠올려 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 누르세요</p><div class="lns-picked mono" id="picked">&nbsp;</div>' +
+          '<div class="lns-pad"><div class="lns-grp"><span class="lns-grp-label mono">숫자</span><div class="lns-btns lns-nums">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(btn).join('') + '</div></div>' +
+          '<div class="lns-grp"><span class="lns-grp-label mono">자음</span><div class="lns-btns lns-cons">' + LETTERS.map(btn).join('') + '</div></div></div>' +
+          '<div class="lns-tools"><span class="mono muted small" id="cnt">0 / ' + n + '</span><button class="btn btn-ghost" id="undo">하나 지우기</button></div></div>';
         const taps = [];
+        const refresh = function () { el.querySelector('#picked').textContent = taps.length ? taps.join(' ') : ' '; el.querySelector('#cnt').textContent = taps.length + ' / ' + n; };
         el.querySelectorAll('.lns-btn').forEach(function (b) {
           b.addEventListener('click', function () {
-            if (b.disabled) return;
+            if (b.disabled || taps.length >= n) return;
             b.disabled = true;
             taps.push(b.getAttribute('data-v'));
-            el.querySelector('#picked').textContent = taps.join(' ');
-            if (taps.length === g.seq.length) T(function () { judge(g, taps); }, 250);
+            refresh();
+            if (taps.length === n) T(function () { judge(g, taps); }, 250);
           });
+        });
+        el.querySelector('#undo').addEventListener('click', function () {
+          if (!taps.length || taps.length >= n) return;
+          const v = taps.pop();
+          const b = el.querySelector('.lns-btn[data-v="' + v + '"]'); if (b) b.disabled = false;
+          refresh();
         });
       }
       function judge(g, taps) {

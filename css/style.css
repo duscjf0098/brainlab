@@ -325,6 +325,11 @@ p { margin: 0; }
 .ss-board .glyph { width: 11vw; max-width: 44px; height: auto; aspect-ratio: 1; }
 .lns-picked { min-height: 28px; font-size: 22px; font-weight: 700; letter-spacing: .2em; color: var(--accent); }
 .lns-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 320px; }
+.lns-pad { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.lns-grp-label { display: block; font-size: 11px; color: var(--muted); letter-spacing: .08em; margin-bottom: 6px; }
+.lns-nums { display: grid; grid-template-columns: repeat(3, 56px); }
+.lns-cons { display: grid; grid-template-columns: repeat(4, 56px); }
+.lns-tools { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
 .lns-btn { width: 56px; height: 56px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--surface); font-size: 22px; font-weight: 700; }
 .lns-btn:disabled { opacity: .3; }
 .poly-prompt { display: flex; justify-content: center; margin-bottom: 18px; }
