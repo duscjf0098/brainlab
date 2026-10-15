@@ -700,7 +700,7 @@
     { premise: '이 상자의 공은 모두 빨갛거나 파랗다. 상자에서 꺼낸 공은 빨갛지 않다.', options: ['꺼낸 공은 파랗다', '꺼낸 공은 빨갛다', '상자에는 파란 공만 있다', '알 수 없다'], answer: 0, level: 2, explain: '빨강 아니면 파랑인데 빨강이 아니니까 파랑이에요.' },
     { premise: '시험이 쉬웠다면 평균이 80점을 넘었을 것이다. 평균은 80점을 넘지 않았다.', options: ['시험은 쉽지 않았다', '시험은 쉬웠다', '평균은 정확히 80점이었다', '알 수 없다'], answer: 0, level: 3, explain: '"쉬우면 80점 초과"인데 80점을 넘지 않았으니까 쉽지 않았던 거예요 (후건 부정).' },
     { premise: '비가 오면 땅이 젖는다. 지금 땅이 젖어 있다.', options: ['비가 왔는지는 알 수 없다', '비가 왔다', '비가 오지 않았다', '땅은 항상 젖어 있다'], answer: 0, level: 3, explain: '땅은 물을 뿌려도 젖어요. "비 → 젖음"에서 "젖음 → 비"는 따라 나오지 않아요.' },
-    { premise: '모든 A는 B가 아니다. 어떤 C는 A다.', options: ['어떤 C는 B가 아니다', '모든 C는 B가 아니다', '어떤 B는 C다', '모든 B는 A다'], answer: 0, level: 3, explain: 'A인 C가 적어도 하나 있고, A는 B가 아니니까 그 C는 B가 아니에요.' },
+    { premise: '어떤 A도 B가 아니다. 어떤 C는 A다.', options: ['어떤 C는 B가 아니다', '어떤 C도 B가 아니다', '어떤 B는 C다', '모든 B는 A다'], answer: 0, level: 3, explain: 'A인 C가 적어도 하나 있고, A는 하나도 B가 아니니까 그 C는 B가 아니에요. A가 아닌 C는 B일 수도 있어요.' },
     { premise: '어떤 새는 날지 못한다. 모든 새는 알을 낳는다.', options: ['알을 낳는 동물 중에 날지 못하는 것이 있다', '날지 못하는 동물은 모두 새다', '알을 낳지 않는 새가 있다', '모든 새는 날지 못한다'], answer: 0, level: 4, explain: '날지 못하는 새가 적어도 하나 있고 그 새도 알을 낳으니까, 알을 낳으면서 날지 못하는 동물이 있어요.' },
     { premise: '회의에 참석한 사람은 모두 보고서를 읽었다. 지수는 보고서를 읽지 않았다.', options: ['지수는 회의에 참석하지 않았다', '지수는 회의에 참석했다', '보고서를 읽은 사람은 모두 회의에 참석했다', '알 수 없다'], answer: 0, level: 4, explain: '참석했다면 읽었어야 하는데 읽지 않았으니까 참석하지 않은 거예요 (후건 부정).' },
     { premise: '모든 B는 C다. 어떤 A는 B가 아니다.', options: ['A와 C의 관계는 알 수 없다', '어떤 A는 C가 아니다', '모든 A는 C다', '어떤 A는 C다'], answer: 0, level: 5, explain: 'B가 아닌 A가 C인지 아닌지는 전제에 없어요. "B가 아니면 C도 아니다"로 읽기 쉬운 함정이에요.' },
@@ -789,18 +789,32 @@
     });
   }
 
-  /* 고정 문항 풀에서 level에 가장 가까운 단계의 안 쓴 문항 번호를 무작위로 고른다 (남은 문항이 없으면 -1) */
-  function pickFromPool(r, pool, level, used) {
+  /* 다시 볼 때 같은 문항이 덜 나오게, 과제마다 최근에 낸 문항 번호를 이 기기에 남긴다 (정밀 검사 두 번 분량).
+     새 문항이 없는 단계에서는 최근 문항도 다시 낸다. 단계를 맞추는 것이 새 문항보다 먼저다. */
+  const SEEN_KEY = 'bl.verbalSeen', SEEN_MAX = 24;
+  function recentSeen(key) { const all = U.store.get(SEEN_KEY, {}); return Array.isArray(all[key]) ? all[key] : []; }
+  function markSeen(key, ids) {
+    const all = U.store.get(SEEN_KEY, {});
+    const list = (Array.isArray(all[key]) ? all[key] : []).filter(function (i) { return ids.indexOf(i) < 0; }).concat(ids);
+    all[key] = list.slice(-SEEN_MAX);
+    U.store.set(SEEN_KEY, all);
+  }
+  /* 고정 문항 풀에서 level에 가장 가까운 단계의 안 쓴 문항 번호를 무작위로 고른다 (남은 문항이 없으면 -1).
+     avoid(최근에 본 문항)가 아닌 문항이 같은 단계에 있으면 그중에서 고른다. */
+  function pickFromPool(r, pool, level, used, avoid) {
     let cand = [];
     for (let d = 0; d <= 5 && !cand.length; d++) {
       cand = pool.map(function (it, i) { return i; }).filter(function (i) { return used.indexOf(i) < 0 && (pool[i].level === level - d || pool[i].level === level + d); });
     }
-    return cand.length ? r.pick(cand) : -1;
+    const fresh = avoid ? cand.filter(function (i) { return avoid.indexOf(i) < 0; }) : [];
+    return fresh.length ? r.pick(fresh) : cand.length ? r.pick(cand) : -1;
   }
   /* 정밀·빠른 검사: 단계 목록대로 한 문항씩 겹치지 않게 뽑는다 (연습 문항은 빼고) */
   function drawPool(r, key, levels) {
-    const pool = POOL[key], used = practiceUsed(key);
-    return levels.map(function (l) { const i = pickFromPool(r, pool, l, used); used.push(i); return pool[i]; });
+    const pool = POOL[key], used = practiceUsed(key), avoid = recentSeen(key);
+    const out = levels.map(function (l) { const i = pickFromPool(r, pool, l, used, avoid); used.push(i); return i; });
+    markSeen(key, out);
+    return out.map(function (i) { return pool[i]; });
   }
 
   /* ===== 5. 도형 회전 (1~5단계) ===== */
@@ -1082,9 +1096,10 @@
     if (GEN[key]) item = GEN[key](r, st.level);
     else {
       const pool = POOL[key];
-      const i = pickFromPool(r, pool, st.level, st.used);
+      const i = pickFromPool(r, pool, st.level, st.used, stub.noHistory ? null : recentSeen(key));
       if (i < 0) return null;
       st.used.push(i);
+      if (!stub.noHistory) markSeen(key, [i]);
       const o = POOL_OPTS[key];
       item = choiceItems(r, [pool[i]], key, o[0], o[1], o[2])[0];
     }
