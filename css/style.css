@@ -349,6 +349,8 @@ p { margin: 0; }
 .stroop-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
 .stroop-btn { height: 72px; border-radius: 12px; border: 0; color: rgba(255,255,255,.85); font-size: 13px; }
 .stroop-btn:active { transform: scale(.97); }
+/* 터치 기기: 두 번 탭 확대·길게 눌러 선택·탭 하이라이트를 막아 반응·기억 과제의 탭이 바로, 한 번만 들어가게 한다 */
+.rt-pad, .crt-btn, .stroop-btn, .gcell, .lns-btn, .opt, .span-input { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 
 /* ---------- 결과 트리 · 복기 ---------- */
 .scale-children { margin: 8px 0 6px 14px; padding-left: 12px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 8px; }

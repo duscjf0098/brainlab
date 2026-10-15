@@ -846,10 +846,14 @@
   const NORMS = {
     matrix: { kind: 'prop', sd: 0.20 }, figAnalogy: { kind: 'prop', sd: 0.20 }, series: { kind: 'prop', sd: 0.22 }, sequence: { kind: 'prop', sd: 0.20 }, weights: { kind: 'prop', sd: 0.22 },
     analogy: { kind: 'prop', sd: 0.18 }, vocab: { kind: 'prop', sd: 0.18 }, logic: { kind: 'prop', sd: 0.20 }, similar: { kind: 'prop', sd: 0.18 }, rotation: { kind: 'prop', sd: 0.22 },
-    digitF: { kind: 'span', mean: 6.5, sd: 1.2 }, digitB: { kind: 'span', mean: 4.8, sd: 1.2 }, grid: { kind: 'span', mean: 5.5, sd: 1.2 }, lns: { kind: 'span', mean: 5.0, sd: 1.2 },
+    /* 폭 과제: 한 개씩 보여 주고 같은 길이를 두 번까지 시도하는 방식(공인 검사와 같은 규칙)의 20~30대 기준.
+       숫자 앞으로 7, 거꾸로 5, 위치(코르시) 6, 숫자-문자 5~6 정도가 보통이라 그 근처에 둔다. 기준을 낮게 잡으면 기억 IQ가 부풀어 보인다. */
+    digitF: { kind: 'span', mean: 7.0, sd: 1.1 }, digitB: { kind: 'span', mean: 5.2, sd: 1.2 }, grid: { kind: 'span', mean: 6.0, sd: 1.1 }, lns: { kind: 'span', mean: 5.6, sd: 1.2 },
     reaction: { kind: 'rt', mean: 280, sd: 45 }, choicert: { kind: 'rt', mean: 480, sd: 80 }, stroop: { kind: 'rt', mean: 800, sd: 130 },
     symbol: { kind: 'count', mean: 24, sd: 6 }
   };
+  /* 터치 화면은 마우스·키보드보다 입력 지연이 길어(대략 30ms) 반응 과제 기준값에 그만큼 더한다. 응답의 절반 이상이 터치면 적용. */
+  const TOUCH_MS = 30;
   const IQ_RANGE = [55, 145];
   /* 라쉬(1PL)+찍기 확률 모형의 사후 최빈값. obs = [{b: 난이도, c: 찍기 확률, ok}], 사전분포 N(0, 1.5²) */
   function irtTheta(obs) {
@@ -1063,10 +1067,14 @@
       const tot = (a.correct || 0) + (a.wrong || 0);
       return { z: U.clamp((net - norm.mean) / norm.sd, -3, 3), raw: net + '개/60초', detail: tot ? '정답 ' + a.correct + ' · 오답 ' + a.wrong + ' · 정확도 ' + Math.round(a.correct / tot * 100) + '%' : '' };
     }
-    const a = Array.isArray(rows[0].a) ? rows[0].a : [];
+    const raw0 = rows[0].a;
+    const a = Array.isArray(raw0) ? raw0 : raw0 && Array.isArray(raw0.times) ? raw0.times : [];
+    const touchN = Array.isArray(raw0) ? a.filter(function (x) { return x && x.touch; }).length : (raw0 && raw0.touch) || 0;
+    const touch = a.length > 0 && touchN / a.length >= 0.5;
+    const mean = norm.mean + (touch ? TOUCH_MS : 0), tnote = touch ? ' · 터치 기준' : '';
     if (key === 'reaction') {
       const med = a.length ? U.median(a) : null;
-      return { z: med == null ? -3 : U.clamp((norm.mean - med) / norm.sd, -3, 3), raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: a.length ? '최고 ' + Math.min.apply(null, a) + 'ms' : '' };
+      return { z: med == null ? -3 : U.clamp((mean - med) / norm.sd, -3, 3), raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: (a.length ? '최고 ' + Math.min.apply(null, a) + 'ms' : '') + tnote };
     }
     const ok = a.filter(function (x) { return x.ok; });
     const acc = a.length ? ok.length / a.length : 0;
@@ -1078,9 +1086,9 @@
       if (cong.length && inc.length) { const d = Math.round(U.median(inc) - U.median(cong)); extra = ' · 간섭 ' + (d >= 0 ? '+' : '') + d + 'ms'; }
     }
     const med = pool.length ? U.median(pool.map(function (x) { return x.rt; })) : null;
-    let z = med == null ? -3 : U.clamp((norm.mean - med) / norm.sd, -3, 3);
+    let z = med == null ? -3 : U.clamp((mean - med) / norm.sd, -3, 3);
     if (acc < 0.75) z = Math.min(z, -1);
-    return { z: z, raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: '정확도 ' + Math.round(acc * 100) + '%' + extra };
+    return { z: z, raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: '정확도 ' + Math.round(acc * 100) + '%' + extra + tnote };
   }
 
   /* 과제별 z 모음 → 영역·종합 결과 객체 */

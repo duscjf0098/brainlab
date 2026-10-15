@@ -520,7 +520,7 @@
     },
 
     reaction: function (it, el, done) {
-      let timers = [], times = [], state = 'idle', t0 = 0, finished = false;
+      let timers = [], times = [], state = 'idle', t0 = 0, finished = false, touches = 0;
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
       function pad() { return el.querySelector('#pad'); }
       function draw(cls, big, small) {
@@ -533,12 +533,15 @@
         draw('wait', '기다리세요', '초록색이 되면 탭');
         T(function () {
           if (state !== 'wait') return;
-          state = 'go';
           const p = pad();
           p.className = 'rt-pad go';
           p.querySelector('.rt-big').textContent = '지금!';
           p.querySelector('.rt-small').textContent = '';
+          state = 'go';
           t0 = performance.now();
+          // 초록색이 실제로 화면에 그려진 프레임의 시각으로 기준점을 당겨 잡는다 (그리기 지연이 반응 시간에 섞이지 않게).
+          // 탭이 먼저 들어왔거나 화면 갱신이 멈춘 상태(백그라운드 탭)면 위의 시각을 그대로 쓴다.
+          requestAnimationFrame(function () { requestAnimationFrame(function () { if (state === 'go') t0 = performance.now(); }); });
         }, 1500 + Math.random() * 2500);
       }
       function onTap(e) {
@@ -559,11 +562,12 @@
             return;
           }
           times.push(ms);
+          if (e.pointerType === 'touch' || e.pointerType === 'pen') touches++;
           state = 'shown';
           if (times.length >= it.trials) {
             finished = true;
             draw('done', ms + ' ms', '측정 완료');
-            T(function () { done(times); }, 800);
+            T(function () { done({ times: times, touch: touches }); }, 800);
           } else {
             draw('shown', ms + ' ms', '탭해서 다음');
           }
@@ -580,7 +584,7 @@
         el.innerHTML = '<div class="crt"><p class="mono muted">' + trials.length + ' / ' + it.trials + '</p>' +
           '<div class="crt-stim" id="stim"></div>' +
           '<div class="crt-btns"><button class="btn crt-btn" data-d="L">← 왼쪽</button><button class="btn crt-btn" data-d="R">오른쪽 →</button></div></div>';
-        el.querySelectorAll('.crt-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-d')); }); });
+        el.querySelectorAll('.crt-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-d'), e.pointerType); }); });
       }
       function next() {
         if (finished) return;
@@ -597,7 +601,7 @@
           t0 = performance.now();
         }, 500 + Math.random() * 900);
       }
-      function answer(d) {
+      function answer(d, pt) {
         if (state !== 'go') return;
         const rt = Math.round(performance.now() - t0);
         const s = el.querySelector('#stim');
@@ -607,7 +611,7 @@
           T(next, 600); return;   // 기록하지 않고 같은 번호를 다시 잰다
         }
         const ok = d === cur;
-        trials.push({ rt: rt, ok: ok });
+        trials.push({ rt: rt, ok: ok, touch: pt === 'touch' || pt === 'pen' });
         s.textContent = ok ? '✓' : '✗';
         s.className = 'crt-stim ' + (ok ? 'ok' : 'bad');
         T(next, 350);
@@ -633,7 +637,7 @@
         el.innerHTML = '<div class="crt"><p class="mono muted">' + trials.length + ' / ' + it.trials + '</p>' +
           '<p class="muted small">글자의 색을 고르세요</p><div class="stroop-word" id="stim"></div>' +
           '<div class="stroop-btns">' + COLORS.map(function (c, i) { return '<button class="stroop-btn" data-k="' + c.k + '" style="background:' + c.hex + '" aria-label="' + c.ko + '"><span class="mono">' + (i + 1) + '</span></button>'; }).join('') + '</div></div>';
-        el.querySelectorAll('.stroop-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-k')); }); });
+        el.querySelectorAll('.stroop-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-k'), e.pointerType); }); });
       }
       function next() {
         if (finished) return;
@@ -654,7 +658,7 @@
           t0 = performance.now();
         }, 400 + Math.random() * 600);
       }
-      function answer(k) {
+      function answer(k, pt) {
         if (state !== 'go') return;
         const rt = Math.round(performance.now() - t0);
         const s = el.querySelector('#stim');
@@ -664,7 +668,7 @@
           T(next, 600); return;
         }
         const ok = k === cur.ink;
-        trials.push({ rt: rt, ok: ok, cong: cur.cong });
+        trials.push({ rt: rt, ok: ok, cong: cur.cong, touch: pt === 'touch' || pt === 'pen' });
         s.textContent = ok ? '✓' : '✗';
         s.style.color = ok ? 'var(--ok)' : 'var(--bad)';
         T(next, 350);
