@@ -62,7 +62,15 @@ BL.card = (function () {
     }
 
     x.fillStyle = '#374151'; x.font = '400 33px ' + FONT;
-    wrap(x, result.summary, W - 160).slice(0, 4).forEach(function (l) { x.fillText(l, 80, y + 20); y += 50; });
+    // 요약은 6줄까지 그리고, 넘치면 마지막 줄 끝을 말줄임표로 줄인다 (문장이 말없이 잘리지 않게)
+    let lines = wrap(x, result.summary, W - 160);
+    if (lines.length > 6) {
+      lines = lines.slice(0, 6);
+      let last = lines[5];
+      while (last && x.measureText(last + '…').width > W - 160) last = last.slice(0, -1);
+      lines[5] = last + '…';
+    }
+    lines.forEach(function (l) { x.fillText(l, 80, y + 20); y += 50; });
     y += 50;
 
     (result.scales || []).forEach(function (s) {
@@ -77,47 +85,58 @@ BL.card = (function () {
     });
 
     x.fillStyle = '#9ca3af'; x.font = '400 23px ' + FONT;
-    x.fillText('참고용 자기평가 · 전문 검사를 대체하지 않습니다', 80, H - 92);
+    x.fillText('참고용 자기평가예요 · 전문 검사를 대신하지 않아요', 80, H - 92);
     x.font = '500 23px ' + MONO; x.fillText(U.fmtDate(result.at || Date.now()), 80, H - 52);
     return c;
   }
 
   function siteUrl() { return (window.BL_CONFIG && window.BL_CONFIG.siteUrl) || location.href.split('#')[0]; }
   function kakaoKey() { return (window.BL_CONFIG && window.BL_CONFIG.kakaoKey) || ''; }
-  /* 카카오 JavaScript SDK를 필요할 때만 불러와 초기화한다 (키가 없으면 거부) */
+  /* 카카오 JavaScript SDK를 불러와 초기화한다 (한 번만, 실패하면 다음에 다시 시도).
+     공유는 버튼을 누른 바로 그 순간에 sendDefault를 불러야 휴대폰에서 카카오톡 앱이 열리고 PC에서 공유 창이 막히지 않는다.
+     누른 뒤에 SDK를 내려받으면 그 사이 "사용자가 누른 직후" 상태가 끝나 첫 번째 탭이 무시되므로, 결과 화면이 뜰 때 미리 불러 둔다. */
+  let kakaoP = null, kakaoFailed = false;
   function loadKakao() {
-    return new Promise(function (res, rej) {
+    if (kakaoP) return kakaoP;
+    kakaoFailed = false;
+    kakaoP = new Promise(function (res, rej) {
       const key = kakaoKey();
       if (!key) return rej(new Error('nokey'));
-      if (window.Kakao && window.Kakao.isInitialized && window.Kakao.isInitialized()) return res(window.Kakao);
-      if (window.Kakao && window.Kakao.init) { try { window.Kakao.init(key); return res(window.Kakao); } catch (e) { return rej(e); } }
+      const init = function () { try { if (!window.Kakao.isInitialized()) window.Kakao.init(key); res(window.Kakao); } catch (e) { rej(e); } };
+      if (window.Kakao && window.Kakao.init) return init();
       const s = document.createElement('script');
       s.src = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js';
       s.async = true;
-      s.onload = function () { try { window.Kakao.init(key); res(window.Kakao); } catch (e) { rej(e); } };
+      s.onload = init;
       s.onerror = function () { rej(new Error('load')); };
       document.head.appendChild(s);
     });
+    kakaoP.catch(function () { kakaoP = null; kakaoFailed = true; });
+    return kakaoP;
   }
-  function kakaoShare(result, test) {
+  function kakaoReady() { const K = window.Kakao; return !!(K && K.isInitialized && K.isInitialized() && K.Share); }
+  function kakaoTemplate(result, test) {
     const url = siteUrl();
-    return loadKakao().then(function (K) {
-      K.Share.sendDefault({
-        objectType: 'feed',
-        content: {
-          title: '두뇌실험실 · ' + test.title,
-          description: result.headline + (result.label ? ' · ' + result.label : '') + '  나도 해보기 →',
-          imageUrl: url + 'og.png',
-          link: { mobileWebUrl: url, webUrl: url }
-        },
-        buttons: [{ title: '나도 해보기', link: { mobileWebUrl: url, webUrl: url } }]
-      });
-      return 'shared';
-    }).catch(function (e) {
-      const m = e && e.message ? e.message : '';
-      return m === 'nokey' ? 'nokey' : /focus|popup|open/i.test(m) ? 'popup' : 'error';
-    });
+    return {
+      objectType: 'feed',
+      content: {
+        title: '두뇌실험실 · ' + test.title,
+        description: result.headline + (result.label ? ' · ' + result.label : ''),
+        imageUrl: url + 'og.png', imageWidth: 1200, imageHeight: 630,
+        link: { mobileWebUrl: url, webUrl: url }
+      },
+      buttons: [{ title: '나도 해보기', link: { mobileWebUrl: url, webUrl: url } }],
+      installTalk: true
+    };
   }
+  /* 클릭 핸들러 안에서 곧바로(동기로) 부른다. 'shared' | 'loading' | 'nokey' | 'popup' | 'error' */
+  function kakaoShare(result, test) {
+    if (!kakaoKey()) return 'nokey';
+    if (!kakaoReady()) { const failed = kakaoFailed; loadKakao(); return failed ? 'error' : 'loading'; }
+    try { window.Kakao.Share.sendDefault(kakaoTemplate(result, test)); return 'shared'; }
+    catch (e) { const m = e && e.message ? e.message : ''; return /focus|popup|open|blocked/i.test(m) ? 'popup' : 'error'; }
+  }
+  function preloadKakao() { if (hasKakao()) loadKakao(); }
   function copyLink(result, test) {
     const text = shareText(result, test);
     const legacy = function () {
@@ -167,5 +186,6 @@ BL.card = (function () {
     }).catch(function (e) { return e && e.name === 'AbortError' ? 'cancel' : 'error'; });
   }
 
-  return { draw: draw, download: download, share: share, shareText: shareText, kakaoShare: kakaoShare, copyLink: copyLink, hasKakao: function () { return !!kakaoKey() && !/claude\.ai$/.test(location.hostname); } };
+  function hasKakao() { return !!kakaoKey() && !/claude\.ai$/.test(location.hostname); }
+  return { draw: draw, download: download, share: share, shareText: shareText, kakaoShare: kakaoShare, kakaoReady: kakaoReady, preloadKakao: preloadKakao, kakaoTemplate: kakaoTemplate, copyLink: copyLink, hasKakao: hasKakao };
 })();

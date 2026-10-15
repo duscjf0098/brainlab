@@ -415,13 +415,13 @@
     const o = shuffleOptions(r, [D].concat(dis), 0);
     const explain = 'A에서 B로: ' + trans.map(function (t) {
       const p = T[t];
-      if (p.to) return TRANS_KO[t] + '이(가) ' + VAL_KO[t][p.to] + '(으)로 바뀜';
+      if (p.to) return t === 'frame' && p.to === 'none' ? '틀이 없어짐' : U.josa(TRANS_KO[t], '이', '가') + ' ' + U.josa(VAL_KO[t][p.to], '으로', '로') + ' 바뀜';
       if (t === 'size') return '크기가 한 단계 커짐';
       if (t === 'count') return '개수가 하나 늘어남';
       if (t === 'rot') return (p.step > 0 ? '시계 방향' : '반시계 방향') + '으로 90° 돎';
       if (t === 'flip') return '좌우가 뒤집힘';
       return TRANS_KO[t] + ': ' + OPK_KO[p.op];
-    }).join(', ') + '. 같은 변화를 C에 적용한 것이 정답입니다.' + (noise.length ? ' C는 A와 ' + noise.map(function (a) { return TRANS_KO[a]; }).join('·') + '이(가) 다르지만 변화 규칙은 같습니다.' : '');
+    }).join(', ') + '. 같은 변화를 C에 적용한 게 정답이에요.' + (noise.length ? ' C는 A와 ' + U.josa(noise.map(function (a) { return TRANS_KO[a]; }).join('·'), '이', '가') + ' 다르지만 바뀌는 규칙은 같아요.' : '');
     return {
       type: 'choice', part: 'figAnalogy', scored: true, level: level, timeLimit: level >= 4 ? 60 : 45,
       prompt: 'A가 B로 바뀐 것과 같은 방식으로 C를 바꾸면?',
@@ -508,10 +508,10 @@
     const names = shapes.map(function (s) { return VAL_KO.shape[s] + '=' + w[s]; }).join(', ');
     return {
       type: 'choice', part: 'weights', scored: true, level: level, timeLimit: level >= 4 ? 90 : level === 3 ? 75 : 60,
-      prompt: '위 저울들은 모두 평형입니다. 마지막 저울의 물음표 자리에 올려야 평형이 되는 것은?',
+      prompt: '위 저울들은 모두 균형이 맞아요. 마지막 저울의 물음표 자리에 올려야 균형이 맞는 것은?',
       promptHtml: '<div class="scales-given">' + givens.map(function (g) { return scaleSVG(g[0], g[1]); }).join('') + scaleSVG(qLeft, null) + '</div>',
       optionsHtml: o.options.map(panSVG), answer: o.answer, optionCols: 2,
-      explain: '가장 가벼운 ' + VAL_KO.shape[shapes[0]] + '을(를) 1로 두면 ' + names + '입니다. 왼쪽의 무게는 ' + cands.t + '이므로 무게가 ' + cands.t + '인 보기가 정답입니다.'
+      explain: '가장 가벼운 ' + U.josa(VAL_KO.shape[shapes[0]], '을', '를') + ' 1로 두면 ' + U.josa(names, '이에요', '예요') + '. 물음표 저울의 왼쪽 무게는 ' + U.josa(cands.t, '이니까', '니까') + ' 무게가 ' + cands.t + '인 보기가 정답이에요.'
     };
   }
 
@@ -569,25 +569,25 @@
   function makeSequence(r, level) {
     const six = function (f) { return [0, 1, 2, 3, 4, 5].map(f); };
     const gens = {
-      arith: function () { const a = r.int(1, 20), d = r.int(2, 9); return { seq: six(function (i) { return a + d * i; }), explain: '앞의 수에 ' + U.josa(d, '을', '를') + ' 더합니다.' }; },
-      arithNeg: function () { const a = r.int(50, 95), d = r.int(3, 9); return { seq: six(function (i) { return a - d * i; }), explain: '앞의 수에서 ' + U.josa(d, '을', '를') + ' 뺍니다.' }; },
-      geo: function () { const a = r.int(1, 4), q = r.pick([2, 3]); return { seq: six(function (i) { return a * Math.pow(q, i); }), explain: '앞의 수에 ' + U.josa(q, '을', '를') + ' 곱합니다.' }; },
-      alt: function () { const a = r.int(1, 15), d1 = r.int(4, 9), d2 = r.int(1, 3); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += i % 2 === 0 ? d1 : -d2; } return { seq: s, explain: '+' + U.josa(d1, '과', '와') + ' −' + U.josa(d2, '이', '가') + ' 번갈아 적용됩니다.' }; },
-      square: function () { const k = r.int(-3, 5), off = r.int(1, 3); return { seq: six(function (i) { return (i + off) * (i + off) + k; }), explain: '제곱수(' + off + '², ' + (off + 1) + '², ' + (off + 2) + '², …)' + (k === 0 ? '입니다.' : k > 0 ? '에 ' + U.josa(k, '을', '를') + ' 더한 수입니다.' : '에서 ' + U.josa(-k, '을', '를') + ' 뺀 수입니다.') }; },
-      fib: function () { const a = r.int(1, 5), b = r.int(a + 1, 9); const s = [a, b]; while (s.length < 6) s.push(s[s.length - 1] + s[s.length - 2]); return { seq: s, explain: '앞의 두 수를 더한 값이 다음 수입니다.' }; },
-      inter: function () { const a = r.int(1, 9), d1 = r.int(1, 4), b = r.int(10, 40), d2 = r.int(3, 10); return { seq: six(function (i) { return i % 2 === 0 ? a + d1 * (i / 2) : b + d2 * ((i - 1) / 2); }), explain: '두 수열이 번갈아 나옵니다. ' + a + '부터 ' + d1 + '씩, ' + b + '부터 ' + d2 + '씩 커집니다.' }; },
-      second: function () { const a = r.int(1, 10), d = r.int(1, 4), inc = r.int(1, 3); let x = a, step = d; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += step; step += inc; } return { seq: s, explain: '이웃한 수의 차이가 ' + d + ', ' + (d + inc) + ', ' + (d + 2 * inc) + '…처럼 ' + inc + '씩 늘어납니다.' }; },
-      mulAdd: function () { const a = r.int(2, 5), k = r.pick([1, -1, 3]); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 + k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + (k > 0 ? U.josa(k, '을', '를') + ' 더합니다.' : U.josa(-k, '을', '를') + ' 뺍니다.') }; },
+      arith: function () { const a = r.int(1, 20), d = r.int(2, 9); return { seq: six(function (i) { return a + d * i; }), explain: '앞의 수에 ' + U.josa(d, '을', '를') + ' 더해요.' }; },
+      arithNeg: function () { const a = r.int(50, 95), d = r.int(3, 9); return { seq: six(function (i) { return a - d * i; }), explain: '앞의 수에서 ' + U.josa(d, '을', '를') + ' 빼요.' }; },
+      geo: function () { const a = r.int(1, 4), q = r.pick([2, 3]); return { seq: six(function (i) { return a * Math.pow(q, i); }), explain: '앞의 수에 ' + U.josa(q, '을', '를') + ' 곱해요.' }; },
+      alt: function () { const a = r.int(1, 15), d1 = r.int(4, 9), d2 = r.int(1, 3); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += i % 2 === 0 ? d1 : -d2; } return { seq: s, explain: '+' + U.josa(d1, '과', '와') + ' −' + U.josa(d2, '이', '가') + ' 번갈아 적용돼요.' }; },
+      square: function () { const k = r.int(-3, 5), off = r.int(1, 3); return { seq: six(function (i) { return (i + off) * (i + off) + k; }), explain: '제곱수(' + off + '², ' + (off + 1) + '², ' + (off + 2) + '², …)' + (k === 0 ? '예요.' : k > 0 ? '에 ' + U.josa(k, '을', '를') + ' 더한 수예요.' : '에서 ' + U.josa(-k, '을', '를') + ' 뺀 수예요.') }; },
+      fib: function () { const a = r.int(1, 5), b = r.int(a + 1, 9); const s = [a, b]; while (s.length < 6) s.push(s[s.length - 1] + s[s.length - 2]); return { seq: s, explain: '앞의 두 수를 더한 값이 다음 수예요.' }; },
+      inter: function () { const a = r.int(1, 9), d1 = r.int(1, 4), b = r.int(10, 40), d2 = r.int(3, 10); return { seq: six(function (i) { return i % 2 === 0 ? a + d1 * (i / 2) : b + d2 * ((i - 1) / 2); }), explain: '두 수열이 번갈아 나와요. ' + a + '부터 ' + d1 + '씩, ' + b + '부터 ' + d2 + '씩 커져요.' }; },
+      second: function () { const a = r.int(1, 10), d = r.int(1, 4), inc = r.int(1, 3); let x = a, step = d; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += step; step += inc; } return { seq: s, explain: '이웃한 수의 차이가 ' + d + ', ' + (d + inc) + ', ' + (d + 2 * inc) + '…처럼 ' + inc + '씩 늘어나요.' }; },
+      mulAdd: function () { const a = r.int(2, 5), k = r.pick([1, -1, 3]); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 + k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + (k > 0 ? U.josa(k, '을', '를') + ' 더해요.' : U.josa(-k, '을', '를') + ' 빼요.') }; },
       /* 4단계 */
-      mulSub: function () { const a = r.int(3, 6), k = r.int(1, 3); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 - k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + U.josa(k, '을', '를') + ' 뺍니다.' }; },
-      alt2: function () { const a = r.int(2, 9), d = r.int(2, 5), b = r.int(2, 5); return { seq: six(function (i) { return i % 2 === 0 ? a + d * (i / 2) : b * Math.pow(2, (i - 1) / 2); }), explain: '두 수열이 번갈아 나옵니다. 홀수 번째는 ' + a + '부터 ' + d + '씩 커지고, 짝수 번째는 ' + b + '부터 2배씩 커집니다.' }; },
-      primes: function () { const st = r.int(0, 5); return { seq: PRIMES.slice(st, st + 6), explain: '소수(1과 자기 자신으로만 나누어지는 수)가 작은 것부터 차례로 나옵니다.' }; },
-      sqPlusN: function () { const off = r.int(1, 3), sg = r.pick([1, -1]); return { seq: six(function (i) { const n = i + off; return n * n + sg * n; }), explain: 'n²' + (sg > 0 ? '+n' : '−n') + ' (n=' + off + ', ' + (off + 1) + ', …)입니다. 이웃한 수의 차이가 2씩 늘어납니다.' }; },
+      mulSub: function () { const a = r.int(3, 6), k = r.int(1, 3); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 - k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + U.josa(k, '을', '를') + ' 빼요.' }; },
+      alt2: function () { const a = r.int(2, 9), d = r.int(2, 5), b = r.int(2, 5); return { seq: six(function (i) { return i % 2 === 0 ? a + d * (i / 2) : b * Math.pow(2, (i - 1) / 2); }), explain: '두 수열이 번갈아 나와요. 홀수 번째는 ' + a + '부터 ' + d + '씩 커지고, 짝수 번째는 ' + b + '부터 2배씩 커져요.' }; },
+      primes: function () { const st = r.int(0, 5); return { seq: PRIMES.slice(st, st + 6), explain: '소수(1과 자기 자신으로만 나누어지는 수)가 작은 것부터 차례로 나와요.' }; },
+      sqPlusN: function () { const off = r.int(1, 3), sg = r.pick([1, -1]); return { seq: six(function (i) { const n = i + off; return n * n + sg * n; }), explain: 'n²' + (sg > 0 ? '+n' : '−n') + ' (n=' + off + ', ' + (off + 1) + ', …) 꼴이에요. 이웃한 수의 차이가 2씩 늘어나요.' }; },
       /* 5단계 */
-      lookback3: function () { const a = r.int(1, 3), b = r.int(1, 3); const s = [a, b, a + b]; while (s.length < 6) s.push(s[s.length - 1] + s[s.length - 2] + s[s.length - 3]); return { seq: s, explain: '앞의 세 수를 더한 값이 다음 수입니다.' }; },
-      altMulAdd: function () { const a = r.int(2, 5), k = r.int(2, 4); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = i % 2 === 0 ? x * 2 : x + k; } return { seq: s, explain: '×2와 ' + U.josa('+' + k, '이', '가') + ' 번갈아 적용됩니다.' }; },
-      diffGeo: function () { const a = r.int(1, 5), d = r.pick([1, 2, 3]); let x = a, step = d; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += step; step *= 2; } return { seq: s, explain: '이웃한 수의 차이가 ' + d + ', ' + d * 2 + ', ' + d * 4 + '…처럼 2배씩 커집니다.' }; },
-      primesSkip: function () { const st = r.int(0, 3); return { seq: [0, 1, 2, 3, 4, 5].map(function (i) { return PRIMES[st + 2 * i]; }), explain: '소수를 하나씩 건너뛰며 나열한 것입니다.' }; }
+      lookback3: function () { const a = r.int(1, 3), b = r.int(1, 3); const s = [a, b, a + b]; while (s.length < 6) s.push(s[s.length - 1] + s[s.length - 2] + s[s.length - 3]); return { seq: s, explain: '앞의 세 수를 더한 값이 다음 수예요.' }; },
+      altMulAdd: function () { const a = r.int(2, 5), k = r.int(2, 4); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = i % 2 === 0 ? x * 2 : x + k; } return { seq: s, explain: '×2와 ' + U.josa('+' + k, '이', '가') + ' 번갈아 적용돼요.' }; },
+      diffGeo: function () { const a = r.int(1, 5), d = r.pick([1, 2, 3]); let x = a, step = d; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += step; step *= 2; } return { seq: s, explain: '이웃한 수의 차이가 ' + d + ', ' + d * 2 + ', ' + d * 4 + '…처럼 2배씩 커져요.' }; },
+      primesSkip: function () { const st = r.int(0, 3); return { seq: [0, 1, 2, 3, 4, 5].map(function (i) { return PRIMES[st + 2 * i]; }), explain: '소수를 하나씩 건너뛰며 나열한 거예요.' }; }
     };
     const pools = { 1: ['arith', 'arithNeg', 'geo'], 2: ['alt', 'square', 'fib', 'inter'], 3: ['second', 'mulAdd', 'inter', 'square'], 4: ['mulSub', 'alt2', 'primes', 'sqPlusN'], 5: ['lookback3', 'altMulAdd', 'diffGeo', 'primesSkip'] };
     // 앞 다섯 수가 다른 단순 규칙으로도 설명되면서 여섯째 수가 달라지는 경우(모호한 문항)는 버리고 다시 만든다
@@ -616,60 +616,60 @@
 
   /* ===== 4. 언어: 유추 · 어휘 · 논리 (원본 문항, 1~5단계) ===== */
   const VERBAL = [
-    { prompt: '손가락 : 손 = 발가락 : ?', options: ['발', '다리', '무릎', '신발'], answer: 0, level: 1, explain: '손가락이 손의 일부이듯 발가락은 발의 일부입니다 (부분과 전체).' },
-    { prompt: '뜨겁다 : 차갑다 = 넓다 : ?', options: ['길다', '좁다', '얇다', '작다'], answer: 1, level: 1, explain: '반대말 관계입니다.' },
-    { prompt: '연필 : 쓰다 = 가위 : ?', options: ['붙이다', '자르다', '재다', '그리다'], answer: 1, level: 1, explain: '도구와 그 도구의 기능입니다.' },
-    { prompt: '새 : 날개 = 물고기 : ?', options: ['비늘', '아가미', '지느러미', '눈'], answer: 2, level: 2, explain: '이동에 쓰는 기관입니다. 날개로 날듯 지느러미로 헤엄칩니다.' },
-    { prompt: '온도계 : 온도 = 저울 : ?', options: ['길이', '부피', '무게', '속도'], answer: 2, level: 2, explain: '측정 도구와 측정 대상입니다.' },
-    { prompt: '섬 : 바다 = 오아시스 : ?', options: ['강', '사막', '숲', '호수'], answer: 1, level: 2, explain: '넓은 공간 속에 고립된 작은 장소입니다.' },
-    { prompt: '나무 : 종이 = 모래 : ?', options: ['시멘트', '유리', '벽돌', '흙'], answer: 1, level: 3, explain: '원료와 그 원료로 만드는 제품입니다. 유리는 모래(규사)로 만듭니다.' },
-    { prompt: '희소하다 : 흔하다 = 간결하다 : ?', options: ['명확하다', '복잡하다', '장황하다', '짧다'], answer: 2, level: 3, explain: '반대말 관계입니다. 간결의 반대는 장황입니다.' },
-    { prompt: '지도 : 지형 = 악보 : ?', options: ['음악', '악기', '연주자', '무대'], answer: 0, level: 4, explain: '기호로 옮겨 적은 것과 그 원래 대상입니다. 지도는 지형을, 악보는 음악을 적습니다.' },
-    { prompt: '증상 : 질병 = 연기 : ?', options: ['불', '공기', '재', '굴뚝'], answer: 0, level: 4, explain: '겉으로 드러나는 징후와 그 원인입니다. 증상은 질병의, 연기는 불의 징후입니다.' },
-    { prompt: '관대하다 : 엄격하다 = 사치하다 : ?', options: ['검소하다', '인색하다', '빈곤하다', '겸손하다'], answer: 0, level: 5, explain: '반대말 관계입니다. 사치의 반대는 검소이며, 인색은 베풀기를 아끼는 것이라 다릅니다.' },
-    { prompt: '암시 : 명시 = 함축 : ?', options: ['직설', '생략', '비유', '축약'], answer: 0, level: 5, explain: '넌지시 드러냄과 분명히 드러냄의 대비입니다. 함축의 반대는 직설입니다.' }
+    { prompt: '손가락 : 손 = 발가락 : ?', options: ['발', '다리', '무릎', '신발'], answer: 0, level: 1, explain: '손가락이 손의 일부이듯 발가락은 발의 일부예요 (부분과 전체).' },
+    { prompt: '뜨겁다 : 차갑다 = 넓다 : ?', options: ['길다', '좁다', '얇다', '작다'], answer: 1, level: 1, explain: '반대말 관계예요.' },
+    { prompt: '연필 : 쓰다 = 가위 : ?', options: ['붙이다', '자르다', '재다', '그리다'], answer: 1, level: 1, explain: '도구와 그 도구가 하는 일이에요.' },
+    { prompt: '새 : 날개 = 물고기 : ?', options: ['비늘', '아가미', '지느러미', '눈'], answer: 2, level: 2, explain: '움직일 때 쓰는 기관이에요. 날개로 날듯 지느러미로 헤엄쳐요.' },
+    { prompt: '온도계 : 온도 = 저울 : ?', options: ['길이', '부피', '무게', '속도'], answer: 2, level: 2, explain: '재는 도구와 그 도구로 재는 대상이에요.' },
+    { prompt: '섬 : 바다 = 오아시스 : ?', options: ['강', '사막', '숲', '호수'], answer: 1, level: 2, explain: '넓은 공간 한가운데 따로 떨어진 작은 곳이에요.' },
+    { prompt: '나무 : 종이 = 모래 : ?', options: ['시멘트', '유리', '벽돌', '흙'], answer: 1, level: 3, explain: '원료와 그 원료로 만드는 물건이에요. 유리는 모래(규사)로 만들어요.' },
+    { prompt: '희소하다 : 흔하다 = 간결하다 : ?', options: ['명확하다', '복잡하다', '장황하다', '짧다'], answer: 2, level: 3, explain: '반대말 관계예요. 간결의 반대는 장황이에요.' },
+    { prompt: '지도 : 지형 = 악보 : ?', options: ['음악', '악기', '연주자', '무대'], answer: 0, level: 4, explain: '기호로 옮겨 적은 것과 그 원래 대상이에요. 지도는 지형을, 악보는 음악을 적어요.' },
+    { prompt: '증상 : 질병 = 연기 : ?', options: ['불', '공기', '재', '굴뚝'], answer: 0, level: 4, explain: '겉으로 드러나는 신호와 그 원인이에요. 증상은 질병의, 연기는 불의 신호예요.' },
+    { prompt: '관대하다 : 엄격하다 = 사치하다 : ?', options: ['검소하다', '인색하다', '빈곤하다', '겸손하다'], answer: 0, level: 5, explain: '반대말 관계예요. 사치의 반대는 검소예요. 인색은 베풀기를 아끼는 것이라 뜻이 달라요.' },
+    { prompt: '암시 : 명시 = 함축 : ?', options: ['직설', '생략', '비유', '축약'], answer: 0, level: 5, explain: '넌지시 드러내는 것과 분명히 드러내는 것의 대비예요. 함축의 반대는 직설이에요.' }
   ];
   const VOCAB = [
     { prompt: '"명료하다"와 뜻이 가장 가까운 말은?', options: ['분명하다', '복잡하다', '느슨하다', '화려하다'], answer: 0, level: 1, explain: '명료하다 = 뚜렷하고 분명하다.' },
     { prompt: '"빈번하다"와 뜻이 가장 가까운 말은?', options: ['잦다', '드물다', '급하다', '넓다'], answer: 0, level: 1, explain: '빈번하다 = 자주 일어나 잦다.' },
-    { prompt: '"인색하다"의 반대말에 가장 가까운 것은?', options: ['후하다', '검소하다', '무심하다', '성실하다'], answer: 0, level: 2, explain: '인색은 베풀기를 아끼는 것, 반대는 후하다입니다.' },
-    { prompt: '"경솔하다"의 반대말에 가장 가까운 것은?', options: ['신중하다', '대담하다', '느리다', '겸손하다'], answer: 0, level: 2, explain: '경솔은 가볍게 행동하는 것, 반대는 신중입니다.' },
+    { prompt: '"인색하다"의 반대말에 가장 가까운 것은?', options: ['후하다', '검소하다', '무심하다', '성실하다'], answer: 0, level: 2, explain: '인색은 베풀기를 아끼는 것이고, 반대는 "후하다"예요.' },
+    { prompt: '"경솔하다"의 반대말에 가장 가까운 것은?', options: ['신중하다', '대담하다', '느리다', '겸손하다'], answer: 0, level: 2, explain: '경솔은 깊이 생각하지 않고 가볍게 행동하는 것이고, 반대는 신중이에요.' },
     { prompt: '"유보하다"와 뜻이 가장 가까운 말은?', options: ['미루다', '결정하다', '거절하다', '보관하다'], answer: 0, level: 2, explain: '유보하다 = 결정을 나중으로 미루다.' },
     { prompt: '"미미하다"와 뜻이 가장 가까운 말은?', options: ['보잘것없다', '아름답다', '조용하다', '강하다'], answer: 0, level: 2, explain: '미미하다 = 보잘것없이 작다.' },
     { prompt: '"완곡하다"와 뜻이 가장 가까운 것은?', options: ['부드럽게 돌려 말하다', '직설적으로 말하다', '단호하게 말하다', '길게 늘여 말하다'], answer: 0, level: 3, explain: '완곡하다 = 듣기 좋게 돌려서 부드럽게 말하다.' },
     { prompt: '"고루하다"와 뜻이 가장 가까운 것은?', options: ['낡고 융통성이 없다', '고르고 균등하다', '외롭고 쓸쓸하다', '높고 귀하다'], answer: 0, level: 3, explain: '고루하다 = 낡은 생각에 매여 융통성이 없다.' },
-    { prompt: '"서슴다"와 뜻이 가장 가까운 말은?', options: ['망설이다', '서두르다', '숨기다', '다투다'], answer: 0, level: 4, explain: '서슴다 = 결단을 내리지 못하고 머뭇거리다. "서슴지 않고"의 그 말입니다.' },
+    { prompt: '"서슴다"와 뜻이 가장 가까운 말은?', options: ['망설이다', '서두르다', '숨기다', '다투다'], answer: 0, level: 4, explain: '서슴다 = 결정을 내리지 못하고 머뭇거리다. "서슴지 않고"라고 할 때의 그 말이에요.' },
     { prompt: '"알음알음"의 뜻으로 가장 알맞은 것은?', options: ['서로 아는 관계를 통해', '아주 천천히 조금씩', '남몰래 은밀하게', '분명하고 뚜렷하게'], answer: 0, level: 4, explain: '알음알음 = 서로 아는 관계나 친분을 통해.' },
     { prompt: '"미쁘다"와 뜻이 가장 가까운 말은?', options: ['믿음직하다', '예쁘다', '미련하다', '어설프다'], answer: 0, level: 5, explain: '미쁘다 = 믿음성이 있다, 믿음직하다.' },
     { prompt: '"사위스럽다"와 뜻이 가장 가까운 것은?', options: ['마음에 불길한 느낌이 들다', '사이가 서먹하다', '몹시 까다롭다', '몸가짐이 단정하다'], answer: 0, level: 5, explain: '사위스럽다 = 마음에 꺼림칙하고 불길한 느낌이 있다.' }
   ];
   const LOGIC = [
-    { premise: '모든 고래는 포유류다. 모든 포유류는 폐로 숨 쉰다.', options: ['모든 고래는 폐로 숨 쉰다', '폐로 숨 쉬는 동물은 모두 고래다', '어떤 포유류는 고래가 아니다', '고래는 물고기다'], answer: 0, level: 1, explain: '고래 → 포유류 → 폐호흡이므로 모든 고래는 폐로 숨 쉽니다.' },
-    { premise: '민수는 지호보다 키가 크다. 지호는 수아보다 키가 크다.', options: ['민수는 수아보다 키가 크다', '수아는 민수보다 키가 크다', '지호가 가장 크다', '셋의 키는 같다'], answer: 0, level: 1, explain: '민수 > 지호 > 수아이므로 민수 > 수아입니다.' },
-    { premise: '어떤 학생은 안경을 쓴다. 안경을 쓴 사람은 모두 시력이 나쁘다.', options: ['어떤 학생은 시력이 나쁘다', '모든 학생은 시력이 나쁘다', '시력이 나쁜 사람은 모두 학생이다', '안경을 안 쓴 학생은 시력이 좋다'], answer: 0, level: 2, explain: '안경 쓴 학생이 적어도 한 명 있고 그 사람은 시력이 나쁘므로 "어떤 학생은 시력이 나쁘다"만 반드시 참입니다.' },
-    { premise: '이 상자의 공은 모두 빨갛거나 파랗다. 상자에서 꺼낸 공은 빨갛지 않다.', options: ['꺼낸 공은 파랗다', '꺼낸 공은 빨갛다', '상자에는 파란 공만 있다', '알 수 없다'], answer: 0, level: 2, explain: '빨강 아니면 파랑인데 빨강이 아니므로 파랑입니다.' },
-    { premise: '시험이 쉬웠다면 평균이 80점을 넘었을 것이다. 평균은 80점을 넘지 않았다.', options: ['시험은 쉽지 않았다', '시험은 쉬웠다', '평균은 정확히 80점이었다', '알 수 없다'], answer: 0, level: 3, explain: '"쉬움 → 80점 초과"인데 80점을 넘지 않았으므로 쉽지 않았습니다 (후건 부정).' },
-    { premise: '비가 오면 땅이 젖는다. 지금 땅이 젖어 있다.', options: ['비가 왔는지는 알 수 없다', '비가 왔다', '비가 오지 않았다', '땅은 항상 젖어 있다'], answer: 0, level: 3, explain: '땅은 물을 뿌려도 젖습니다. "비 → 젖음"에서 "젖음 → 비"는 따라 나오지 않습니다.' },
-    { premise: '모든 A는 B가 아니다. 어떤 C는 A다.', options: ['어떤 C는 B가 아니다', '모든 C는 B가 아니다', '어떤 B는 C다', '모든 B는 A다'], answer: 0, level: 3, explain: 'A인 C가 적어도 하나 있고, A는 B가 아니므로 그 C는 B가 아닙니다.' },
-    { premise: '어떤 새는 날지 못한다. 모든 새는 알을 낳는다.', options: ['알을 낳는 동물 중에 날지 못하는 것이 있다', '날지 못하는 동물은 모두 새다', '알을 낳지 않는 새가 있다', '모든 새는 날지 못한다'], answer: 0, level: 4, explain: '날지 못하는 새가 적어도 하나 있고 그 새도 알을 낳으므로, 알을 낳으면서 날지 못하는 동물이 있습니다.' },
-    { premise: '회의에 참석한 사람은 모두 보고서를 읽었다. 지수는 보고서를 읽지 않았다.', options: ['지수는 회의에 참석하지 않았다', '지수는 회의에 참석했다', '보고서를 읽은 사람은 모두 회의에 참석했다', '알 수 없다'], answer: 0, level: 4, explain: '참석했다면 읽었어야 하는데 읽지 않았으므로 참석하지 않았습니다 (후건 부정).' },
-    { premise: '모든 B는 C다. 어떤 A는 B가 아니다.', options: ['A와 C의 관계는 알 수 없다', '어떤 A는 C가 아니다', '모든 A는 C다', '어떤 A는 C다'], answer: 0, level: 5, explain: 'B가 아닌 A가 C인지 아닌지는 전제에 없습니다. "B가 아니면 C도 아니다"로 읽기 쉬운 함정입니다.' },
-    { premise: '진우, 민아, 서준 중 한 명만 거짓말을 한다. 진우: "민아는 거짓말쟁이다." 민아: "서준은 거짓말쟁이다." 서준: "나는 거짓말쟁이가 아니다."', options: ['민아', '진우', '서준', '알 수 없다'], answer: 0, level: 5, explain: '민아가 거짓말쟁이라면 진우의 말은 참, 서준의 말도 참이 되어 한 명만 거짓인 조건에 맞습니다. 다른 경우는 거짓말쟁이가 둘이 됩니다.' }
+    { premise: '모든 고래는 포유류다. 모든 포유류는 폐로 숨 쉰다.', options: ['모든 고래는 폐로 숨 쉰다', '폐로 숨 쉬는 동물은 모두 고래다', '어떤 포유류는 고래가 아니다', '고래는 물고기다'], answer: 0, level: 1, explain: '고래 → 포유류 → 폐호흡이니까 모든 고래는 폐로 숨 쉬어요.' },
+    { premise: '민수는 지호보다 키가 크다. 지호는 수아보다 키가 크다.', options: ['민수는 수아보다 키가 크다', '수아는 민수보다 키가 크다', '지호가 가장 크다', '셋의 키는 같다'], answer: 0, level: 1, explain: '민수 > 지호 > 수아니까 민수 > 수아예요.' },
+    { premise: '어떤 학생은 안경을 쓴다. 안경을 쓴 사람은 모두 시력이 나쁘다.', options: ['어떤 학생은 시력이 나쁘다', '모든 학생은 시력이 나쁘다', '시력이 나쁜 사람은 모두 학생이다', '안경을 안 쓴 학생은 시력이 좋다'], answer: 0, level: 2, explain: '안경 쓴 학생이 적어도 한 명 있고 그 사람은 시력이 나쁘니까 "어떤 학생은 시력이 나쁘다"만 반드시 참이에요.' },
+    { premise: '이 상자의 공은 모두 빨갛거나 파랗다. 상자에서 꺼낸 공은 빨갛지 않다.', options: ['꺼낸 공은 파랗다', '꺼낸 공은 빨갛다', '상자에는 파란 공만 있다', '알 수 없다'], answer: 0, level: 2, explain: '빨강 아니면 파랑인데 빨강이 아니니까 파랑이에요.' },
+    { premise: '시험이 쉬웠다면 평균이 80점을 넘었을 것이다. 평균은 80점을 넘지 않았다.', options: ['시험은 쉽지 않았다', '시험은 쉬웠다', '평균은 정확히 80점이었다', '알 수 없다'], answer: 0, level: 3, explain: '"쉬우면 80점 초과"인데 80점을 넘지 않았으니까 쉽지 않았던 거예요 (후건 부정).' },
+    { premise: '비가 오면 땅이 젖는다. 지금 땅이 젖어 있다.', options: ['비가 왔는지는 알 수 없다', '비가 왔다', '비가 오지 않았다', '땅은 항상 젖어 있다'], answer: 0, level: 3, explain: '땅은 물을 뿌려도 젖어요. "비 → 젖음"에서 "젖음 → 비"는 따라 나오지 않아요.' },
+    { premise: '모든 A는 B가 아니다. 어떤 C는 A다.', options: ['어떤 C는 B가 아니다', '모든 C는 B가 아니다', '어떤 B는 C다', '모든 B는 A다'], answer: 0, level: 3, explain: 'A인 C가 적어도 하나 있고, A는 B가 아니니까 그 C는 B가 아니에요.' },
+    { premise: '어떤 새는 날지 못한다. 모든 새는 알을 낳는다.', options: ['알을 낳는 동물 중에 날지 못하는 것이 있다', '날지 못하는 동물은 모두 새다', '알을 낳지 않는 새가 있다', '모든 새는 날지 못한다'], answer: 0, level: 4, explain: '날지 못하는 새가 적어도 하나 있고 그 새도 알을 낳으니까, 알을 낳으면서 날지 못하는 동물이 있어요.' },
+    { premise: '회의에 참석한 사람은 모두 보고서를 읽었다. 지수는 보고서를 읽지 않았다.', options: ['지수는 회의에 참석하지 않았다', '지수는 회의에 참석했다', '보고서를 읽은 사람은 모두 회의에 참석했다', '알 수 없다'], answer: 0, level: 4, explain: '참석했다면 읽었어야 하는데 읽지 않았으니까 참석하지 않은 거예요 (후건 부정).' },
+    { premise: '모든 B는 C다. 어떤 A는 B가 아니다.', options: ['A와 C의 관계는 알 수 없다', '어떤 A는 C가 아니다', '모든 A는 C다', '어떤 A는 C다'], answer: 0, level: 5, explain: 'B가 아닌 A가 C인지 아닌지는 전제에 없어요. "B가 아니면 C도 아니다"로 읽기 쉬운 함정이에요.' },
+    { premise: '진우, 민아, 서준 중 한 명만 거짓말을 한다. 진우: "민아는 거짓말쟁이다." 민아: "서준은 거짓말쟁이다." 서준: "나는 거짓말쟁이가 아니다."', options: ['민아', '진우', '서준', '알 수 없다'], answer: 0, level: 5, explain: '민아가 거짓말쟁이라면 진우의 말도 참, 서준의 말도 참이라 거짓말쟁이가 한 명뿐이라는 조건에 맞아요. 다른 경우에는 거짓말쟁이가 둘이 돼요.' }
   ];
   /* 공통점 찾기: 두 낱말의 본질적 공통점(범주·기능)을 고른다. 보기 길이는 정답과 무관하게 섞었다. */
   const SIMILAR = [
-    { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 껍질째 먹는다', '둘 다 씨가 하나도 없다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"입니다. 노란색과 껍질째 먹는 것은 한쪽에만 해당하고, 사과에는 씨가 있습니다.' },
-    { pair: ['개', '고양이'], options: ['네 발 달린 포유류다', '사람을 보면 짖는다', '주인을 따라다닌다', '주로 밤에 활동한다'], answer: 0, level: 1, explain: '둘 다 포유류입니다. 나머지는 한쪽에만 해당합니다.' },
-    { pair: ['시계', '달력'], options: ['시간을 재는 도구다', '바늘이 돌아간다', '한 해가 지나면 새것으로 바꾼다', '전기가 있어야 움직인다'], answer: 0, level: 2, explain: '둘 다 시간을 재고 알려 주는 도구입니다. 바늘은 시계에만, 해마다 바꾸는 것은 달력에만 해당합니다.' },
-    { pair: ['연필', '붓'], options: ['그리거나 쓰는 도구다', '글씨를 쓰는 데만 쓴다', '잉크를 묻혀 쓴다', '지우개로 지울 수 있다'], answer: 0, level: 2, explain: '기능(그리기·쓰기)이 본질적 공통점입니다. 나머지는 한쪽에만 해당합니다.' },
-    { pair: ['증기', '얼음'], options: ['물의 다른 상태다', '만지면 차갑다', '사람이 만들어 낸 것이다', '하늘 위에 떠 있다'], answer: 0, level: 3, explain: '둘 다 물이 상태만 바뀐 것입니다.' },
-    { pair: ['칭찬', '벌'], options: ['행동을 바꾸는 수단이다', '받으면 기분이 좋다', '아이에게만 쓰는 것이다', '말로만 할 수 있다'], answer: 0, level: 3, explain: '정반대로 보이지만 둘 다 행동을 조절하려는 수단입니다.' },
-    { pair: ['지도', '설명서'], options: ['모르는 것을 안내한다', '길을 찾을 때만 쓴다', '한 번 보면 다시 볼 일이 없다', '반드시 전문가가 만든다'], answer: 0, level: 4, explain: '둘 다 모르는 것을 찾아가게 돕는 안내 도구입니다. 나머지는 한쪽에만 맞거나 사실이 아닙니다.' },
-    { pair: ['뿌리', '기초'], options: ['전체를 떠받치는 바탕이다', '위로 갈수록 두꺼워진다', '시간이 지나면 저절로 사라진다', '식물에게만 있는 것이다'], answer: 0, level: 4, explain: '보이지 않는 곳에서 전체를 지탱한다는 점이 본질입니다.' },
-    { pair: ['민주주의', '독재'], options: ['사회를 다스리는 방식이다', '국민이 직접 투표한다', '권력이 한 사람에게 있다', '현대에 와서 생긴 제도다'], answer: 0, level: 5, explain: '정반대의 체제지만 둘 다 "통치 방식"이라는 범주에 속합니다.' },
-    { pair: ['희망', '두려움'], options: ['앞일에 대한 감정이다', '마음이 편해지는 감정이다', '주로 밤에 생기는 감정이다', '남에게 숨기는 감정이다'], answer: 0, level: 5, explain: '둘 다 아직 오지 않은 일을 향한 감정입니다.' },
-    { pair: ['소문', '뉴스'], options: ['사람들에게 퍼지는 정보다', '언제나 사실에 근거한다', '신문과 방송에만 실린다', '며칠 지나면 모두 잊힌다'], answer: 0, level: 5, explain: '진위와 경로는 다르지만 둘 다 퍼져 나가는 정보입니다.' }
-  ].map(function (it) { it.prompt = '"' + it.pair[0] + '"와(과) "' + it.pair[1] + '"의 공통점으로 가장 알맞은 것은?'; return it; });
+    { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 껍질째 먹는다', '둘 다 씨가 하나도 없다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"이에요. 노란색과 껍질째 먹는 것은 한쪽에만 해당하고, 사과에는 씨가 있어요.' },
+    { pair: ['개', '고양이'], options: ['네 발 달린 포유류다', '사람을 보면 짖는다', '주인을 따라다닌다', '주로 밤에 활동한다'], answer: 0, level: 1, explain: '둘 다 포유류예요. 나머지는 한쪽에만 해당해요.' },
+    { pair: ['시계', '달력'], options: ['시간을 재는 도구다', '바늘이 돌아간다', '한 해가 지나면 새것으로 바꾼다', '전기가 있어야 움직인다'], answer: 0, level: 2, explain: '둘 다 시간을 재고 알려 주는 도구예요. 바늘은 시계에만, 해마다 바꾸는 것은 달력에만 해당해요.' },
+    { pair: ['연필', '붓'], options: ['그리거나 쓰는 도구다', '글씨를 쓰는 데만 쓴다', '잉크를 묻혀 쓴다', '지우개로 지울 수 있다'], answer: 0, level: 2, explain: '하는 일(그리기·쓰기)이 본질적인 공통점이에요. 나머지는 한쪽에만 해당해요.' },
+    { pair: ['증기', '얼음'], options: ['물의 다른 상태다', '만지면 차갑다', '사람이 만들어 낸 것이다', '하늘 위에 떠 있다'], answer: 0, level: 3, explain: '둘 다 물이 상태만 바뀐 거예요.' },
+    { pair: ['칭찬', '벌'], options: ['행동을 바꾸는 수단이다', '받으면 기분이 좋다', '아이에게만 쓰는 것이다', '말로만 할 수 있다'], answer: 0, level: 3, explain: '정반대로 보이지만 둘 다 행동을 바꾸려고 쓰는 수단이에요.' },
+    { pair: ['지도', '설명서'], options: ['모르는 것을 안내한다', '길을 찾을 때만 쓴다', '한 번 보면 다시 볼 일이 없다', '반드시 전문가가 만든다'], answer: 0, level: 4, explain: '둘 다 모르는 것을 찾아가게 돕는 안내 도구예요. 나머지는 한쪽에만 맞거나 사실이 아니에요.' },
+    { pair: ['뿌리', '기초'], options: ['전체를 떠받치는 바탕이다', '위로 갈수록 두꺼워진다', '시간이 지나면 저절로 사라진다', '식물에게만 있는 것이다'], answer: 0, level: 4, explain: '보이지 않는 곳에서 전체를 받친다는 점이 핵심이에요.' },
+    { pair: ['민주주의', '독재'], options: ['사회를 다스리는 방식이다', '국민이 직접 투표한다', '권력이 한 사람에게 있다', '현대에 와서 생긴 제도다'], answer: 0, level: 5, explain: '정반대의 체제지만 둘 다 "나라를 다스리는 방식"이라는 범주에 속해요.' },
+    { pair: ['희망', '두려움'], options: ['앞일에 대한 감정이다', '마음이 편해지는 감정이다', '주로 밤에 생기는 감정이다', '남에게 숨기는 감정이다'], answer: 0, level: 5, explain: '둘 다 아직 오지 않은 일을 향한 감정이에요.' },
+    { pair: ['소문', '뉴스'], options: ['사람들에게 퍼지는 정보다', '언제나 사실에 근거한다', '신문과 방송에만 실린다', '며칠 지나면 모두 잊힌다'], answer: 0, level: 5, explain: '사실인지와 퍼지는 경로는 다르지만 둘 다 사람들 사이에 퍼지는 정보예요.' }
+  ].map(function (it) { it.prompt = U.josa('"' + it.pair[0] + '"', '과', '와') + ' "' + it.pair[1] + '"의 공통점으로 가장 알맞은 것은?'; return it; });
   const QUICK_VERBAL = [0, 3, 6, 8, 10, 11];
   /* 기호 찾기용 글리프 12종 (세 가지 비대칭 모양 × 네 방향) */
   function glyphSVG(i) {
@@ -787,10 +787,10 @@
     const o = shuffleOptions(r, [rots[k]].concat(dis), 0);
     return {
       type: 'choice', part: 'rotation', scored: true, level: level, timeLimit: level >= 4 ? 50 : 40,
-      prompt: '위 도형을 돌리기만 해서 만들 수 있는 것은? (뒤집으면 안 됩니다)',
+      prompt: '위 도형을 돌리기만 해서 만들 수 있는 것은? (뒤집으면 안 돼요)',
       promptHtml: '<div class="poly-prompt">' + polySVG(shape) + '</div>',
       optionsHtml: o.options.map(polySVG), answer: o.answer, optionCols: 4,
-      explain: '정답은 원래 도형을 ' + (k * 90) + '° 돌린 모양입니다. 나머지는 거울에 비친 모양이거나 칸 하나의 위치가 다른 도형입니다.'
+      explain: '정답은 원래 도형을 ' + (k * 90) + '° 돌린 모양이에요. 나머지는 거울에 비친 모양이거나 칸 하나의 위치가 다른 도형이에요.'
     };
   }
 
@@ -1128,8 +1128,11 @@
       const sorted = scales.slice().sort(function (a, b) { return b.value - a.value; });
       headline = (opts.merged ? '종합 ' : '') + '추정 IQ ' + iq;
       const weak = sorted[sorted.length - 1];
-      summary = bandText + ' 가장 강한 쪽은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + weak.label + ' ' + U.josa(weak.value, '은', '는') + ' 연습하면 더 오를 여지가 있어요.' +
-        (keys.length < TASK_KEYS.length ? ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했어요.' : '');
+      const spread = sorted[0].value - weak.value;
+      summary = bandText + (sorted.length < 2 ? '' : spread < 8
+          ? ' 영역별 점수가 ' + weak.value + '~' + sorted[0].value + ' 사이로 고르게 나왔어요.'
+          : ' 가장 강한 쪽은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + weak.label + ' ' + U.josa(weak.value, '은', '는') + ' 연습하면 더 오를 여지가 있어요.') +
+        (keys.length < TASK_KEYS.length ? (opts.quick ? ' 빠른 검사라 대표 과제 ' + keys.length + '개로 낸 점수예요. 나머지 과제도 풀면 종합 프로필이 더 정확해져요.' : ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했어요.') : '');
     }
     sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균이 100인 IQ 눈금으로 바꾼 점수예요. 열 명 중 일곱 명쯤이 85~115 사이에 들어가요. "상위 %"는 그 눈금에서 내 위치고, ±' + U.josa(sem, '은', '는') + ' 오차 범위예요. 실제 값이 그 안에 있을 확률이 70% 정도고, 과제를 많이 풀수록 범위가 좁아져요. 점수는 몇 개를 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 각 단계의 난이도는 설계할 때 정한 예상 정답률이라, 실제 응시 데이터로 보정하기 전까지는 공인 지능검사의 IQ와 같다고 볼 수 없어요. 같은 과제를 여러 번 하면 익숙해져서 점수가 올라요.' });
     return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: tasks, z: z };
@@ -1143,7 +1146,7 @@
     const review = [];
     const tasks = {};
     TASK_KEYS.forEach(function (k) { if (byPart[k]) tasks[k] = taskStats(k, byPart[k], review); });
-    const res = assemble(tasks, {});
+    const res = assemble(tasks, { quick: parseMode(meta.mode).kind === 'quick' });
     res.modeLabel = modeLabel(meta.mode);
     res.review = review;
     return res;

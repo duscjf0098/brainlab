@@ -265,7 +265,8 @@
         const ok = i === it.answer;
         const box = document.createElement('div');
         box.className = 'practice-fb ' + (ok ? 'ok' : 'bad');
-        box.innerHTML = '<p class="practice-title">' + (ok ? '정답이에요.' : '아쉽네요. 정답은 ' + (it.answer + 1) + '번이에요.') + '</p>' +
+        // 그림 보기에는 번호가 안 보이므로 "N번" 대신 초록 테두리로 표시한 보기를 가리킨다
+        box.innerHTML = '<p class="practice-title">' + (ok ? '정답이에요.' : it.optionsHtml ? '아쉽네요. 정답은 초록 테두리로 표시한 보기예요.' : '아쉽네요. 정답은 ' + (it.answer + 1) + '번이에요.') + '</p>' +
           (it.optionsHtml ? '<div class="rv-opt">' + it.optionsHtml[it.answer] + '</div>' : '') +
           '<p class="practice-explain">' + U.esc(it.explain || '') + '</p>' +
           '<button class="btn btn-primary btn-block" id="pnext">본 문항 시작</button>';
@@ -305,7 +306,16 @@
           num.textContent = left;
           if (left <= 10) row.classList.add('urgent');
         }, 250);
-        timer = setTimeout(function () { if (answered || gone) return; answered = true; if (tick) clearInterval(tick); done(null); }, limit * 1000);
+        // 시간이 다 되면 말없이 넘어가지 않고 잠깐 알려 준 뒤 넘어간다
+        timer = setTimeout(function () {
+          if (answered || gone) return;
+          answered = true; if (tick) clearInterval(tick);
+          el.querySelectorAll('.opt').forEach(function (b) { b.disabled = true; });
+          const toast = document.createElement('div'); toast.className = 'toast'; toast.setAttribute('role', 'status');
+          toast.textContent = '시간이 다 됐어요. 다음 문항으로 넘어가요.';
+          el.appendChild(toast);
+          setTimeout(function () { if (!gone) done(null); }, 1100);
+        }, limit * 1000);
       }
       return function () { gone = true; if (timer) clearTimeout(timer); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); };
     },
@@ -374,7 +384,7 @@
         inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
       }
       function end() { if (finished) return; finished = true; done(best); }
-      introCard(el, it, trial, it.start + '자리부터 시작해 맞힐 때마다 한 자리씩 늘어납니다. 최대 ' + it.max + '자리.');
+      introCard(el, it, trial, it.start + '자리부터 시작해서 맞힐 때마다 한 자리씩 늘어나요. 최대 ' + it.max + '자리까지예요.');
       return function () { timers.forEach(clearTimeout); };
     },
 
@@ -419,7 +429,7 @@
         if (len > it.max || fails >= 2) T(end, 900); else T(trial, 900);
       }
       function end() { if (finished) return; finished = true; done(best); }
-      introCard(el, it, trial, it.start + '칸부터 시작해 맞힐 때마다 한 칸씩 늘어납니다. 최대 ' + it.max + '칸.');
+      introCard(el, it, trial, it.start + '칸부터 시작해서 맞힐 때마다 한 칸씩 늘어나요. 최대 ' + it.max + '칸까지예요.');
       return function () { timers.forEach(clearTimeout); };
     },
 
@@ -438,7 +448,7 @@
       }
       function trial() {
         const g = gen(len);
-        el.innerHTML = '<div class="span-stage"><p class="mono muted">' + len + '개 · 잘 보세요</p><div class="span-digit mono" id="digit">&nbsp;</div><p class="muted small">숫자와 자음이 섞여 나옵니다</p></div>';
+        el.innerHTML = '<div class="span-stage"><p class="mono muted">' + len + '개 · 잘 보세요</p><div class="span-digit mono" id="digit">&nbsp;</div><p class="muted small">숫자와 자음이 섞여 나와요</p></div>';
         const box = el.querySelector('#digit');
         g.seq.forEach(function (d, i) {
           T(function () { box.textContent = d; box.classList.add('on'); }, 500 + i * 1000);
@@ -480,7 +490,7 @@
         if (len > it.max || fails >= 2) T(end, 1000); else T(trial, 1000);
       }
       function end() { if (finished) return; finished = true; done(best); }
-      introCard(el, it, trial, it.start + '개부터 시작해 맞힐 때마다 하나씩 늘어납니다. 최대 ' + it.max + '개.');
+      introCard(el, it, trial, it.start + '개부터 시작해서 맞힐 때마다 하나씩 늘어나요. 최대 ' + it.max + '개까지예요.');
       return function () { timers.forEach(clearTimeout); };
     },
 
@@ -527,7 +537,7 @@
       }
       function onKey(e) { if (!keyOn) return; if (e.key === 'ArrowLeft' || e.key === '1') answer(true); else if (e.key === 'ArrowRight' || e.key === '2') answer(false); }
       document.addEventListener('keydown', onKey);
-      introCard(el, it, start, it.seconds + '초 동안 진행합니다. 빠르기와 정확도를 함께 봅니다.');
+      introCard(el, it, start, it.seconds + '초 동안 해요. 빠르기와 정확도를 같이 봐요.');
       return function () { timers.forEach(clearTimeout); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); };
     },
 
@@ -585,7 +595,7 @@
           }
         }
       }
-      introCard(el, it, function () { draw('idle', '탭하여 시작', '초록색이 되면 최대한 빨리 탭'); }, it.trials + '회 측정합니다. 초록색이 되기 전에 탭하면 다시 합니다.');
+      introCard(el, it, function () { draw('idle', '탭하여 시작', '초록색이 되면 최대한 빨리 탭'); }, it.trials + '번 재요. 초록색이 되기 전에 누르면 그 번은 다시 해요.');
       return function () { timers.forEach(clearTimeout); };
     },
 
@@ -630,7 +640,7 @@
       }
       function onKey(e) { if (e.key === 'ArrowLeft') answer('L'); else if (e.key === 'ArrowRight') answer('R'); }
       document.addEventListener('keydown', onKey);
-      introCard(el, it, next, it.trials + '회. 화살표가 나타나기 전에 누른 것은 무시됩니다.');
+      introCard(el, it, next, it.trials + '번 해요. 화살표가 나오기 전에 누른 건 세지 않아요.');
       return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); };
     },
 
@@ -687,7 +697,7 @@
       }
       function onKey(e) { const i = ['1', '2', '3', '4'].indexOf(e.key); if (i >= 0) answer(COLORS[i].k); }
       document.addEventListener('keydown', onKey);
-      introCard(el, it, next, it.trials + '회. 절반은 글자와 색이 같고 절반은 다릅니다. PC에서는 1~4 숫자키도 됩니다.');
+      introCard(el, it, next, it.trials + '번 해요. 절반은 글자와 색이 같고 절반은 달라요. PC에서는 숫자키 1~4도 돼요.');
       return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); };
     }
   };
@@ -756,11 +766,13 @@
       });
     });
     const kakao = document.getElementById('kakao');
-    if (kakao) kakao.addEventListener('click', function () {
-      BL.card.kakaoShare(result, t).then(function (how) {
-        note.textContent = how === 'shared' ? '' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았어요.' : how === 'popup' ? '공유 창이 팝업 차단으로 열리지 않았어요. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.' : '카카오톡 공유를 불러오지 못했어요. 링크 복사를 이용해 주세요.';
+    if (kakao) {
+      BL.card.preloadKakao();   // 누르는 순간 바로 공유 창을 열 수 있게 미리 불러 둔다
+      kakao.addEventListener('click', function () {
+        const how = BL.card.kakaoShare(result, t);
+        note.textContent = how === 'shared' ? '' : how === 'loading' ? '카카오톡 공유를 준비하고 있어요. 1~2초 뒤에 한 번 더 눌러 주세요.' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았어요.' : how === 'popup' ? '공유 창이 팝업 차단으로 열리지 않았어요. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.' : '카카오톡 공유를 불러오지 못했어요. 링크 복사를 이용해 주세요.';
       });
-    });
+    }
   }
   function renderResult(id, idx) {
     const t = BL.tests[id];
@@ -832,6 +844,7 @@
     const levels = level === 'all' ? Array.from({ length: MAXL[key] || 5 }, function (_, i) { return i + 1; }) : [Math.max(1, parseInt(level, 10) || 1)];
     setScreen('<div class="wrap"><a class="back" href="#/">← 실험 목록</a><p class="eyebrow mono">GALLERY · 검수용</p><h1 class="title">' + U.esc(tk.label) + ' · ' + (level === 'all' ? '모든 단계' : levels[0] + '단계') + ' · 단계당 ' + cnt + '문항</h1><div id="gal"></div></div>', function () {
       const g = document.getElementById('gal');
+      const cleanups = [];   // 문항마다 붙는 키보드 리스너를 화면을 떠날 때 모두 뗀다
       levels.forEach(function (lv) {
         for (let i = 0; i < cnt; i++) {
           const stub = { type: 'adaptive', part: key, scored: false, count: 999, state: { done: 0, level: lv, max: lv, used: [], levels: [], oks: [] } };
@@ -841,10 +854,12 @@
           const box = document.createElement('div'); box.className = 'gal-item';
           box.innerHTML = '<p class="mono muted small">' + lv + '단계 #' + (i + 1) + ' · 정답 ' + (it.answer + 1) + '번 · ' + U.esc(it.explain || '') + '</p>';
           const el = document.createElement('div'); box.appendChild(el); g.appendChild(box);
-          RENDER.choice(it, el, function () {}, { timeFactor: 0 });
+          const c = RENDER.choice(it, el, function () {}, { timeFactor: 0 });
+          if (typeof c === 'function') cleanups.push(c);
           const ans = el.querySelector('.opt[data-i="' + it.answer + '"]'); if (ans) ans.classList.add('correct');
         }
       });
+      return function () { cleanups.forEach(function (c) { try { c(); } catch (e) { } }); };
     });
   }
   function renderPreview(id, mode) {
@@ -891,7 +906,7 @@
       '<p class="eyebrow mono">ABOUT</p><h1 class="title">두뇌실험실 안내</h1>' +
       '<section class="rs"><h3>무엇을 하는 곳인가요</h3><p>머리 쓰는 힘, 감정 다루는 힘, 성격, 연애 패턴을 스스로 재 보는 곳이에요. 돈을 받지 않고 로그인도 없어요. 문항은 전부 이 사이트를 위해 직접 만들었거나, 누구나 쓸 수 있게 공개된 문항을 우리말로 옮긴 거예요.</p></section>' +
       '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따르고, 문항은 공개된 국제 성격 문항(IPIP)을 번역해서 손봤어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p></section>' +
-      '<section class="rs"><h3>점수는 어디에 쓰면 좋나요</h3><p>검사마다 소개 페이지에 그 능력이나 성향이 생활 어디에 쓰이고 어떤 영향을 주는지 적어 두었어요. 결과는 "내가 뭘 잘하고 뭘 연습하면 좋은지" 감을 잡는 용도로 보면 딱 좋아요. 사람을 평가하거나 줄 세우는 데 쓰라고 만든 게 아니에요.</p></section>' +
+      '<section class="rs"><h3>점수는 어디에 쓰면 좋나요</h3><p>검사를 마치면 결과 화면에서 그 능력이나 성향이 생활 어디에 쓰이고 어떤 영향을 주는지 함께 보여 드려요. 결과는 "내가 뭘 잘하고 뭘 연습하면 좋은지" 감을 잡는 용도로 보면 딱 좋아요. 사람을 평가하거나 줄 세우는 데 쓰라고 만든 게 아니에요.</p></section>' +
       '<section class="rs"><h3>한계</h3><p>모든 결과는 참고용이에요. 많은 사람에게 실시해서 검증한 공인 검사가 아니고, 공식 IQ나 진단을 내주지 않아요. 점수는 그날 컨디션, 기기, 환경에 따라 달라져요. 마음 건강이 걱정된다면 전문가와 상담하세요.</p></section>' +
       '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 답과 결과는 이 브라우저 안에만 저장되고 서버로 보내지 않아요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +
       '</div>'

@@ -38,6 +38,10 @@ node serve.cjs
 - `#/gallery/<과제 키>/<단계 또는 all>[/<단계당 개수>]` — 예: `#/gallery/matrix/all`, `#/gallery/weights/5/3`. 생성 문항을 연습 모드(타이머 없음)로 쭉 그려 주고 정답 보기를 초록 테두리로 표시한다. 저장되지 않는다. 과제 키: matrix, figAnalogy, series, sequence, weights, rotation (analogy·vocab·logic·similar도 됨).
 - 도형 그리기 규칙(2026-10-15 점검): 마름모 틀은 안쪽이 좁아 도형 3~4개와 겹치므로 틀은 none·square·circle·hexagon만 쓴다. 모서리 점은 (13,13)·(87,87) 등 셀 구석에 두어 둥근·육각 틀과 큰 도형 4개에 겹치지 않는다. 저울 보기 접시는 7개까지 올라가므로 접시를 넓게(10~110) 그린다.
 
+## 문구 검증
+
+- `scratchpad/text.cjs <루트>`: 생성 문항 수천 개와 모든 결과 문장(검사·모드별 무작위 응답)을 만들어, 조사 자리표시자("을(를)", "이(가)", "(으)로", "와(과)")·딱딱한 합니다체("~니다", 문항 속 "아니다"는 제외)·깨진 값(undefined/NaN)이 없는지 확인한다. 조사는 항상 `U.josa(단어, 받침 있을 때, 없을 때)`로 붙인다.
+
 ## 정답 검증
 
 - `scratchpad/audit.cjs <루트> [반복]`: 생성 문항(행렬·유추·계열·수열·저울·회전)을 단계별로 수천 개 만들어, 보이는 칸·저울·도형만으로 다시 계산한 정답이 보기 중 정확히 하나인지 확인한다. 저울은 1~9 범위의 모든 무게 조합 중 주어진 저울과 맞는 조합 전부에서 정답만 평형이어야 하고, 2×2 집합 논리는 예시 행에 맞는 모든 (연산, K′) 가설이 같은 답을 내야 한다(`kUnique`).
@@ -82,7 +86,9 @@ node serve.cjs
 - `robots.txt`, `sitemap.xml`(홈 1건, 해시 라우트는 별도 URL이 아님), `og.png`(1200×630), `icon-192.png`/`icon-512.png`, `manifest.webmanifest`(홈 화면에 추가 가능).
 - 이미지는 `make-images.ps1`(System.Drawing)로 만들었다. 문구를 바꾸려면 og-text.txt를 고쳐 다시 실행한다.
 - 구글 서치 콘솔 등록은 소유 확인이 필요하다(HTML 태그 방식: 콘솔이 주는 `<meta name="google-site-verification">` 태그를 `index.html` head에 넣고 커밋). 등록 후 sitemap.xml 제출.
-- 카카오톡: 링크 미리보기는 OG 태그로 동작. "카카오톡 공유" 버튼은 `js/config.js`의 `kakaoKey`(developers.kakao.com 앱의 JavaScript 키)가 있을 때만 보이며, 앱 설정 > 플랫폼 > Web에 `https://duscjf0098.github.io` 등록이 필요하다. 키 없이도 "링크 복사"로 카톡에 붙여 넣을 수 있다.
+- 카카오톡: 링크 미리보기는 OG 태그로 동작. "카카오톡 공유" 버튼은 `js/config.js`의 `kakaoKey`(developers.kakao.com 앱의 JavaScript 키)가 있을 때만 보인다. 키 없이도 "링크 복사"로 카톡에 붙여 넣을 수 있다.
+  - 콘솔 설정 두 곳이 모두 필요하다 (앱 ID 1608815): ① 앱 > 플랫폼 키 > JavaScript 키 > JavaScript SDK 도메인에 `https://duscjf0098.github.io`(테스트용 `http://localhost:5173`), ② 앱 > 제품 링크 관리 > 웹 도메인에 `https://duscjf0098.github.io`. ②가 없으면 공유 창은 열리지만 메시지의 링크와 "나도 해보기" 버튼이 빠져 카톡에서 눌러도 사이트가 안 열린다 (2026-10-15 확인: ②가 비어 있었음).
+  - 코드: SDK는 결과 화면이 뜰 때 미리 불러 두고(`BL.card.preloadKakao`), 버튼 클릭 핸들러 안에서 `Kakao.Share.sendDefault`를 곧바로 부른다. 누른 뒤에 SDK를 내려받으면 사용자 동작 직후 상태가 끝나 휴대폰에서 첫 탭이 무시된다. 아직 준비 전이면 "1~2초 뒤에 한 번 더 눌러 주세요"를 띄운다.
 
 ## 배포
 

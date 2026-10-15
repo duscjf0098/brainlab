@@ -122,6 +122,7 @@ p { margin: 0; }
 .explain-where .mono, .where .mono { display: inline-block; font-size: 11px; color: var(--accent); letter-spacing: .08em; margin-right: 6px; vertical-align: 1px; }
 .explain-row .explain-tasks { font-size: 12px; color: var(--muted); margin-top: 6px; }
 .section-card .where { font-size: 14px; color: var(--muted); }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: calc(100vw - 32px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); z-index: 50; text-align: center; }
 .gal-item { margin: 18px 0 30px; padding-top: 14px; border-top: 1px dashed var(--line-2); }
 .gal-item > p { margin-bottom: 8px; line-height: 1.5; }
 .banner { background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; padding: 10px 12px; border-radius: var(--radius-s); margin-top: 16px; }
