@@ -1,0 +1,15 @@
+{
+  "name": "두뇌실험실",
+  "short_name": "두뇌실험실",
+  "description": "인지 능력(추정 IQ), 정서 지능, 성격, 연애 애착 유형 자기평가 실험실",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "lang": "ko",
+  "background_color": "#fafaf9",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

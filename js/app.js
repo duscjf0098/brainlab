@@ -692,7 +692,9 @@
       '<p class="summary">' + U.esc(result.summary) + '</p>' +
       (result.plot || '') +
       '<div class="scales">' + (result.scales || []).map(function (s) { return scaleHtml(s, false); }).join('') + '</div>' +
-      '<div class="actions"><button class="btn" id="save">이미지 저장</button><button class="btn" id="share">공유</button></div>' +
+      '<div class="actions actions-share">' +
+      (BL.card.hasKakao() ? '<button class="btn btn-kakao" id="kakao">카카오톡 공유</button>' : '') +
+      '<button class="btn" id="share">공유</button><button class="btn" id="copy">링크 복사</button><button class="btn" id="save">이미지 저장</button></div>' +
       '<p class="action-note muted small" id="note"></p>' +
       (t.merge && !opts.profile ? '<a class="btn btn-block profile-link" href="#/profile/' + t.id + '">종합 프로필 보기 · 따로 푼 과제를 합친 결과</a>' : '') +
       sections +
@@ -708,7 +710,18 @@
     });
     document.getElementById('share').addEventListener('click', function () {
       BL.card.share(result, t).then(function (how) {
-        note.textContent = { shared: '공유했습니다.', copied: '공유 기능이 없는 브라우저라 결과 텍스트를 복사했습니다.', cancel: '', none: '이 브라우저에서는 공유를 지원하지 않습니다. 이미지 저장을 이용해 주세요.', error: '공유에 실패했습니다. 이미지 저장을 이용해 주세요.' }[how] || '';
+        note.textContent = { shared: '공유했습니다.', copied: '공유 기능이 없는 브라우저라 결과 텍스트를 복사했습니다.', cancel: '', none: '이 브라우저에서는 공유를 지원하지 않습니다. 링크 복사나 이미지 저장을 이용해 주세요.', error: '공유에 실패했습니다. 링크 복사나 이미지 저장을 이용해 주세요.' }[how] || '';
+      });
+    });
+    document.getElementById('copy').addEventListener('click', function () {
+      BL.card.copyLink(result, t).then(function (how) {
+        note.textContent = how === 'copied' ? '결과와 사이트 링크를 복사했습니다. 카카오톡 대화창에 붙여 넣으세요.' : '복사하지 못했습니다. 주소창의 주소를 직접 복사해 주세요.';
+      });
+    });
+    const kakao = document.getElementById('kakao');
+    if (kakao) kakao.addEventListener('click', function () {
+      BL.card.kakaoShare(result, t).then(function (how) {
+        note.textContent = how === 'shared' ? '' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았습니다.' : '카카오톡 공유를 불러오지 못했습니다. 링크 복사를 이용해 주세요.';
       });
     });
   }

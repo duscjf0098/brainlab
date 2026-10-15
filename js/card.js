@@ -82,8 +82,55 @@ BL.card = (function () {
     return c;
   }
 
+  function siteUrl() { return (window.BL_CONFIG && window.BL_CONFIG.siteUrl) || location.href.split('#')[0]; }
+  function kakaoKey() { return (window.BL_CONFIG && window.BL_CONFIG.kakaoKey) || ''; }
+  /* 카카오 JavaScript SDK를 필요할 때만 불러와 초기화한다 (키가 없으면 거부) */
+  function loadKakao() {
+    return new Promise(function (res, rej) {
+      const key = kakaoKey();
+      if (!key) return rej(new Error('nokey'));
+      if (window.Kakao && window.Kakao.isInitialized && window.Kakao.isInitialized()) return res(window.Kakao);
+      if (window.Kakao && window.Kakao.init) { try { window.Kakao.init(key); return res(window.Kakao); } catch (e) { return rej(e); } }
+      const s = document.createElement('script');
+      s.src = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js';
+      s.async = true;
+      s.onload = function () { try { window.Kakao.init(key); res(window.Kakao); } catch (e) { rej(e); } };
+      s.onerror = function () { rej(new Error('load')); };
+      document.head.appendChild(s);
+    });
+  }
+  function kakaoShare(result, test) {
+    const url = siteUrl();
+    return loadKakao().then(function (K) {
+      K.Share.sendDefault({
+        objectType: 'feed',
+        content: {
+          title: '두뇌실험실 · ' + test.title,
+          description: result.headline + (result.label ? ' · ' + result.label : '') + '  나도 해보기 →',
+          imageUrl: url + 'og.png',
+          link: { mobileWebUrl: url, webUrl: url }
+        },
+        buttons: [{ title: '나도 해보기', link: { mobileWebUrl: url, webUrl: url } }]
+      });
+      return 'shared';
+    }).catch(function (e) { return e && e.message === 'nokey' ? 'nokey' : 'error'; });
+  }
+  function copyLink(result, test) {
+    const text = shareText(result, test);
+    const legacy = function () {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px';
+        document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+        const ok = document.execCommand('copy'); ta.remove();
+        return ok ? 'copied' : 'error';
+      } catch (e) { return 'error'; }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return 'copied'; }).catch(function () { return legacy(); });
+    return Promise.resolve(legacy());
+  }
   function shareText(result, test) {
-    const url = location.href.split('#')[0];
+    const url = siteUrl();
     return '두뇌실험실 · ' + test.title + '\n' + result.headline + (result.label ? ' (' + result.label + ')' : '') + '\n' +
       (result.scales || []).map(function (s) { return s.label + ' ' + s.value; }).join(' · ') + '\n' + url;
   }
@@ -117,5 +164,5 @@ BL.card = (function () {
     }).catch(function (e) { return e && e.name === 'AbortError' ? 'cancel' : 'error'; });
   }
 
-  return { draw: draw, download: download, share: share, shareText: shareText };
+  return { draw: draw, download: download, share: share, shareText: shareText, kakaoShare: kakaoShare, copyLink: copyLink, hasKakao: function () { return !!kakaoKey(); } };
 })();

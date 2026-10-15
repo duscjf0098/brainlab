@@ -57,6 +57,14 @@ node serve.cjs
 - 모든 결과 화면에 "참고용 자기평가" 면책 문구가 붙는다. IQ 숫자나 진단 표현은 쓰지 않는다.
 - 개인정보를 받지 않으며 결과는 localStorage에만 저장된다.
 
+## 검색 노출과 공유
+
+- `index.html`에 제목·설명·canonical·Open Graph·Twitter 카드·JSON-LD(WebSite)·manifest·favicon이 있고, 앱이 뜨기 전 정적 소개 블록(`.seo-static`)이 검색 엔진과 링크 미리보기에 읽힌다.
+- `robots.txt`, `sitemap.xml`(홈 1건, 해시 라우트는 별도 URL이 아님), `og.png`(1200×630), `icon-192.png`/`icon-512.png`, `manifest.webmanifest`(홈 화면에 추가 가능).
+- 이미지는 `make-images.ps1`(System.Drawing)로 만들었다. 문구를 바꾸려면 og-text.txt를 고쳐 다시 실행한다.
+- 구글 서치 콘솔 등록은 소유 확인이 필요하다(HTML 태그 방식: 콘솔이 주는 `<meta name="google-site-verification">` 태그를 `index.html` head에 넣고 커밋). 등록 후 sitemap.xml 제출.
+- 카카오톡: 링크 미리보기는 OG 태그로 동작. "카카오톡 공유" 버튼은 `js/config.js`의 `kakaoKey`(developers.kakao.com 앱의 JavaScript 키)가 있을 때만 보이며, 앱 설정 > 플랫폼 > Web에 `https://duscjf0098.github.io` 등록이 필요하다. 키 없이도 "링크 복사"로 카톡에 붙여 넣을 수 있다.
+
 ## 배포
 
 - 공개 주소: https://duscjf0098.github.io/brainlab/ (GitHub Pages, 저장소 https://github.com/duscjf0098/brainlab, main 브랜치 루트)
