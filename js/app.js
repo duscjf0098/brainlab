@@ -32,6 +32,7 @@
     if (a === 'run' && BL.tests[b]) return renderRun(b);
     if (a === 'result' && BL.tests[b]) return renderResult(b, c);
     if (a === 'preview' && BL.tests[b]) return renderPreview(b, c);
+    if (a === 'gallery' && b) return renderGallery(b, c, p[3]);
     if (a === 'profile' && BL.tests[b] && BL.tests[b].merge) return renderProfile(b);
     if (a === 'history') return renderHistory();
     if (a === 'about') return renderAbout();
@@ -804,6 +805,31 @@
     if (it.type === 'choicert') { const a = []; for (let i = 0; i < it.trials; i++) a.push({ rt: r.int(320, 650), ok: r.next() < 0.92 }); return a; }
     if (it.type === 'stroop') { const a = []; for (let i = 0; i < it.trials; i++) { const cong = i % 2 === 0; a.push({ rt: r.int(cong ? 500 : 650, cong ? 850 : 1050), ok: r.next() < 0.9, cong: cong }); } return a; }
     return null;
+  }
+  /* ---------- 문항 갤러리 (검수용, 저장 안 됨): #/gallery/<과제 키>/<단계 또는 all>[/<단계당 개수>] ---------- */
+  function renderGallery(key, level, n) {
+    const t = BL.tests.cognitive;
+    const tk = t.tasks.filter(function (k) { return k.key === key; })[0];
+    if (!tk) return go('#/');
+    const MAXL = { matrix: 6, figAnalogy: 5, series: 3, sequence: 5, weights: 5, rotation: 5 };
+    const cnt = Math.min(12, parseInt(n, 10) || (level === 'all' ? 1 : 4));
+    const levels = level === 'all' ? Array.from({ length: MAXL[key] || 5 }, function (_, i) { return i + 1; }) : [Math.max(1, parseInt(level, 10) || 1)];
+    setScreen('<div class="wrap"><a class="back" href="#/">← 실험 목록</a><p class="eyebrow mono">GALLERY · 검수용</p><h1 class="title">' + U.esc(tk.label) + ' · ' + (level === 'all' ? '모든 단계' : levels[0] + '단계') + ' · 단계당 ' + cnt + '문항</h1><div id="gal"></div></div>', function () {
+      const g = document.getElementById('gal');
+      levels.forEach(function (lv) {
+        for (let i = 0; i < cnt; i++) {
+          const stub = { type: 'adaptive', part: key, scored: false, count: 999, state: { done: 0, level: lv, max: lv, used: [], levels: [], oks: [] } };
+          const it = t.adaptNext(stub);
+          if (!it) return;
+          it.practice = true;
+          const box = document.createElement('div'); box.className = 'gal-item';
+          box.innerHTML = '<p class="mono muted small">' + lv + '단계 #' + (i + 1) + ' · 정답 ' + (it.answer + 1) + '번 · ' + U.esc(it.explain || '') + '</p>';
+          const el = document.createElement('div'); box.appendChild(el); g.appendChild(box);
+          RENDER.choice(it, el, function () {}, { timeFactor: 0 });
+          const ans = el.querySelector('.opt[data-i="' + it.answer + '"]'); if (ans) ans.classList.add('correct');
+        }
+      });
+    });
   }
   function renderPreview(id, mode) {
     const t = BL.tests[id];

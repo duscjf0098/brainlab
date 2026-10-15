@@ -15,14 +15,15 @@
   /* ===== 공통: 도형 셀 (네 층: 틀 · 안쪽 도형 · 선 · 모서리 점) ===== */
   const SHAPES = ['circle', 'square', 'triangle', 'diamond', 'pentagon', 'hexagon', 'star', 'cross'];
   const ASYM = ['triangle', 'arrow', 'lshape'];       // 회전이 보이는 모양
-  const FRAMES = ['none', 'square', 'circle', 'diamond', 'hexagon'];
+  /* 마름모 틀은 안쪽 공간이 좁아 도형 3~4개(중간·큰 크기)가 틀 선과 겹치므로 쓰지 않는다. */
+  const FRAMES = ['none', 'square', 'circle', 'hexagon'];
   const FILLS = ['none', 'solid', 'half', 'dot', 'hatch'];
   const COUNTS = [1, 2, 3, 4];
   const SIZES = ['s', 'm', 'l'];
   const ROTS = [0, 90, 180, 270];
   const POSS = ['c', 'n', 'e', 's', 'w'];
   const POS_XY = { c: [50, 50], n: [50, 30], e: [70, 50], s: [50, 70], w: [30, 50] };
-  const MARK_POS = { a: [22, 22], b: [78, 22], c: [22, 78], d: [78, 78] };   // 모서리 점 (틀 안쪽)
+  const MARK_POS = { a: [13, 13], b: [87, 13], c: [13, 87], d: [87, 87] };   // 모서리 점 (네모 틀 안쪽, 둥근·육각 틀 바깥. 큰 도형 4개와도 안 겹침)
   const LINE_DEF = { h: [10, 50, 90, 50], v: [50, 10, 50, 90], d: [14, 14, 86, 86], e: [14, 86, 86, 14] };
   const DOMAIN = { shape: SHAPES, fill: FILLS, count: COUNTS, size: SIZES, frame: FRAMES, pos: POSS };
   const ATTRS = ['shape', 'fill', 'count', 'size'];    // 도형 계열에서 쓰는 기본 속성
@@ -217,8 +218,11 @@
       if (!kUnique(left0, c0, left1, c1, order)) continue;
       return { K: K, rows: [[left0, c0], [left1, c1]] };
     }
-    // 검증된 안전한 기본값: K={첫째}, 둘째 → 첫째+둘째, 둘째셋째 → 첫째둘째셋째 (합집합)
-    return { K: order.slice(0, 1), rows: [[order.slice(1, 2), order.slice(0, 2)], [order.slice(1, 3), order.slice(0, 3)]] };
+    // 연산별로 검증된 안전한 기본값 (가설 전수 검사를 통과하는 조합)
+    const o = order;
+    if (op === 'xor') return { K: o.slice(0, 2), rows: [[o.slice(0, 1), o.slice(1, 2)], [o.slice(2, 3), o.slice(0, 3)]] };
+    if (op === 'sub') return { K: o.slice(0, 1), rows: [[o.slice(0, 3), o.slice(1, 3)], [o.slice(0, 2), o.slice(1, 2)]] };
+    return { K: o.slice(0, 1), rows: [[o.slice(1, 2), o.slice(0, 2)], [o.slice(1, 3), o.slice(0, 3)]] };
   }
   function logicFoils(r, a, b, op, order, answer, n) {
     n = n || 3;
@@ -431,8 +435,8 @@
   const W_SHAPES = ['circle', 'square', 'triangle'];
   function bagWeight(bag, w) { return bag.reduce(function (s, k) { return s + w[k]; }, 0); }
   function bagKey(bag) { return bag.slice().sort().join(','); }
-  function bagItems(bag, cx, cy, r) {
-    const n = bag.length, gap = r * 2.4;
+  function bagItems(bag, cx, cy, r, gapf) {
+    const n = bag.length, gap = r * (gapf || 2.4);
     return bag.map(function (k, i) { return shapeEl(k, cx + (i - (n - 1) / 2) * gap, cy, r, 'fill="currentColor" stroke="currentColor" stroke-width="1"', 0, 0); }).join('');
   }
   function scaleSVG(left, right) {
@@ -448,8 +452,9 @@
       pan(left, 60) + pan(right, 200) + '</svg>';
   }
   function panSVG(bag) {
-    return '<svg class="cell pan-opt" viewBox="0 0 120 56" aria-hidden="true">' + bagItems(bag, 60, 26, 6.5) +
-      '<path d="M22,40 Q60,60 98,40" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>';
+    // 보기 접시는 최대 7개까지 올라가므로 접시를 넓게(10~110) 그리고 간격을 조금 좁힌다
+    return '<svg class="cell pan-opt" viewBox="0 0 120 56" aria-hidden="true">' + bagItems(bag, 60, 26, 6.5, 2.3) +
+      '<path d="M10,40 Q60,60 110,40" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>';
   }
   function bagsOfWeight(target, shapes, w, maxItems) {
     const out = [];
