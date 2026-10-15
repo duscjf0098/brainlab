@@ -3,5 +3,5 @@
    (JavaScript 키는 도메인으로 제한되는 공개 키라 저장소에 있어도 된다.) */
 window.BL_CONFIG = {
   siteUrl: 'https://duscjf0098.github.io/brainlab/',
-  kakaoKey: ''
+  kakaoKey: 'd1a3cd068a9a5f95af5892b34aeb75aa'
 };

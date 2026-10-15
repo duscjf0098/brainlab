@@ -164,5 +164,5 @@ BL.card = (function () {
     }).catch(function (e) { return e && e.name === 'AbortError' ? 'cancel' : 'error'; });
   }
 
-  return { draw: draw, download: download, share: share, shareText: shareText, kakaoShare: kakaoShare, copyLink: copyLink, hasKakao: function () { return !!kakaoKey(); } };
+  return { draw: draw, download: download, share: share, shareText: shareText, kakaoShare: kakaoShare, copyLink: copyLink, hasKakao: function () { return !!kakaoKey() && !/claude\.ai$/.test(location.hostname); } };
 })();
