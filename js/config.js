@@ -5,5 +5,5 @@ window.BL_CONFIG = {
   siteUrl: 'https://duscjf0098.github.io/brainlab/',
   kakaoKey: 'd1a3cd068a9a5f95af5892b34aeb75aa',
   /* 익명 응시 통계 서버(server/, Cloudflare Worker) 주소. 비어 있으면 통계를 보내지도 받지도 않고 안내·스위치도 나오지 않는다. 배포 방법은 README "익명 통계 서버". */
-  statsUrl: ''
+  statsUrl: 'https://brainlab-stats.duscjf0098.workers.dev'
 };

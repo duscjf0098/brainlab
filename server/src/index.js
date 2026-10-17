@@ -9,7 +9,8 @@
                   금방 쓰기 때문이다. ?fresh=1 + Authorization: Bearer <ADMIN_TOKEN> 이면 바로 다시 계산한다.
    GET  /export   원자료(관리용). Authorization: Bearer <ADMIN_TOKEN>. 토큰은 wrangler secret 으로만 둔다.
    GET  /         상태(받은 결과 수, 집계 표본 수).
-   남용 방지: 본문 크기 제한(MAX_BODY), IP당 요청 빈도 제한(ratelimits 바인딩 — Cloudflare 안의 순간 계수기라 IP가 저장되지 않음),
+   남용 방지: 본문 크기 제한(MAX_BODY), IP당 요청 빈도 제한(ratelimits 바인딩 — Cloudflare 안의 순간 계수기라 IP가 저장되지 않음. 엣지마다 따로 세는
+   느슨한 제한이라 몰아치기는 일부만 막는다), 서버 전체 전송 상한(분당 MAX_PER_MIN, 하루 MAX_PER_DAY — D1 quota 표에 개수만 센다, IP 없음),
    전송은 ALLOWED_ORIGINS 에 있는 Origin 만. 값은 모두 범위를 검사하고 모르는 필드는 버린다. Workers 로그 저장(observability)은 꺼 둔다. */
 
 const TASKS = {
@@ -93,6 +94,7 @@ async function status(env) {
 async function submit(request, env, origin) {
   if (origin && allowedOrigins(env).indexOf(origin) < 0) return json({ error: 'origin not allowed' }, 403);
   if (await limited(env.RL_SUBMIT, request)) return json({ error: 'too many requests' }, 429, { 'Retry-After': '60' });
+  if (await overQuota(env)) return json({ error: 'busy' }, 429, { 'Retry-After': '120' });
   const max = Number(env.MAX_BODY || 16384);
   if (Number(request.headers.get('Content-Length') || 0) > max) return json({ error: 'too large' }, 413);
   const text = await request.text();
@@ -113,6 +115,19 @@ async function submit(request, env, origin) {
   const r = await env.DB.batch(stmts);
   if (!r[0].meta.changes) return json({ ok: true, dup: true });
   return json({ ok: true }, 201);
+}
+
+/* 서버 전체 전송 상한. 분·일 단위 개수만 D1 quota 표에 센다(누가 보냈는지는 남기지 않는다). 넘치면 429 → 사이트는 큐에 남겨 나중에 다시 보낸다.
+   D1 무료 쓰기 한도(하루 10만 행, 결과 하나에 최대 23행)를 넘지 않게 하는 것이 목적이다. */
+async function overQuota(env) {
+  const perMin = Number(env.MAX_PER_MIN || 60), perDay = Number(env.MAX_PER_DAY || 3000);
+  const minute = Math.floor(Date.now() / 60000);
+  const mk = 'm:' + String(minute).padStart(10, '0'), dk = 'd:' + today();
+  const up = 'INSERT INTO quota (k, n) VALUES (?1, 1) ON CONFLICT(k) DO UPDATE SET n = n + 1 RETURNING n';
+  const r = await env.DB.batch([env.DB.prepare(up).bind(mk), env.DB.prepare(up).bind(dk)]);
+  if (minute % 30 === 0) await env.DB.prepare("DELETE FROM quota WHERE k < ?1 AND k LIKE 'm:%'").bind('m:' + String(minute - 60).padStart(10, '0')).run();
+  const nMin = r[0].results[0].n, nDay = r[1].results[0].n;
+  return nMin > perMin || nDay > perDay;
 }
 
 /* 받은 값의 모양과 범위 검사. 모르는 필드는 버린다. */

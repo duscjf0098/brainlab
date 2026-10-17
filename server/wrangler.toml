@@ -16,12 +16,15 @@ ALLOWED_ORIGINS = "https://duscjf0098.github.io,http://localhost:5173,http://127
 MAX_BODY = "16384"
 # 이 수 미만이면 분포(백분위)를 돌려주지 않는다. 사이트도 같은 기준으로 "실제 응시자 기준"을 숨긴다.
 MIN_SAMPLE = "30"
+# 서버 전체 전송 상한(개수만 셈). 넘친 결과는 사이트가 큐에 남겼다가 다시 보낸다. D1 무료 쓰기 한도(하루 10만 행)에 맞춘 값.
+MAX_PER_MIN = "60"
+MAX_PER_DAY = "3000"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "brainlab-stats"
 # npx wrangler d1 create brainlab-stats 가 출력한 database_id 로 바꾼다
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "cb5eb1f2-17cb-4455-bcd4-193c0676ba94"
 
 # 요청 빈도 제한. IP당 60초에 전송 20회·조회 60회. Cloudflare 안의 순간 계수기라 IP가 어디에도 저장되지 않는다.
 [[ratelimits]]

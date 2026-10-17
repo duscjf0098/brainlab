@@ -41,3 +41,9 @@ CREATE TABLE IF NOT EXISTS stats_cache (
   n INTEGER NOT NULL,
   body TEXT NOT NULL
 );
+
+-- 서버 전체 전송 수 (분 'm:<분 번호>'·일 'd:<날짜>' 단위 개수만, IP 없음). 분 단위 행은 한 시간 뒤 지운다.
+CREATE TABLE IF NOT EXISTS quota (
+  k TEXT PRIMARY KEY,
+  n INTEGER NOT NULL
+);
