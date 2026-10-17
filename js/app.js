@@ -196,11 +196,22 @@
     const scoredTotal = session.items.filter(function (x) { return x.scored; }).length + pending - (it.adaptive ? 1 : 0);
     const scoredDone = session.items.slice(0, session.index).filter(function (x) { return x.scored; }).length;
     const pct = Math.round(scoredDone / scoredTotal * 100);
+    // 시간 제한이 없는 검사는 이전 문항으로 돌아가 답을 바꿀 수 있다. 인지 검사는 제한 시간과 적응형 진행 때문에 되돌리지 않는다.
+    const answerable = function (x) { return x && x.scored && (x.type === 'likert' || x.type === 'choice'); };
+    let prevIdx = -1;
+    if (!t.timed) for (let j = session.index - 1; j >= 0; j--) if (answerable(session.items[j])) { prevIdx = j; break; }
+    const answeredHere = !t.timed && answerable(it) && session.answers[session.index] != null;
+    const nav = prevIdx >= 0 || answeredHere ? '<div class="run-nav">' + (prevIdx >= 0 ? '<button class="btn btn-ghost" id="prev">← 이전 문항</button>' : '<span></span>') +
+      (answeredHere ? '<button class="btn btn-ghost" id="next">다음 →</button>' : '') + '</div>' : '';
     const chrome = '<div class="run-head"><a class="run-title" href="#/test/' + id + '">' + U.esc(t.title) + '</a>' +
       '<span class="run-count mono">' + (scoredDone + (it.scored ? 1 : 0)) + ' / ' + scoredTotal + '</span></div>' +
       '<div class="progress"><div class="progress-bar" style="width:' + pct + '%"></div></div>';
-    setScreen('<div class="wrap run tinted tint-' + id + '">' + chrome + '<div id="item" class="item"></div></div>', function () {
+    setScreen('<div class="wrap run tinted tint-' + id + '">' + chrome + '<div id="item" class="item"></div>' + nav + '</div>', function () {
       session.shownAt = Date.now();
+      const pb = document.getElementById('prev');
+      if (pb) pb.addEventListener('click', function () { session.index = prevIdx; saveSession(); renderRun(id); });
+      const nb = document.getElementById('next');
+      if (nb) nb.addEventListener('click', function () { session.index += 1; saveSession(); renderRun(id); });
       return RENDER[it.type](it, document.getElementById('item'), function (answer) {
         session.answers[session.index] = answer;
         session.times[session.index] = Date.now() - session.shownAt;
@@ -208,7 +219,7 @@
         session.index += 1;
         saveSession();
         renderRun(id);
-      }, { timeFactor: session.timeFactor });
+      }, { timeFactor: session.timeFactor, prev: session.answers[session.index] });
     });
   }
 
@@ -292,6 +303,7 @@
         answered = true;
         if (timer) clearTimeout(timer);
         if (tick) clearInterval(tick);
+        el.querySelectorAll('.opt.selected').forEach(function (x) { x.classList.remove('selected'); });
         const b = el.querySelector('.opt[data-i="' + i + '"]');
         if (b) b.classList.add('selected');
         if (it.practice) { showPractice(i); return; }
@@ -300,6 +312,8 @@
       el.querySelectorAll('.opt').forEach(function (b) {
         b.addEventListener('click', function () { pick(Number(b.getAttribute('data-i'))); });
       });
+      // 이전 문항으로 돌아왔을 때는 전에 고른 답을 표시해 둔다
+      if (ctx && typeof ctx.prev === 'number') { const pv = el.querySelector('.opt[data-i="' + ctx.prev + '"]'); if (pv) pv.classList.add('selected'); }
       const onKey = function (e) {
         const n = parseInt(e.key, 10);
         if (n >= 1 && n <= opts.length && !e.ctrlKey && !e.metaKey && !e.altKey) pick(n - 1);
@@ -331,7 +345,7 @@
       return function () { gone = true; if (timer) clearTimeout(timer); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); };
     },
 
-    likert: function (it, el, done) {
+    likert: function (it, el, done, ctx) {
       const labels = it.labels || ['전혀 아니다', '아니다', '보통이다', '그렇다', '매우 그렇다'];
       let finished = false;
       el.innerHTML = (it.lead ? '<p class="q-lead">' + U.esc(it.lead) + '</p>' : '') + '<p class="q-prompt q-likert">' + U.esc(it.text) + '</p>' +
@@ -342,6 +356,7 @@
       const pick = function (v) {
         if (finished || gone) return;
         finished = true;
+        el.querySelectorAll('.lk.selected').forEach(function (x) { x.classList.remove('selected'); });
         const b = el.querySelector('.lk[data-v="' + v + '"]');
         if (b) b.classList.add('selected');
         setTimeout(function () { if (!gone) done(v); }, 150);
@@ -349,6 +364,7 @@
       el.querySelectorAll('.lk').forEach(function (b) {
         b.addEventListener('click', function () { pick(Number(b.getAttribute('data-v'))); });
       });
+      if (ctx && typeof ctx.prev === 'number') { const pv = el.querySelector('.lk[data-v="' + ctx.prev + '"]'); if (pv) pv.classList.add('selected'); }
       const onKey = function (e) { const n = parseInt(e.key, 10); if (n >= 1 && n <= 5) pick(n); };
       document.addEventListener('keydown', onKey);
       return function () { gone = true; document.removeEventListener('keydown', onKey); };
@@ -810,8 +826,15 @@
     if (kakao) {
       BL.card.preloadKakao();   // 누르는 순간 바로 공유 창을 열 수 있게 미리 불러 둔다
       kakao.addEventListener('click', function () {
-        const how = BL.card.kakaoShare(result, t);
-        note.textContent = how === 'shared' ? '' : how === 'loading' ? '카카오톡 공유를 준비하고 있어요. 1~2초 뒤에 한 번 더 눌러 주세요.' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았어요.' : how === 'popup' ? '공유 창이 팝업 차단으로 열리지 않았어요. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.' : '카카오톡 공유를 불러오지 못했어요. 링크 복사를 이용해 주세요.';
+        // 처음 누르면 결과 이미지를 카카오에 올리고, 다 올라가면 버튼을 한 번 더 눌러 보낸다.
+        // 올리는 동안 기다렸다가 보내면 "누른 직후" 상태가 끝나 휴대폰에서 카카오톡이 안 열릴 수 있어서 두 번에 나눈다.
+        const how = BL.card.kakaoShare(result, t, function (state) {
+          kakao.disabled = false;
+          kakao.textContent = '카카오톡으로 보내기';
+          note.textContent = state === 'ready' ? '결과 이미지가 준비됐어요. 한 번 더 누르면 카카오톡이 열려요.' : '결과 이미지를 올리지 못해서 사이트 대표 이미지로 보낼게요. 한 번 더 눌러 주세요.';
+        });
+        if (how === 'uploading') { kakao.disabled = true; kakao.textContent = '이미지 준비 중…'; note.textContent = '카카오톡에 함께 보낼 결과 이미지를 카카오에 올리고 있어요.'; return; }
+        note.textContent = how === 'shared' ? '' : how === 'loading' ? '카카오톡 공유를 준비하고 있어요. 1~2초 뒤에 한 번 더 눌러 주세요.' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았어요.' : how === 'popup' ? '공유 창이 팝업 차단으로 열리지 않았어요. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.' : '카카오톡 공유를 불러오지 못했어요. 링크 복사나 이미지 저장을 이용해 주세요.';
       });
     }
   }
@@ -949,7 +972,7 @@
       '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전, 전개도 접기, 블록 세기), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따르고, 문항은 공개된 국제 성격 문항(IPIP)을 번역해서 손봤어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p><p>진로 흥미 유형 검사는 심리학자 존 홀랜드의 여섯 가지 흥미 유형(현실·탐구·예술·사회·진취·관습)을 틀로 삼아, 유형마다 두 갈래씩 해 보고 싶은 활동으로 재요. 문항은 이 사이트를 위해 직접 썼어요. 흥미는 하고 싶은 마음이라서 적성이나 능력과는 달라요.</p><p>연애 스타일 검사는 사회학자 존 리가 나눈 사랑의 여섯 가지 스타일(에로스, 루두스, 스토르게, 프래그마, 마니아, 아가페)을 틀로 삼고, 문항은 이 사이트를 위해 직접 썼어요.</p></section>' +
       '<section class="rs"><h3>점수는 어디에 쓰면 좋나요</h3><p>검사를 마치면 결과 화면에서 그 능력이나 성향이 생활 어디에 쓰이고 어떤 영향을 주는지 함께 보여 드려요. 결과는 "내가 뭘 잘하고 뭘 연습하면 좋은지" 감을 잡는 용도로 보면 딱 좋아요. 사람을 평가하거나 줄 세우는 데 쓰라고 만든 게 아니에요.</p></section>' +
       '<section class="rs"><h3>한계</h3><p>모든 결과는 참고용이에요. 많은 사람에게 실시해서 검증한 공인 검사가 아니고, 공식 IQ나 진단을 내주지 않아요. 점수는 그날 컨디션, 기기, 환경에 따라 달라져요. 마음 건강이 걱정된다면 전문가와 상담하세요.</p></section>' +
-      '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 답과 결과는 이 브라우저 안에만 저장되고 서버로 보내지 않아요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +
+      '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 답과 결과는 이 브라우저 안에만 저장되고 서버로 보내지 않아요. 카카오톡 공유를 누를 때만, 함께 보낼 결과 이미지가 카카오 서버에 올라가요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +
       '</div>'
     );
   }

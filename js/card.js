@@ -1,7 +1,7 @@
 /* 결과 카드 이미지 생성 · 저장 · 공유 */
 BL.card = (function () {
   const U = BL.util;
-  const W = 1080, H = 1350;
+  const W = 1080, H = 1350, SQ = 800;   // SQ: 카카오톡 공유용 정사각형 이미지
   const FONT = '"Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif';
   const MONO = 'ui-monospace, "SF Mono", Consolas, "D2Coding", monospace';
   /* 결과 이미지 색: 화면과 같은 검사별 파스텔 [바탕, 글자, 강조] (css .tint-<id>) */
@@ -99,6 +99,45 @@ BL.card = (function () {
     return c;
   }
 
+  /* 카카오톡 공유용 정사각형 결과 이미지(800×800): 검사 색 블록에 결과 이름, 그 아래 점수 막대 (피드 메시지는 1:1이 잘리지 않는다) */
+  function drawSquare(result, test) {
+    const c = document.createElement('canvas');
+    c.width = SQ; c.height = SQ;
+    const x = c.getContext('2d');
+    const tc = TINT[test.id] || TINT.cognitive;
+    const heroH = result.label ? 300 : 236;
+    x.fillStyle = '#fff8f1'; x.fillRect(0, 0, SQ, SQ);
+    roundRect(x, 32, 32, SQ - 64, heroH, 40); x.fillStyle = tc[0]; x.fill();
+    x.fillStyle = tc[1]; x.font = '800 24px ' + FONT; x.fillText('두뇌실험실', 64, 86);
+    x.globalAlpha = 0.78; x.font = '500 26px ' + FONT; x.fillText(test.title, 64, 126); x.globalAlpha = 1;
+    let size = 72;
+    x.font = '800 ' + size + 'px ' + FONT;
+    while (x.measureText(result.headline).width > SQ - 128 && size > 40) { size -= 4; x.font = '800 ' + size + 'px ' + FONT; }
+    x.fillText(result.headline, 64, 206);
+    if (result.label) {
+      x.font = '700 24px ' + FONT;
+      let label = result.label;
+      if (x.measureText(label).width > SQ - 176) { while (label.length > 1 && x.measureText(label + '…').width > SQ - 176) label = label.slice(0, -1); label += '…'; }
+      roundRect(x, 64, 230, x.measureText(label).width + 40, 48, 24); x.fillStyle = tc[2]; x.fill();
+      x.fillStyle = '#ffffff'; x.fillText(label, 84, 263);
+    }
+    const scales = (result.scales || []).slice(0, 6);
+    let y = 32 + heroH + 64;
+    const step = Math.min(72, Math.floor((SQ - 70 - y) / Math.max(1, scales.length)));
+    scales.forEach(function (s) {
+      x.fillStyle = '#2b2522'; x.font = '600 24px ' + FONT; x.fillText(s.label, 64, y);
+      x.fillStyle = tc[2]; x.font = '700 24px ' + MONO; x.textAlign = 'right'; x.fillText(String(s.value), SQ - 64, y); x.textAlign = 'left';
+      roundRect(x, 64, y + 14, SQ - 128, 12, 6); x.fillStyle = '#f0e6dc'; x.fill();
+      const lo = s.range ? s.range[0] : 0, hi = s.range ? s.range[1] : 100;
+      const fw = (SQ - 128) * U.clamp((s.value - lo) / (hi - lo), 0, 1);
+      if (fw > 0) { roundRect(x, 64, y + 14, Math.max(fw, 12), 12, 6); x.fillStyle = tc[2]; x.fill(); }
+      y += step;
+    });
+    x.fillStyle = '#8a7f78'; x.font = '400 19px ' + FONT;
+    x.fillText('참고용 자기평가 · ' + siteUrl().replace(/^https?:\/\//, '').replace(/\/$/, ''), 64, SQ - 36);
+    return c;
+  }
+
   function siteUrl() { return (window.BL_CONFIG && window.BL_CONFIG.siteUrl) || location.href.split('#')[0]; }
   function kakaoKey() { return (window.BL_CONFIG && window.BL_CONFIG.kakaoKey) || ''; }
   /* 카카오 JavaScript SDK를 불러와 초기화한다 (한 번만, 실패하면 다음에 다시 시도).
@@ -124,25 +163,45 @@ BL.card = (function () {
     return kakaoP;
   }
   function kakaoReady() { const K = window.Kakao; return !!(K && K.isInitialized && K.isInitialized() && K.Share); }
-  function kakaoTemplate(result, test) {
+  function kakaoTemplate(result, test, img) {
     const url = siteUrl();
     return {
       objectType: 'feed',
       content: {
         title: '두뇌실험실 · ' + test.title,
         description: result.headline + (result.label ? ' · ' + result.label : ''),
-        imageUrl: url + 'og.png', imageWidth: 1200, imageHeight: 630,
+        imageUrl: img ? img.url : url + 'og.png', imageWidth: img ? img.w : 1200, imageHeight: img ? img.h : 630,
         link: { mobileWebUrl: url, webUrl: url }
       },
       buttons: [{ title: '나도 해보기', link: { mobileWebUrl: url, webUrl: url } }],
       installTalk: true
     };
   }
-  /* 클릭 핸들러 안에서 곧바로(동기로) 부른다. 'shared' | 'loading' | 'nokey' | 'popup' | 'error' */
-  function kakaoShare(result, test) {
+  /* 클릭 핸들러 안에서 곧바로(동기로) 부른다. 'shared' | 'uploading' | 'loading' | 'nokey' | 'popup' | 'error'
+     결과 이미지: 처음 누를 때만 정사각형 이미지를 카카오 이미지 서버에 올리고(누르지 않으면 아무 데도 보내지 않는다) 'uploading'을 돌려준다.
+     다 올라가면 onReady('ready' | 'fallback')를 부르고, 다음에 누를 때 그 주소로 바로 보낸다. 올리기에 실패하면 og.png로 보낸다. */
+  const kakaoImg = {};   // 결과 키 → { url, w, h } · 'pending' · null(실패)
+  function resultKey(result, test) { return test.id + '|' + (result.at || '') + '|' + result.headline; }
+  function kakaoShare(result, test, onReady) {
     if (!kakaoKey()) return 'nokey';
     if (!kakaoReady()) { const failed = kakaoFailed; loadKakao(); return failed ? 'error' : 'loading'; }
-    try { window.Kakao.Share.sendDefault(kakaoTemplate(result, test)); return 'shared'; }
+    const key = resultKey(result, test);
+    if (kakaoImg[key] === 'pending') return 'uploading';
+    if (kakaoImg[key] === undefined && window.Kakao.Share.uploadImage) {
+      let file = null;
+      try { file = dataUrlToFile(drawSquare(result, test).toDataURL('image/png'), 'result.png'); } catch (e) { file = null; }
+      if (file) {
+        kakaoImg[key] = 'pending';
+        window.Kakao.Share.uploadImage({ file: [file] }).then(function (res) {
+          const o = res && res.infos && res.infos.original;
+          kakaoImg[key] = o && o.url ? { url: o.url, w: o.width || SQ, h: o.height || SQ } : null;
+          if (onReady) onReady(kakaoImg[key] ? 'ready' : 'fallback');
+        }, function () { kakaoImg[key] = null; if (onReady) onReady('fallback'); });
+        return 'uploading';
+      }
+      kakaoImg[key] = null;
+    }
+    try { window.Kakao.Share.sendDefault(kakaoTemplate(result, test, kakaoImg[key] || null)); return 'shared'; }
     catch (e) { const m = e && e.message ? e.message : ''; return /focus|popup|open|blocked/i.test(m) ? 'popup' : 'error'; }
   }
   function preloadKakao() { if (hasKakao()) loadKakao(); }
@@ -223,5 +282,5 @@ BL.card = (function () {
   }
 
   function hasKakao() { return !!kakaoKey() && !/claude\.ai$/.test(location.hostname); }
-  return { draw: draw, download: download, saveImage: saveImage, shareFile: shareFile, triggerDownload: triggerDownload, share: share, shareText: shareText, kakaoShare: kakaoShare, kakaoReady: kakaoReady, preloadKakao: preloadKakao, kakaoTemplate: kakaoTemplate, copyLink: copyLink, hasKakao: hasKakao };
+  return { draw: draw, drawSquare: drawSquare, download: download, saveImage: saveImage, shareFile: shareFile, triggerDownload: triggerDownload, share: share, shareText: shareText, kakaoShare: kakaoShare, kakaoReady: kakaoReady, preloadKakao: preloadKakao, kakaoTemplate: kakaoTemplate, copyLink: copyLink, hasKakao: hasKakao };
 })();
