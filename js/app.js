@@ -182,7 +182,8 @@
       return;
     }
     const pending = session.items.reduce(function (s, x) { return s + (x.type === 'adaptive' && x.state ? Math.max(0, x.count - x.state.done) : 0); }, 0);
-    const scoredTotal = session.items.filter(function (x) { return x.scored; }).length + pending;
+    // 화면에 띄운 적응형 문항은 목록에도 있고 스텁의 남은 수에도 들어 있어 한 번 뺀다
+    const scoredTotal = session.items.filter(function (x) { return x.scored; }).length + pending - (it.adaptive ? 1 : 0);
     const scoredDone = session.items.slice(0, session.index).filter(function (x) { return x.scored; }).length;
     const pct = Math.round(scoredDone / scoredTotal * 100);
     const chrome = '<div class="run-head"><a class="run-title" href="#/test/' + id + '">' + U.esc(t.title) + '</a>' +

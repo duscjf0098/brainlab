@@ -961,7 +961,9 @@
     symbol: { label: '기호 찾기', domain: 'speed', minutes: 2, desc: '왼쪽 기호 두 개 중 하나라도 오른쪽 다섯 개 안에 있으면 "있음", 없으면 "없음"을 골라요. 60초 동안 최대한 많이, 정확하게요.', where: '많은 것 중에서 찾는 걸 빨리 골라내는 힘이에요. 명단에서 이름 찾기, 오타 찾기, 서류 검토에 쓰여요.' }
   };
   const TASK_KEYS = Object.keys(TASKS);
-  const QUICK = ['matrix', 'sequence', 'analogy', 'rotation', 'digitF', 'reaction'];
+  /* 빠른 검사: 영역마다 대표 과제를 골라 적응형으로 푼다. 숫자 앞으로·단순 반응은 지능과의 관계가 약해 숫자 거꾸로·기호 찾기로,
+     유추는 같은 시간에 문항을 더 풀 수 있는 어휘로 바꿨다. 참값을 아는 가상 응시자 시뮬레이션에서 오차(RMSE)가 IQ 9.5 → 8 안팎. */
+  const QUICK = ['matrix', 'sequence', 'vocab', 'rotation', 'digitB', 'symbol'];
   const LEVEL_KO = { 1: '쉬움', 2: '보통', 3: '어려움', 4: '매우 어려움', 5: '최상', 6: '극상' };
 
   /* 난이도 단계별 예상 정답률 (문항 설계 기준). 포함된 문항의 평균이 그 과제의 기준 정답률이 된다. */
@@ -1135,7 +1137,7 @@
     const wantPractice = function (k) { return opts.practice !== false && practiced.indexOf(k) < 0; };
     const m = parseMode(mode);
     const r = U.rng();
-    const adaptive = m.kind === 'adaptive' || m.kind === 'task';
+    const adaptive = m.kind !== 'full'; // 빠른 검사도 적응형이라 LEVELS의 quick 단계표는 쓰이지 않는다
     const make = function (k, full) { return adaptive && ADAPT[k] ? taskItemsAdaptive(r, k, wantPractice(k)) : taskItems(r, k, full, wantPractice(k)); };
     if (m.kind === 'task') return make(m.key, true);
     const full = m.kind !== 'quick';
@@ -1239,7 +1241,10 @@
     const single = keys.length === 1 ? keys[0] : null;
     const z = single ? tasks[single].z : compositeZ(domZ, 0.5);
     const iq = iqOf(z), pct = topPct(z), bd = band(iq);
-    const rel = keys.length * 0.45 / (1 + (keys.length - 1) * 0.45);
+    /* 과제 하나의 몫을 0.3으로 보고 과제 수만큼 합친다(스피어먼-브라운). 참값을 아는 가상 응시자로 돌려 보면 ± 안에 실제 값이
+       70% 안팎으로 들어온다(0.45일 때는 빠른 검사 50%, 18과제 60%뿐이었다). 과제 하나만 푼 결과는 그 과제 점수의 오차라 0.45를 둔다. */
+    const q = single ? 0.45 : 0.3;
+    const rel = keys.length * q / (1 + (keys.length - 1) * q);
     const sem = Math.round(15 * Math.sqrt(1 - rel));
     const bandText = {
       '매우 우수': '같은 기준으로 100명 중 두세 명 안에 드는 결과예요.',
@@ -1316,7 +1321,7 @@
     timed: true,
     modes: [
       { id: 'adaptive', label: '적응형 검사', desc: '맞히면 다음 문제가 어려워지고 틀리면 쉬워져요. 내 실력 근처에서 집중해서 재니까 짧아도 정확해요. 처음이면 이걸 추천해요.', duration: '약 35분', length: '18과제' },
-      { id: 'quick', label: '빠른 검사', desc: '대표 과제 6개만 골라 다섯 영역을 한 번씩 훑어요. 시간이 없을 때 맛보기로 좋아요.', duration: '약 12분', length: '6과제' },
+      { id: 'quick', label: '빠른 검사', desc: '다섯 영역에서 대표 과제 6개만 골라, 적응형처럼 내 실력에 맞춰 문제를 내요. 시간이 없을 때 좋아요. 과제가 적은 만큼 오차 범위는 더 넓어요.', duration: '약 13분', length: '6과제' },
       { id: 'full', label: '정밀 검사', desc: '18개 과제의 모든 단계를 처음부터 끝까지 다 풀어요. 가장 길지만, 단계별 정답률과 틀린 문제 다시 보기까지 볼 수 있어요.', duration: '약 50분', length: '18과제' }
     ],
     glyphSVG: glyphSVG,
