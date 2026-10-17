@@ -1,5 +1,7 @@
 /* 두뇌실험실 · 밝고 부드럽게 (C안: 크림 바탕, 검사별 파스텔, 둥근 카드) */
 :root {
+  /* 항상 밝은 화면(2026-10-18). "only"는 휴대폰·카카오톡 브라우저가 화면을 억지로 어둡게 바꾸지 못하게 한다 */
+  color-scheme: only light;
   --bg: #fff8f1;
   --surface: #ffffff;
   --ink: #2b2522;
@@ -25,23 +27,6 @@
   --font: "Pretendard Variable", Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, "D2Coding", monospace;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #1a1614; --surface: #241f1c; --ink: #f5efea; --ink-2: #d9cfc7; --muted: #a89b91;
-    --line: #352e2a; --line-2: #443b36; --accent: #a99cff; --accent-ink: #1b1440;
-    --accent-soft: #2b2648; --accent-line: #4b4380; --shadow: none; --chip: rgba(0, 0, 0, .22);
-    --accent-2-soft: #3d261d; --accent-2-ink: #f7a07d;
-    --blk-t: #4a4470; --blk-l: #332d5a; --blk-r: #241f42;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #1a1614; --surface: #241f1c; --ink: #f5efea; --ink-2: #d9cfc7; --muted: #a89b91;
-  --line: #352e2a; --line-2: #443b36; --accent: #a99cff; --accent-ink: #1b1440;
-  --accent-soft: #2b2648; --accent-line: #4b4380; --shadow: none; --chip: rgba(0, 0, 0, .22);
-  --accent-2-soft: #3d261d; --accent-2-ink: #f7a07d;
-  --blk-t: #4a4470; --blk-l: #332d5a; --blk-r: #241f42;
-}
-
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -443,17 +428,3 @@ svg.scale { display: block; width: 100%; max-width: 360px; margin: 0 auto; color
 .tint-interest { --tint: #ddeeff; --tint-ink: #10406e; --tint-strong: #2d72c2; --tint-on: #ffffff; --tint-line: #a9cdf3; }
 .tint-love { --tint: #fff0c9; --tint-ink: #6a4a06; --tint-strong: #9a6208; --tint-on: #ffffff; --tint-line: #f3d58a; }
 .tinted { --accent: var(--tint-strong); --accent-ink: var(--tint-on); --accent-soft: var(--tint); --accent-line: var(--tint-line); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .tint-cognitive { --tint: #2b2648; --tint-ink: #dcd6ff; --tint-strong: #a99cff; --tint-on: #1b1440; --tint-line: #4b4380; }
-  :root:not([data-theme="light"]) .tint-eq { --tint: #3d2230; --tint-ink: #ffc9dd; --tint-strong: #f48db4; --tint-on: #3a0f22; --tint-line: #6e3a52; }
-  :root:not([data-theme="light"]) .tint-personality { --tint: #173a2f; --tint-ink: #b7ebd6; --tint-strong: #5bd3a6; --tint-on: #06281c; --tint-line: #2d6652; }
-  :root:not([data-theme="light"]) .tint-attachment { --tint: #3d261d; --tint-ink: #ffcdb8; --tint-strong: #f7a07d; --tint-on: #3a1608; --tint-line: #6e4433; }
-  :root:not([data-theme="light"]) .tint-interest { --tint: #1b3047; --tint-ink: #c2ddfb; --tint-strong: #78b4f2; --tint-on: #0a2440; --tint-line: #34557a; }
-  :root:not([data-theme="light"]) .tint-love { --tint: #3a3015; --tint-ink: #fbe2a4; --tint-strong: #f2c14e; --tint-on: #3a2a04; --tint-line: #6b5826; }
-}
-:root[data-theme="dark"] .tint-cognitive { --tint: #2b2648; --tint-ink: #dcd6ff; --tint-strong: #a99cff; --tint-on: #1b1440; --tint-line: #4b4380; }
-:root[data-theme="dark"] .tint-eq { --tint: #3d2230; --tint-ink: #ffc9dd; --tint-strong: #f48db4; --tint-on: #3a0f22; --tint-line: #6e3a52; }
-:root[data-theme="dark"] .tint-personality { --tint: #173a2f; --tint-ink: #b7ebd6; --tint-strong: #5bd3a6; --tint-on: #06281c; --tint-line: #2d6652; }
-:root[data-theme="dark"] .tint-attachment { --tint: #3d261d; --tint-ink: #ffcdb8; --tint-strong: #f7a07d; --tint-on: #3a1608; --tint-line: #6e4433; }
-:root[data-theme="dark"] .tint-interest { --tint: #1b3047; --tint-ink: #c2ddfb; --tint-strong: #78b4f2; --tint-on: #0a2440; --tint-line: #34557a; }
-:root[data-theme="dark"] .tint-love { --tint: #3a3015; --tint-ink: #fbe2a4; --tint-strong: #f2c14e; --tint-on: #3a2a04; --tint-line: #6b5826; }
