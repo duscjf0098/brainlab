@@ -3,6 +3,16 @@
   const U = BL.util;
   const app = document.getElementById('app');
   const ORDER = ['cognitive', 'eq', 'personality', 'attachment', 'interest', 'love'];
+  /* 첫 화면 카드와 검사 소개의 질문형 제목 (색은 css의 .tint-<id>) */
+  const LOOK = {
+    cognitive: { q: '내 머리, 몇 점일까?', line: '규칙 찾기, 언어, 공간, 기억, 속도. 다섯 가지 힘으로 추정 IQ를 재요.' },
+    eq: { q: '남의 마음, 얼마나 잘 읽을까?', line: '짧은 상황을 읽고, 기분을 알아채고 다루는 힘을 봐요.' },
+    personality: { q: '나는 어떤 사람일까?', line: '다섯 갈래, 열다섯 가지 특성으로 내 성격을 그려요.' },
+    attachment: { q: '연애할 때 나는 어떤 모습일까?', line: '불안해지는 편인지, 거리를 두는 편인지 네 가지 유형으로 봐요.' },
+    interest: { q: '나한테 맞는 일은 뭘까?', line: '어떤 일을 할 때 즐거운지 여섯 가지 흥미 유형으로 알아봐요.' },
+    love: { q: '나는 어떻게 사랑할까?', line: '첫눈에 반하는 편인지, 천천히 스며드는 편인지. 여섯 가지 스타일로 봐요.' }
+  };
+  function look(id) { return LOOK[id] || { q: BL.tests[id].title, line: BL.tests[id].subtitle }; }
   const STORE_KEY = 'bl.results';
   const SESSION_KEY = 'bl.session';
   const MAX_RESULTS = 40;
@@ -41,18 +51,19 @@
 
   /* ---------- 홈 ---------- */
   function testCard(id) {
-    const t = BL.tests[id];
-    return '<a class="test-card" href="#/test/' + id + '">' +
-      '<div class="test-card-top"><span class="mono num">' + U.pad2(t.num) + '</span><span class="tag tag-' + t.kind + '">' + U.esc(t.kindLabel) + '</span></div>' +
-      '<h2>' + U.esc(t.title) + '</h2>' +
-      '<p>' + U.esc(t.subtitle) + '</p>' +
-      '<div class="test-card-meta mono">' + U.esc(t.duration) + ' · ' + U.esc(t.length) + '</div>' +
+    const t = BL.tests[id], lk = look(id);
+    return '<a class="test-card tint-' + id + '" href="#/test/' + id + '">' +
+      '<span class="card-kicker">' + U.esc(t.title) + ' · ' + U.esc(t.kindLabel) + '</span>' +
+      '<h2>' + U.esc(lk.q) + '</h2>' +
+      '<p>' + U.esc(lk.line) + '</p>' +
+      '<div class="test-card-meta"><span class="chip">' + U.esc(t.duration) + '</span><span class="chip">' + U.esc(t.length) + '</span></div>' +
+      '<span class="card-go" aria-hidden="true">→</span>' +
       '</a>';
   }
   function rowHtml(r, idx) {
     const t = BL.tests[r.testId];
     if (!t) return '';
-    return '<a class="row" href="#/result/' + t.id + '/' + idx + '"><span class="row-title">' + U.esc(t.title) + (r.modeLabel ? ' · ' + U.esc(r.modeLabel) : '') + '</span><span class="row-sub">' + U.esc(r.headline) + (r.label ? ' · ' + U.esc(r.label) : '') + '</span><span class="row-date mono">' + U.fmtDate(r.at) + '</span></a>';
+    return '<a class="row tint-' + t.id + '" href="#/result/' + t.id + '/' + idx + '"><span class="row-title">' + U.esc(t.title) + (r.modeLabel ? ' · ' + U.esc(r.modeLabel) : '') + '</span><span class="row-sub">' + U.esc(r.headline) + (r.label ? ' · ' + U.esc(r.label) : '') + '</span><span class="row-date mono">' + U.fmtDate(r.at) + '</span></a>';
   }
   function renderHome() {
     const all = results();
@@ -60,14 +71,13 @@
     const recentHtml = recent.length ? '<section class="block"><div class="block-head"><h3>최근 기록</h3><a href="#/history" class="link">전체 보기</a></div>' +
       recent.map(function (x) { return rowHtml(x.r, x.i); }).join('') + '</section>' : '';
     const cog = BL.tests.cognitive && BL.tests.cognitive.merge ? BL.tests.cognitive.merge(all) : null;
-    const profileHtml = cog ? '<a class="profile-card" href="#/profile/cognitive"><span class="eyebrow mono">인지 종합 프로필</span><span class="profile-main">' + U.esc(cog.headline) + '</span><span class="muted small">' + U.esc(cog.label) + ' · ' + cog.coverage.done + '/' + cog.coverage.total + ' 과제 반영</span></a>' : '';
+    const profileHtml = cog ? '<a class="profile-card tinted tint-cognitive" href="#/profile/cognitive"><span class="eyebrow">인지 종합 프로필</span><span class="profile-main">' + U.esc(cog.headline) + '</span><span class="muted small">' + U.esc(cog.label) + ' · ' + cog.coverage.done + '/' + cog.coverage.total + ' 과제 반영</span></a>' : '';
     setScreen(
       '<div class="wrap">' +
       '<section class="hero">' +
-      '<img class="hero-banner" src="banner.svg" alt="두뇌실험실 배너" width="1200" height="420">' +
-      '<p class="eyebrow mono">무료 · 로그인 없음</p>' +
-      '<h1>나를 측정하는<br><em>여섯 가지 실험</em></h1>' +
-      '<p class="lead">머리가 얼마나 잘 돌아가는지, 남의 기분을 얼마나 잘 읽는지, 나는 어떤 성격이고 연애할 때는 어떤 사람인지, 어떤 일에 끌리는지. 검사마다 그 능력이 생활 어디에 쓰이는지도 같이 알려 드려요. 결과는 내 폰이나 컴퓨터에만 남아요.</p>' +
+      '<p class="hero-chips"><span>무료</span><span>로그인 없음</span><span>결과는 내 폰에만</span></p>' +
+      '<h1>궁금했던 나,<br><em>여기서 알아봐요</em></h1>' +
+      '<p class="lead">머리 쓰는 힘부터 성격, 연애, 끌리는 일까지 여섯 가지 실험이 있어요. 결과마다 그게 생활 어디에 쓰이는지도 알려 드려요.</p>' +
       '</section>' +
       '<section class="grid">' + ORDER.filter(function (id) { return BL.tests[id]; }).map(testCard).join('') + '</section>' +
       profileHtml +
@@ -129,11 +139,11 @@
       }).join('') + '</div>' + taskGridHtml(t)
       : '<button class="btn btn-primary btn-block" id="start">시작하기</button>';
     setScreen(
-      '<div class="wrap">' +
+      '<div class="wrap tinted tint-' + id + '">' +
       '<a class="back" href="#/">← 실험 목록</a>' +
-      '<p class="eyebrow mono">EXPERIMENT ' + U.pad2(t.num) + ' · ' + U.esc(t.kindLabel) + '</p>' +
-      '<h1 class="title">' + U.esc(t.title) + '</h1>' +
-      '<p class="lead">' + U.esc(t.subtitle) + '</p>' +
+      '<div class="intro-hero"><p class="eyebrow">' + U.esc(t.title) + ' · ' + U.esc(t.kindLabel) + '</p>' +
+      '<h1 class="title">' + U.esc(look(id).q) + '</h1>' +
+      '<p class="lead">' + U.esc(t.subtitle) + '</p></div>' +
       '<ul class="intro-list">' + t.intro.map(function (s) { return '<li>' + U.esc(s) + '</li>'; }).join('') + '</ul>' +
       '<div class="spec"><div><span class="mono">소요 시간</span>' + U.esc(t.duration) + '</div><div><span class="mono">구성</span>' + U.esc(t.length) + '</div><div><span class="mono">저장</span>이 브라우저</div></div>' +
       resumeHtml + timeHtml + startHtml +
@@ -189,7 +199,7 @@
     const chrome = '<div class="run-head"><a class="run-title" href="#/test/' + id + '">' + U.esc(t.title) + '</a>' +
       '<span class="run-count mono">' + (scoredDone + (it.scored ? 1 : 0)) + ' / ' + scoredTotal + '</span></div>' +
       '<div class="progress"><div class="progress-bar" style="width:' + pct + '%"></div></div>';
-    setScreen('<div class="wrap run">' + chrome + '<div id="item" class="item"></div></div>', function () {
+    setScreen('<div class="wrap run tinted tint-' + id + '">' + chrome + '<div id="item" class="item"></div></div>', function () {
       session.shownAt = Date.now();
       return RENDER[it.type](it, document.getElementById('item'), function (answer) {
         session.answers[session.index] = answer;
@@ -228,7 +238,7 @@
 
   /* ---------- 문항 렌더러 ---------- */
   function introCard(el, it, onStart, extra) {
-    el.innerHTML = '<div class="section-card"><p class="eyebrow mono">TASK</p><h2>' + U.esc(it.title) + '</h2><p>' + U.esc(it.desc) + '</p>' +
+    el.innerHTML = '<div class="section-card"><p class="eyebrow">과제</p><h2>' + U.esc(it.title) + '</h2><p>' + U.esc(it.desc) + '</p>' +
       (extra ? '<p class="muted small">' + U.esc(extra) + '</p>' : '') +
       '<button class="btn btn-primary btn-block" id="go">시작</button></div>';
     el.querySelector('#go').addEventListener('click', onStart);
@@ -237,7 +247,7 @@
   const RENDER = {
     section: function (it, el, done) {
       el.innerHTML = '<div class="section-card' + (it.sub ? ' section-sub' : '') + '">' +
-        '<p class="eyebrow mono">' + (it.sub ? 'TASK' : 'PART ' + it.num) + '</p>' +
+        '<p class="eyebrow">' + (it.sub ? '과제' : '파트 ' + it.num) + '</p>' +
         '<h2>' + U.esc(it.title) + '</h2>' +
         '<p>' + U.esc(it.desc) + '</p>' +
         (it.where ? '<p class="where"><span class="mono">일상에서</span>' + U.esc(it.where) + '</p>' : '') +
@@ -728,7 +738,7 @@
   /* 이어서 해 보기: 검사 정의의 related [{ id, why }]를 다른 검사로 가는 카드로 보여 준다 */
   function relatedHtml(t) {
     return (t.related || []).filter(function (x) { return BL.tests[x.id]; }).map(function (x) {
-      return '<a class="profile-card profile-link" href="#/test/' + x.id + '"><span class="eyebrow mono">이어서 해 보기</span><span class="profile-main">' + U.esc(BL.tests[x.id].title) + '</span><span class="muted small">' + U.esc(x.why) + '</span></a>';
+      return '<a class="profile-card profile-link tinted tint-' + x.id + '" href="#/test/' + x.id + '"><span class="eyebrow">이어서 해 보기</span><span class="profile-main">' + U.esc(BL.tests[x.id].title) + '</span><span class="muted small">' + U.esc(x.why) + '</span></a>';
     }).join('');
   }
   function resultHtml(t, result, opts) {
@@ -736,12 +746,12 @@
     const sections = (result.sections || []).map(function (sec) {
       return '<section class="rs"><h3>' + U.esc(sec.title) + '</h3><p>' + U.esc(sec.body) + '</p></section>';
     }).join('');
-    return '<div class="wrap result">' +
+    return '<div class="wrap result tinted tint-' + t.id + '">' +
       (opts.banner ? '<div class="banner">' + opts.banner + '</div>' : '') +
       '<a class="back" href="#/">← 실험 목록</a>' +
-      '<p class="eyebrow mono">RESULT · ' + U.esc(t.title) + (result.modeLabel ? ' · ' + U.esc(result.modeLabel) : '') + (result.at ? ' · ' + U.fmtDate(result.at) : '') + '</p>' +
+      '<div class="result-hero"><p class="eyebrow">결과 · ' + U.esc(t.title) + (result.modeLabel ? ' · ' + U.esc(result.modeLabel) : '') + (result.at ? ' · ' + U.fmtDate(result.at) : '') + '</p>' +
       '<h1 class="headline">' + U.esc(result.headline) + '</h1>' +
-      (result.label ? '<span class="badge">' + U.esc(result.label) + '</span>' : '') +
+      (result.label ? '<span class="badge">' + U.esc(result.label) + '</span>' : '') + '</div>' +
       '<p class="summary">' + U.esc(result.summary) + '</p>' +
       (result.plot || '') +
       '<div class="scales">' + (result.scales || []).map(function (s) { return scaleHtml(s, false); }).join('') + '</div>' +
@@ -848,7 +858,7 @@
     const t = BL.tests[id];
     const merged = t.merge(results());
     if (!merged) {
-      setScreen('<div class="wrap"><a class="back" href="#/test/' + id + '">← ' + U.esc(t.title) + '</a><p class="eyebrow mono">PROFILE</p><h1 class="title">종합 프로필</h1><p class="empty">아직 합칠 결과가 없어요. 과제를 하나라도 풀면 여기에 모여요.</p><a class="btn btn-primary btn-block" href="#/test/' + id + '">과제 고르러 가기</a></div>');
+      setScreen('<div class="wrap tinted tint-' + id + '"><a class="back" href="#/test/' + id + '">← ' + U.esc(t.title) + '</a><p class="eyebrow">' + U.esc(t.title) + '</p><h1 class="title">종합 프로필</h1><p class="empty">아직 합칠 결과가 없어요. 과제를 하나라도 풀면 여기에 모여요.</p><a class="btn btn-primary btn-block" href="#/test/' + id + '">과제 고르러 가기</a></div>');
       return;
     }
     merged.testId = id; merged.at = Date.now();
@@ -916,7 +926,7 @@
     setScreen(
       '<div class="wrap">' +
       '<a class="back" href="#/">← 실험 목록</a>' +
-      '<p class="eyebrow mono">ARCHIVE</p><h1 class="title">내 기록</h1>' +
+      '<p class="eyebrow">이 브라우저에 남은 결과</p><h1 class="title">내 기록</h1>' +
       (rows ? '<div class="rows">' + rows + '</div><button class="btn btn-ghost btn-block" id="clear">기록 모두 삭제</button>' : '<p class="empty">아직 기록이 없어요. 첫 실험을 시작해 보세요.</p>') +
       '<p class="notice">기록은 이 브라우저의 저장 공간에만 있어요. 브라우저 데이터를 지우면 함께 사라져요.</p>' +
       '</div>',
@@ -934,7 +944,7 @@
     setScreen(
       '<div class="wrap about">' +
       '<a class="back" href="#/">← 실험 목록</a>' +
-      '<p class="eyebrow mono">ABOUT</p><h1 class="title">두뇌실험실 안내</h1>' +
+      '<p class="eyebrow">무료 · 로그인 없음</p><h1 class="title">두뇌실험실 안내</h1>' +
       '<section class="rs"><h3>무엇을 하는 곳인가요</h3><p>머리 쓰는 힘, 감정 다루는 힘, 성격, 연애 패턴, 끌리는 일을 스스로 재 보는 곳이에요. 돈을 받지 않고 로그인도 없어요. 문항은 전부 이 사이트를 위해 직접 만들었거나, 누구나 쓸 수 있게 공개된 문항을 우리말로 옮긴 거예요.</p></section>' +
       '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전, 전개도 접기, 블록 세기), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따르고, 문항은 공개된 국제 성격 문항(IPIP)을 번역해서 손봤어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p><p>진로 흥미 유형 검사는 심리학자 존 홀랜드의 여섯 가지 흥미 유형(현실·탐구·예술·사회·진취·관습)을 틀로 삼아, 유형마다 두 갈래씩 해 보고 싶은 활동으로 재요. 문항은 이 사이트를 위해 직접 썼어요. 흥미는 하고 싶은 마음이라서 적성이나 능력과는 달라요.</p><p>연애 스타일 검사는 사회학자 존 리가 나눈 사랑의 여섯 가지 스타일(에로스, 루두스, 스토르게, 프래그마, 마니아, 아가페)을 틀로 삼고, 문항은 이 사이트를 위해 직접 썼어요.</p></section>' +
       '<section class="rs"><h3>점수는 어디에 쓰면 좋나요</h3><p>검사를 마치면 결과 화면에서 그 능력이나 성향이 생활 어디에 쓰이고 어떤 영향을 주는지 함께 보여 드려요. 결과는 "내가 뭘 잘하고 뭘 연습하면 좋은지" 감을 잡는 용도로 보면 딱 좋아요. 사람을 평가하거나 줄 세우는 데 쓰라고 만든 게 아니에요.</p></section>' +

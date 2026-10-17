@@ -13,7 +13,7 @@ node serve.cjs
 ## 구조
 
 - `index.html` 진입점. 스크립트 로드 순서가 중요하다 (util → tests → card → app).
-- `css/style.css` 미니멀 연구소 테마. 색은 `:root` 토큰으로 관리하고 다크 모드를 자동 지원한다.
+- `css/style.css` 밝고 부드러운 테마(2026-10-18, 크림 바탕·둥근 카드·알약 버튼). 색은 `:root` 토큰으로 관리하고 다크 모드를 자동 지원한다. 검사별 파스텔 색은 `.tint-<id>`(바탕·글자·강조·테두리)에 있고, `.tinted`를 붙인 화면은 그 색을 `--accent`로 써서 버튼·진행 막대·결과 막대가 검사 색을 따른다. 첫 화면 카드와 검사 소개의 질문형 제목은 `js/app.js`의 `LOOK`, 공유 이미지 색은 `js/card.js`의 `TINT`.
 - `js/util.js` 난수(seeded RNG), HTML 이스케이프, 저장소 유틸.
 - `js/tests/*.js` 검사 정의. 각 파일은 `BL.tests.<id> = { build(), score(answers, items), ... }` 를 등록한다. 검사 정의에 `related: [{ id, why }]`를 두면 결과 화면 맨 아래에 그 검사로 가는 "이어서 해 보기" 카드가 붙는다(애착 ↔ 연애 스타일).
 - `js/card.js` 결과 카드 PNG 생성(1080×1350), 저장, 공유.

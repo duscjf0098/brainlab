@@ -4,6 +4,11 @@ BL.card = (function () {
   const W = 1080, H = 1350;
   const FONT = '"Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif';
   const MONO = 'ui-monospace, "SF Mono", Consolas, "D2Coding", monospace';
+  /* 결과 이미지 색: 화면과 같은 검사별 파스텔 [바탕, 글자, 강조] (css .tint-<id>) */
+  const TINT = {
+    cognitive: ['#ece8ff', '#2e2470', '#6150e0'], eq: ['#ffe4ee', '#6e1e40', '#c93c76'], personality: ['#d9f5ea', '#0e4d3a', '#14845f'],
+    attachment: ['#ffe6db', '#74301a', '#c4532d'], interest: ['#ddeeff', '#10406e', '#2d72c2'], love: ['#fff0c9', '#6a4a06', '#9a6208']
+  };
 
   function roundRect(x, px, py, w, h, r) {
     r = Math.min(r, h / 2, w / 2);
@@ -39,14 +44,15 @@ BL.card = (function () {
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const x = c.getContext('2d');
-    x.fillStyle = '#fafaf9'; x.fillRect(0, 0, W, H);
-    x.fillStyle = '#e5e7eb';
-    for (let gx = 60; gx < W; gx += 60) for (let gy = 60; gy < H; gy += 60) x.fillRect(gx - 1, gy - 1, 3, 3);
+    const tc = TINT[test.id] || TINT.cognitive;
+    const heroH = result.label ? 412 : 322;
+    x.fillStyle = '#fff8f1'; x.fillRect(0, 0, W, H);
+    roundRect(x, 48, 48, W - 96, heroH, 56); x.fillStyle = tc[0]; x.fill();
 
-    x.fillStyle = '#0f766e'; x.font = '600 26px ' + MONO; x.fillText('BRAIN LAB  ·  두뇌실험실', 80, 108);
-    x.fillStyle = '#6b7280'; x.font = '500 32px ' + FONT; x.fillText(test.title, 80, 176);
+    x.fillStyle = tc[1]; x.font = '800 28px ' + FONT; x.fillText('두뇌실험실', 80, 112);
+    x.globalAlpha = 0.78; x.font = '500 32px ' + FONT; x.fillText(test.title, 80, 176); x.globalAlpha = 1;
 
-    x.fillStyle = '#15181d';
+    x.fillStyle = tc[1];
     let size = 88;
     x.font = '800 ' + size + 'px ' + FONT;
     while (x.measureText(result.headline).width > W - 160 && size > 48) { size -= 4; x.font = '800 ' + size + 'px ' + FONT; }
@@ -56,12 +62,13 @@ BL.card = (function () {
     if (result.label) {
       x.font = '700 30px ' + FONT;
       const w = x.measureText(result.label).width + 48;
-      roundRect(x, 80, y, w, 60, 30); x.fillStyle = '#0f766e'; x.fill();
+      roundRect(x, 80, y, w, 60, 30); x.fillStyle = tc[2]; x.fill();
       x.fillStyle = '#ffffff'; x.fillText(result.label, 104, y + 41);
       y += 100;
     }
 
-    x.fillStyle = '#374151'; x.font = '400 33px ' + FONT;
+    y = Math.max(y, 48 + heroH + 30);
+    x.fillStyle = '#4a413c'; x.font = '400 33px ' + FONT;
     // 요약은 6줄까지 그리고, 넘치면 마지막 줄 끝을 말줄임표로 줄인다 (문장이 말없이 잘리지 않게)
     let lines = wrap(x, result.summary, W - 160);
     if (lines.length > 6) {
@@ -76,17 +83,17 @@ BL.card = (function () {
     // 막대가 많으면(진로 흥미 6유형 등) 간격을 줄여 아래 안내 문구와 겹치지 않게 한다
     const step = Math.min(84, Math.floor((H - 150 - y) / Math.max(1, (result.scales || []).length)));
     (result.scales || []).forEach(function (s) {
-      x.fillStyle = '#15181d'; x.font = '600 30px ' + FONT; x.fillText(s.label, 80, y);
-      x.fillStyle = '#0f766e'; x.font = '700 30px ' + MONO; x.textAlign = 'right'; x.fillText(String(s.value), W - 80, y); x.textAlign = 'left';
-      roundRect(x, 80, y + 18, W - 160, 16, 8); x.fillStyle = '#e5e7eb'; x.fill();
+      x.fillStyle = '#2b2522'; x.font = '600 30px ' + FONT; x.fillText(s.label, 80, y);
+      x.fillStyle = tc[2]; x.font = '700 30px ' + MONO; x.textAlign = 'right'; x.fillText(String(s.value), W - 80, y); x.textAlign = 'left';
+      roundRect(x, 80, y + 18, W - 160, 16, 8); x.fillStyle = '#f0e6dc'; x.fill();
       const lo = s.range ? s.range[0] : 0, hi = s.range ? s.range[1] : 100;
       const fw = (W - 160) * U.clamp((s.value - lo) / (hi - lo), 0, 1);
-      if (fw > 0) { roundRect(x, 80, y + 18, Math.max(fw, 16), 16, 8); x.fillStyle = '#0f766e'; x.fill(); }
-      if (s.range) { x.fillStyle = '#9ca3af'; x.fillRect(80 + (W - 160) * (100 - lo) / (hi - lo) - 1, y + 12, 2, 28); }
+      if (fw > 0) { roundRect(x, 80, y + 18, Math.max(fw, 16), 16, 8); x.fillStyle = tc[2]; x.fill(); }
+      if (s.range) { x.fillStyle = '#b9aca1'; x.fillRect(80 + (W - 160) * (100 - lo) / (hi - lo) - 1, y + 12, 2, 28); }
       y += step;
     });
 
-    x.fillStyle = '#9ca3af'; x.font = '400 23px ' + FONT;
+    x.fillStyle = '#8a7f78'; x.font = '400 23px ' + FONT;
     x.fillText('참고용 자기평가예요 · 전문 검사를 대신하지 않아요', 80, H - 92);
     x.font = '500 23px ' + MONO; x.fillText(U.fmtDate(result.at || Date.now()), 80, H - 52);
     return c;
