@@ -5,7 +5,7 @@
   const ORDER = ['cognitive', 'eq', 'personality', 'attachment', 'interest', 'love'];
   /* 첫 화면 카드와 검사 소개의 질문형 제목 (색은 css의 .tint-<id>) */
   const LOOK = {
-    cognitive: { q: '내 머리, 몇 점일까?', line: '규칙 찾기, 언어, 공간, 기억, 속도. 다섯 가지 힘으로 추정 IQ를 재요.' },
+    cognitive: { q: '나 아이큐는 몇 점일까?', line: '규칙 찾기, 언어, 공간, 기억, 속도. 다섯 가지 힘으로 추정 IQ를 재요.' },
     eq: { q: '남의 마음, 얼마나 잘 읽을까?', line: '짧은 상황을 읽고, 기분을 알아채고 다루는 힘을 봐요.' },
     personality: { q: '나는 어떤 사람일까?', line: '다섯 갈래, 열다섯 가지 특성으로 내 성격을 그려요.' },
     attachment: { q: '연애할 때 나는 어떤 모습일까?', line: '불안해지는 편인지, 거리를 두는 편인지 네 가지 유형으로 봐요.' },
