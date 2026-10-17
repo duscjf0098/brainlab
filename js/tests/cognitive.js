@@ -7,7 +7,8 @@
    난이도: 문항마다 1~5단계가 있고 쉬운 것부터 나온다. 4~5단계는 실제 지능검사의 상위 문항 유형
    (레이븐식 회전·논리 연산·선 겹침 규칙, 다단계 수열, 고난도 어휘·삼단논법)을 따른다.
    점수는 IQ 척도(평균 100, 표준편차 15)로 환산한다. 기준값(NORMS, LEVEL_P)은 문항 설계상의 예상 정답률과
-   일반 성인 추정치이며 공인 규준이 아니다. 실제 응시 데이터가 쌓이면 바꿔야 한다.
+   일반 성인 추정치이며 공인 규준이 아니다. 영역·종합 점수는 가상 응시자 시뮬레이션으로 규준화한다(OBS).
+   실제 응시 데이터가 쌓이면 바꿔야 한다.
    도형 행렬 · 도형 계열 · 수열 · 도형 회전 · 전개도 접기 · 블록 세기 문항은 규칙 기반으로 매번 새로 생성한다 (원본 문항). */
 (function () {
   const U = BL.util;
@@ -1228,7 +1229,8 @@
   };
   const TASK_KEYS = Object.keys(TASKS);
   /* 빠른 검사: 영역마다 대표 과제를 골라 적응형으로 푼다. 숫자 앞으로·단순 반응은 지능과의 관계가 약해 숫자 거꾸로·기호 찾기로,
-     유추는 같은 시간에 문항을 더 풀 수 있는 어휘로 바꿨다. 참값을 아는 가상 응시자 시뮬레이션에서 오차(RMSE)가 IQ 9.5 → 8 안팎.
+     유추는 같은 시간에 문항을 더 풀 수 있는 어휘로 바꿨다. 참값을 아는 가상 응시자 시뮬레이션에서 오차(RMSE)가 IQ 9.5 → 8 안팎
+     (2026-10-18 영역·종합 규준화 뒤에는 평균 쪽으로 눌리던 몫을 풀어 8.4 안팎).
      2026-10-18: 공간을 도형 회전 하나로만 재지 않도록 전개도 접기를 더해 7과제로 했다(사용자 결정). */
   const QUICK = ['matrix', 'sequence', 'vocab', 'rotation', 'fold', 'digitB', 'symbol'];
   const LEVEL_KO = { 1: '쉬움', 2: '보통', 3: '어려움', 4: '매우 어려움', 5: '최상', 6: '극상' };
@@ -1267,11 +1269,39 @@
   }
   function iqOf(z) { return Math.round(U.clamp(100 + 15 * z, IQ_RANGE[0], IQ_RANGE[1])); }
   function topPct(z) { return Math.max(1, Math.round((1 - U.normCdf(z)) * 100)); }
-  function compositeZ(zs, r) {
-    const k = zs.length;
-    if (!k) return 0;
-    if (k === 1) return zs[0];
-    return U.clamp(U.mean(zs) / Math.sqrt((1 + (k - 1) * r) / k), -3, 3);
+  /* 영역·종합 점수 규준화 (2026-10-18). 과제 점수(z)에는 측정 오차가 섞여 있어 과제끼리의 상관이 참 능력끼리보다 훨씬 낮다.
+     예전에는 참 능력 사이 상관(영역 안 0.6, 영역 사이 0.5)을 가정한 합성 공식으로 합쳐서, 종합 점수의 표준편차가 15가 아니라
+     11~12로 줄고 참값이 높은 사람(122.5 이상)은 7점 안팎 낮게, 낮은 사람(77.5 미만)은 8~10점 높게 나왔다. 그래서 과제 점수를 더한 뒤, 같은 과제를 푼
+     가상 응시자 집단에서 그 합이 평균 0·표준편차 1이 되도록 나눈다(관측 점수 규준화). 값은 참값을 아는 가상 응시자 6000명
+     시뮬레이션(20과제)에서 구했다. within·between = 관측 과제 점수끼리의 상관(같은 영역·다른 영역), spread = 과제 점수의
+     표준편차(채점 종류별), shift = 정답률 과제 점수의 평균이 0보다 높은 정도(라쉬 사후 최빈값은 찍기 확률 때문에 낮은 쪽이 덜
+     내려간다). 과제 점수 자체는 그대로 두므로 예전에 저장한 결과도 같은 방식으로 합쳐진다. 실제 응시 자료가 쌓이면 실제 분포로 바꾼다. */
+  const OBS = {
+    within: { fluid: 0.28, verbal: 0.30, spatial: 0.18, memory: 0.28, speed: 0.25 }, between: 0.17,
+    spread: { prop: 0.94, span: 1.11, rt: 1.08, count: 1.07 }, shift: { adaptive: 0.06, full: 0.04 }
+  };
+  // 정답률 과제의 평균 이동: 기준 정답률(meanP)은 단계표대로 푼 결과(정밀 검사)에만 있고 적응형에는 없다
+  function obsShift(k, st) { return NORMS[k].kind !== 'prop' ? 0 : st.meanP == null ? OBS.shift.adaptive : OBS.shift.full; }
+  function obsCov(a, b) {
+    const r = a === b ? 1 : TASKS[a].domain === TASKS[b].domain ? OBS.within[TASKS[a].domain] : OBS.between;
+    return r * OBS.spread[NORMS[a].kind] * OBS.spread[NORMS[b].kind];
+  }
+  function sumCov(A, B) { let v = 0; A.forEach(function (a) { B.forEach(function (b) { v += obsCov(a, b); }); }); return v; }
+  /* 영역 점수: 과제가 하나면 그 과제 점수 그대로, 둘 이상이면 평균 이동을 뺀 합을 그 합의 표준편차로 나눈다 */
+  function domainZ(keys, tasks) {
+    if (keys.length === 1) return tasks[keys[0]].z;
+    const sum = keys.reduce(function (s, k) { return s + tasks[k].z - obsShift(k, tasks[k]); }, 0);
+    return U.clamp(sum / Math.sqrt(sumCov(keys, keys)), -3, 3);
+  }
+  /* 종합 점수: 영역 점수를 더하고(과제 하나짜리 영역은 평균 이동을 빼고) 그 합의 표준편차로 나눈다. groups = [{ keys, z }] */
+  function overallZ(groups, tasks) {
+    const S = groups.map(function (g) { return g.keys.length > 1 ? Math.sqrt(sumCov(g.keys, g.keys)) : 1; });
+    let sum = 0, v = 0;
+    groups.forEach(function (g, i) {
+      sum += g.z - (g.keys.length > 1 ? 0 : obsShift(g.keys[0], tasks[g.keys[0]]));
+      groups.forEach(function (h, j) { v += sumCov(g.keys, h.keys) / (S[i] * S[j]); });
+    });
+    return U.clamp(sum / Math.sqrt(v), -3, 3);
   }
   function band(iq) {
     return iq >= 130 ? '매우 우수' : iq >= 120 ? '우수' : iq >= 110 ? '평균 상' : iq >= 90 ? '평균' : iq >= 80 ? '평균 하' : iq >= 70 ? '경계선' : '낮음';
@@ -1504,12 +1534,12 @@
   /* 과제별 z 모음 → 영역·종합 결과 객체 */
   function assemble(tasks, opts) {
     const scales = [], sections = [];
-    const domZ = [];
+    const groups = [];
     DOMAINS.forEach(function (d) {
       const keys = TASK_KEYS.filter(function (k) { return TASKS[k].domain === d.key && tasks[k]; });
       if (!keys.length) return;
-      const z = compositeZ(keys.map(function (k) { return tasks[k].z; }), 0.6);
-      domZ.push(z);
+      const z = domainZ(keys, tasks);
+      groups.push({ keys: keys, z: z });
       const iq = iqOf(z);
       scales.push({ key: d.key, label: d.label, value: iq, range: IQ_RANGE, raw: '상위 ' + topPct(z) + '%',
         children: keys.map(function (k) { return { key: k, label: TASKS[k].label, value: iqOf(tasks[k].z), range: IQ_RANGE, raw: tasks[k].raw }; }) });
@@ -1517,13 +1547,16 @@
     });
     const keys = Object.keys(tasks);
     const single = keys.length === 1 ? keys[0] : null;
-    const z = single ? tasks[single].z : compositeZ(domZ, 0.5);
+    const z = single ? tasks[single].z : overallZ(groups, tasks);
     const iq = iqOf(z), pct = topPct(z), bd = band(iq);
-    /* 과제 하나의 몫을 0.3으로 보고 과제 수만큼 합친다(스피어먼-브라운). 참값을 아는 가상 응시자로 돌려 보면 ± 안에 실제 값이
-       70% 안팎으로 들어온다(0.45일 때는 빠른 검사 50%, 18과제 60%뿐이었다). 과제 하나만 푼 결과는 그 과제 점수의 오차라 0.45를 둔다. */
-    const q = single ? 0.45 : 0.3;
-    const rel = keys.length * q / (1 + (keys.length - 1) * q);
-    const sem = Math.round(15 * Math.sqrt(1 - rel));
+    /* ±(SEM) = √(측정 오차² + 덜 푼 몫²). 측정 오차는 과제 하나의 몫을 0.3으로 보고 과제 수 n만큼 합친 신뢰도 n·0.3/(1+(n−1)·0.3)로
+       15·√(1−신뢰도)(스피어먼-브라운). 덜 푼 몫은 전체 K과제 중 n개, 다섯 영역 중 m개만 풀어 종합 IQ를 덜 대표하는 만큼으로
+       6²·(1−n/K) + 4²·(1−m/5)를 더한다. 규준화 뒤 참값을 아는 가상 응시자로 돌려 보면 ± 안에 실제 값이 빠른 검사(±9) 74%,
+       20과제(±5) 74~75%, 따로 푼 과제를 합친 프로필 69~77%로 들어온다(측정 오차만 쓰면 빠른 검사가 ±7, 63%).
+       과제 하나만 푼 결과는 그 과제 점수의 오차라 0.45만 둔다(±11, 75%). */
+    const q = single ? 0.45 : 0.3, n = keys.length;
+    const meas = 15 * Math.sqrt(1 - n * q / (1 + (n - 1) * q));
+    const sem = Math.round(single ? meas : Math.sqrt(meas * meas + 36 * (1 - n / TASK_KEYS.length) + 16 * (1 - groups.length / DOMAINS.length)));
     const bandText = {
       '매우 우수': '같은 기준으로 100명 중 두세 명 안에 드는 결과예요.',
       '우수': '대부분의 사람보다 빠르고 정확했어요.',
@@ -1547,7 +1580,11 @@
           : ' 가장 강한 쪽은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + weak.label + ' ' + U.josa(weak.value, '은', '는') + ' 연습하면 더 오를 여지가 있어요.') +
         (keys.length < TASK_KEYS.length ? (opts.quick ? ' 빠른 검사라 대표 과제 ' + keys.length + '개로 낸 점수예요. 나머지 과제도 풀면 종합 프로필이 더 정확해져요.' : ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했어요.') : '');
     }
-    sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균이 100인 IQ 눈금으로 바꾼 점수예요. 열 명 중 일곱 명쯤이 85~115 사이에 들어가요. "상위 %"는 그 눈금에서 내 위치고, ±' + U.josa(sem, '은', '는') + ' 오차 범위예요. 실제 값이 그 안에 있을 확률이 70% 정도고, 과제를 많이 풀수록 범위가 좁아져요. 점수는 몇 개를 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 각 단계의 난이도는 설계할 때 정한 예상 정답률이라, 실제 응시 데이터로 보정하기 전까지는 공인 지능검사의 IQ와 같다고 볼 수 없어요. 같은 과제를 여러 번 하면 익숙해져서 점수가 올라요.' });
+    sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균이 100, 표준편차가 15인 IQ 눈금으로 바꾼 점수예요. 열 명 중 일곱 명쯤이 85~115 사이에 들어가요. ' +
+      (single ? '과제 하나만으로 낸 점수는 문항이 적어서, 실력이 아주 높거나 낮으면 실제보다 100에 가깝게 나오기 쉬워요. '
+        : '여러 과제를 합친 영역·종합 점수는 실력을 미리 정해 둔 가상 응시자 수천 명에게 같은 문제를 풀게 해 보고, 점수가 이 눈금대로 퍼지도록 맞췄어요. ') +
+      '"상위 %"는 그 눈금에서 내 위치고, ±' + U.josa(sem, '은', '는') + ' 오차 범위예요. 실제 값이 그 안에 있을 확률이 70% 정도고, 과제를 많이 풀수록' + (single ? '' : ', 다섯 영역을 고루 풀수록') + ' 범위가 좁아져요. ' +
+      (single ? '' : '아주 높거나 낮은 점수에는 그날의 운도 섞이기 쉬워서, 다시 하면 100 쪽으로 조금 돌아오는 경우가 많아요. ') + '점수는 몇 개를 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 각 단계의 난이도는 설계할 때 정한 예상 정답률이라, 실제 응시 데이터로 보정하기 전까지는 공인 지능검사의 IQ와 같다고 볼 수 없어요. 같은 과제를 여러 번 하면 익숙해져서 점수가 올라요.' });
     return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: tasks, z: z };
   }
 
