@@ -46,20 +46,21 @@
 </header>
 
 <main id="app" class="app">
-  <!-- 자바스크립트가 실행되기 전에 검색 엔진과 미리보기가 읽는 정적 내용. 앱이 뜨면 교체된다. -->
+  <!-- 자바스크립트가 실행되기 전에 검색 엔진과 미리보기가 읽는 정적 내용. 앱이 뜨면 첫 화면으로 바뀌므로 모양은 첫 화면(js/app.js의 renderHome, LOOK)과 맞춘다. -->
   <div class="wrap seo-static">
-    <img class="hero-banner" src="banner.svg" alt="두뇌실험실 배너" width="1200" height="420">
-    <p class="eyebrow mono">무료 · 로그인 없음</p>
-    <h1>두뇌실험실 — 나를 측정하는 여섯 가지 실험</h1>
-    <p class="lead">머리가 얼마나 잘 돌아가는지, 남의 기분을 얼마나 잘 읽는지, 나는 어떤 성격이고 연애할 때는 어떤 사람인지, 어떤 일에 끌리는지. 검사마다 그 능력이 생활 어디에 쓰이는지도 같이 알려 드려요. 결과는 내 폰이나 컴퓨터에만 남아요.</p>
-    <ul class="intro-list">
-      <li><strong>인지 능력 검사</strong> — 규칙 찾기, 언어, 공간, 기억, 속도와 주의. 머리 쓰는 힘 다섯 가지를 20개 과제로 재서 추정 IQ(평균 100)로 보여 줘요. 새 일을 배우는 속도, 글 읽는 힘, 길 찾기, 암산, 운전 중 반응처럼 생활 어디에 쓰이는지도 함께 설명해요.</li>
-      <li><strong>정서 지능 검사</strong> — 상대 기분 알아채기, 기분을 일에 쓰기, 감정 이해하기, 감정 다루기. 상황 판단 기본 24문항, 정밀 48문항.</li>
-      <li><strong>성격 검사</strong> — 외향성, 친화성, 성실성, 정서 민감성, 개방성. 빅파이브 다섯 갈래와 열다섯 가지 세부 특성, 기본 60문항, 정밀 90문항. 각 성격이 일과 관계에서 어떻게 드러나는지 알려 줘요.</li>
-      <li><strong>연애 애착 유형 검사</strong> — 연애에서 불안해지는 정도와 거리를 두는 정도를 재서 안정형, 불안 몰입형, 회피 독립형, 혼란 양가형 중 어디에 가까운지 알아봐요.</li>
-      <li><strong>진로 흥미 유형 검사</strong> — 현실형, 탐구형, 예술형, 사회형, 진취형, 관습형. 홀랜드의 여섯 가지 흥미 유형으로 어떤 일에 끌리는지 알아보는 무료 직업 흥미 테스트예요. 기본 36문항, 정밀 72문항. 상위 두 유형 조합과 어울리는 활동·직업 예시를 보여 주고, 적성(잘하는 힘)이 아니라 흥미(하고 싶은 마음)를 본다는 점도 함께 알려 드려요.</li>
-      <li><strong>연애 스타일 검사</strong> — 첫눈에 반하는 편인지, 친구처럼 천천히 스며드는 편인지. 열정형, 놀이형, 친구형, 실용형, 몰입형, 헌신형, 사랑의 여섯 가지 스타일 중 어디에 가까운지 알아봐요.</li>
-    </ul>
+    <section class="hero">
+      <p class="hero-chips"><span>무료</span><span>로그인 없음</span><span>결과는 내 폰에만</span></p>
+      <h1>궁금했던 나,<br><em>여기서 알아봐요</em></h1>
+      <p class="lead">두뇌실험실에는 나를 측정하는 여섯 가지 실험이 있어요. 머리가 얼마나 잘 돌아가는지, 남의 기분을 얼마나 잘 읽는지, 나는 어떤 성격이고 연애할 때는 어떤 사람인지, 어떤 일에 끌리는지. 검사마다 그 능력이 생활 어디에 쓰이는지도 같이 알려 드려요. 결과는 내 폰이나 컴퓨터에만 남아요.</p>
+    </section>
+    <section class="grid">
+      <a class="test-card tint-cognitive" href="#/test/cognitive"><span class="card-kicker">인지 능력 검사</span><h2>내 머리, 몇 점일까?</h2><p>규칙 찾기, 언어, 공간, 기억, 속도와 주의. 머리 쓰는 힘 다섯 가지를 20개 과제로 재서 추정 IQ(평균 100)로 보여 줘요. 새 일을 배우는 속도, 글 읽는 힘, 길 찾기, 암산, 운전 중 반응처럼 생활 어디에 쓰이는지도 함께 설명해요.</p><span class="card-go" aria-hidden="true">→</span></a>
+      <a class="test-card tint-eq" href="#/test/eq"><span class="card-kicker">정서 지능 검사</span><h2>남의 마음, 얼마나 잘 읽을까?</h2><p>상대 기분 알아채기, 기분을 일에 쓰기, 감정 이해하기, 감정 다루기. 상황 판단 기본 24문항, 정밀 48문항.</p><span class="card-go" aria-hidden="true">→</span></a>
+      <a class="test-card tint-personality" href="#/test/personality"><span class="card-kicker">성격 검사</span><h2>나는 어떤 사람일까?</h2><p>외향성, 친화성, 성실성, 정서 민감성, 개방성. 빅파이브 다섯 갈래와 열다섯 가지 세부 특성, 기본 60문항, 정밀 90문항. 각 성격이 일과 관계에서 어떻게 드러나는지 알려 줘요.</p><span class="card-go" aria-hidden="true">→</span></a>
+      <a class="test-card tint-attachment" href="#/test/attachment"><span class="card-kicker">연애 애착 유형 검사</span><h2>연애할 때 나는 어떤 모습일까?</h2><p>연애에서 불안해지는 정도와 거리를 두는 정도를 재서 안정형, 불안 몰입형, 회피 독립형, 혼란 양가형 중 어디에 가까운지 알아봐요.</p><span class="card-go" aria-hidden="true">→</span></a>
+      <a class="test-card tint-interest" href="#/test/interest"><span class="card-kicker">진로 흥미 유형 검사</span><h2>나한테 맞는 일은 뭘까?</h2><p>현실형, 탐구형, 예술형, 사회형, 진취형, 관습형. 홀랜드의 여섯 가지 흥미 유형으로 어떤 일에 끌리는지 알아보는 무료 직업 흥미 테스트예요. 기본 36문항, 정밀 72문항. 상위 두 유형 조합과 어울리는 활동·직업 예시를 보여 주고, 적성(잘하는 힘)이 아니라 흥미(하고 싶은 마음)를 본다는 점도 함께 알려 드려요.</p><span class="card-go" aria-hidden="true">→</span></a>
+      <a class="test-card tint-love" href="#/test/love"><span class="card-kicker">연애 스타일 검사</span><h2>나는 어떻게 사랑할까?</h2><p>첫눈에 반하는 편인지, 친구처럼 천천히 스며드는 편인지. 열정형, 놀이형, 친구형, 실용형, 몰입형, 헌신형, 사랑의 여섯 가지 스타일 중 어디에 가까운지 알아봐요.</p><span class="card-go" aria-hidden="true">→</span></a>
+    </section>
     <noscript><p class="notice">이 사이트는 자바스크립트가 켜져 있어야 동작합니다. 브라우저 설정에서 자바스크립트를 허용해 주세요.</p></noscript>
   </div>
 </main>

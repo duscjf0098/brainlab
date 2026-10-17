@@ -92,10 +92,10 @@ node serve.cjs
 
 ## 검색 노출과 공유
 
-- `index.html`에 제목·설명·canonical·Open Graph·Twitter 카드·JSON-LD(WebSite)·manifest·favicon이 있고, 앱이 뜨기 전 정적 소개 블록(`.seo-static`)이 검색 엔진과 링크 미리보기에 읽힌다.
+- `index.html`에 제목·설명·canonical·Open Graph·Twitter 카드·JSON-LD(WebSite)·manifest·favicon이 있고, 앱이 뜨기 전 정적 소개 블록(`.seo-static`)이 검색 엔진과 링크 미리보기에 읽힌다. 정적 블록은 앱이 뜨면 첫 화면으로 바뀌므로 첫 화면과 같은 칩·제목("궁금했던 나, 여기서 알아봐요")·검사별 파스텔 카드(질문형 제목은 `js/app.js`의 `LOOK`)로 두고, 카드 설명만 검색어가 들어간 긴 문장으로 쓴다. 예전 배너 `banner.svg`는 2026-10-18에 뺐다.
 - `robots.txt`, `sitemap.xml`(홈 1건, 해시 라우트는 별도 URL이 아님), `og.png`(1200×630), `icon-192.png`/`icon-512.png`, `manifest.webmanifest`(홈 화면에 추가 가능).
-- 이미지는 `make-images.ps1`(System.Drawing)로 만들었다. 문구를 바꾸려면 og-text.txt를 고쳐 다시 실행한다.
-- 2026-10-18에 검사가 여섯 개가 되어 `og.png`를 같은 배치로 다시 그렸다("나를 측정하는 여섯 가지 실험", 부제는 여섯 검사 이름이고 넘치면 부제 글자 크기만 줄인다). OG 이미지만 다시 그리는 `scratchpad/og-only.ps1 -OutFile <png> -TextFile <txt>`(줄 순서: 제목, 부제, 태그, 문구, 아랫줄). 카카오톡은 미리보기 이미지를 캐시하므로 바뀐 이미지가 바로 안 보이면 카카오 개발자 사이트의 공유 디버거에서 캐시를 지운다.
+- 아이콘(`icon-192.png`/`icon-512.png`)은 `make-images.ps1`(System.Drawing)로 만들었다.
+- `og.png`는 2026-10-18에 C안으로 다시 만들었다. 크림 바탕에 사이트 이름, 첫 화면 문구 "궁금했던 나, 여기서 알아봐요"(둘째 줄 보라), 칩 세 개, 검사 색 카드 세 장(인지·정서 지능·성격의 질문형 제목)을 넣고 이모지·아이콘은 넣지 않았다. 카카오톡 말풍선(가로 260px 안팎)에서도 이름과 문구가 읽히게 문구 100px, 이름 50px로 잡았다. 원본은 같은 색 토큰으로 짠 HTML(로컬 전용 `.claude/og/og.html`)이고, `node serve.cjs`를 띄운 뒤 Chrome headless로 찍는다: `chrome --headless --hide-scrollbars --force-device-scale-factor=1 --window-size=1200,630 --virtual-time-budget=15000 --screenshot=og.png http://localhost:5173/.claude/og/og.html`. 카카오톡은 미리보기 이미지를 캐시하므로 바뀐 이미지가 바로 안 보이면 카카오 개발자 사이트의 공유 디버거에서 캐시를 지운다.
 - 구글 서치 콘솔 등록은 소유 확인이 필요하다(HTML 태그 방식: 콘솔이 주는 `<meta name="google-site-verification">` 태그를 `index.html` head에 넣고 커밋). 등록 후 sitemap.xml 제출.
 - 카카오톡: 링크 미리보기는 OG 태그로 동작. "카카오톡 공유" 버튼은 `js/config.js`의 `kakaoKey`(developers.kakao.com 앱의 JavaScript 키)가 있을 때만 보인다. 키 없이도 "링크 복사"로 카톡에 붙여 넣을 수 있다.
   - 콘솔 설정 두 곳이 모두 필요하다 (앱 ID 1608815): ① 앱 > 플랫폼 키 > JavaScript 키 > JavaScript SDK 도메인에 `https://duscjf0098.github.io`(테스트용 `http://localhost:5173`), ② 앱 > 제품 링크 관리 > 웹 도메인에 `https://duscjf0098.github.io`. 카카오 문서상 ②에 없는 도메인의 링크는 쓸 수 없다("등록되어 있지 않은 도메인 또는 스킴은 사용할 수 없습니다"). 2026-10-15에 ②가 비어 있어 같은 날 `https://duscjf0098.github.io`를 등록했다(기본 웹 도메인). 공유 창(sharer.kakao.com 피커)의 미리보기에는 제목·설명·썸네일만 나오고 링크·버튼은 원래 안 보이므로, 링크가 살아 있는지는 실제로 보낸 메시지(예: 나와의 채팅)를 눌러 봐야 확인된다.
