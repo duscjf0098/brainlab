@@ -825,16 +825,23 @@
     const kakao = document.getElementById('kakao');
     if (kakao) {
       BL.card.preloadKakao();   // 누르는 순간 바로 공유 창을 열 수 있게 미리 불러 둔다
+      const KAKAO_MSG = { shared: '', loading: '카카오톡 공유를 준비하고 있어요. 1~2초 뒤에 한 번 더 눌러 주세요.', nokey: '카카오 앱 키가 아직 설정되지 않았어요.', popup: '공유 창이 팝업 차단으로 열리지 않았어요. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.', error: '카카오톡 공유를 불러오지 못했어요. 링크 복사나 이미지 저장을 이용해 주세요.' };
       kakao.addEventListener('click', function () {
-        // 처음 누르면 결과 이미지를 카카오에 올리고, 다 올라가면 버튼을 한 번 더 눌러 보낸다.
-        // 올리는 동안 기다렸다가 보내면 "누른 직후" 상태가 끝나 휴대폰에서 카카오톡이 안 열릴 수 있어서 두 번에 나눈다.
+        // 처음 누르면 결과 이미지를 카카오에 올린다. 다 올라갔을 때 "누른 직후" 상태가 아직 살아 있으면(브라우저가 대개 5초까지 쳐 준다)
+        // 바로 보내고, 끝났으면 한 번 더 누르게 한다. 그 상태 밖에서 보내면 휴대폰에서 카카오톡이 안 열릴 수 있다.
         const how = BL.card.kakaoShare(result, t, function (state) {
           kakao.disabled = false;
+          if (navigator.userActivation && navigator.userActivation.isActive) {
+            kakao.textContent = '카카오톡 공유';
+            const again = BL.card.kakaoShare(result, t);
+            note.textContent = KAKAO_MSG[again] !== undefined ? KAKAO_MSG[again] : KAKAO_MSG.error;
+            return;
+          }
           kakao.textContent = '카카오톡으로 보내기';
           note.textContent = state === 'ready' ? '결과 이미지가 준비됐어요. 한 번 더 누르면 카카오톡이 열려요.' : '결과 이미지를 올리지 못해서 사이트 대표 이미지로 보낼게요. 한 번 더 눌러 주세요.';
         });
-        if (how === 'uploading') { kakao.disabled = true; kakao.textContent = '이미지 준비 중…'; note.textContent = '카카오톡에 함께 보낼 결과 이미지를 카카오에 올리고 있어요.'; return; }
-        note.textContent = how === 'shared' ? '' : how === 'loading' ? '카카오톡 공유를 준비하고 있어요. 1~2초 뒤에 한 번 더 눌러 주세요.' : how === 'nokey' ? '카카오 앱 키가 아직 설정되지 않았어요.' : how === 'popup' ? '공유 창이 팝업 차단으로 열리지 않았어요. 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.' : '카카오톡 공유를 불러오지 못했어요. 링크 복사나 이미지 저장을 이용해 주세요.';
+        if (how === 'uploading') { kakao.disabled = true; kakao.textContent = '이미지 준비 중…'; note.textContent = '카카오톡에 함께 보낼 결과 이미지를 올리고 있어요. 잠시만요.'; return; }
+        note.textContent = KAKAO_MSG[how] !== undefined ? KAKAO_MSG[how] : KAKAO_MSG.error;
       });
     }
   }

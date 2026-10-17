@@ -50,7 +50,7 @@ BL.card = (function () {
     roundRect(x, 48, 48, W - 96, heroH, 56); x.fillStyle = tc[0]; x.fill();
 
     x.fillStyle = tc[1]; x.font = '800 28px ' + FONT; x.fillText('두뇌실험실', 80, 112);
-    x.globalAlpha = 0.78; x.font = '500 32px ' + FONT; x.fillText(test.title, 80, 176); x.globalAlpha = 1;
+    x.globalAlpha = 0.78; x.font = '500 32px ' + FONT; x.fillText(test.title + (result.modeLabel ? ' · ' + result.modeLabel : ''), 80, 176); x.globalAlpha = 1;
 
     x.fillStyle = tc[1];
     let size = 88;
@@ -109,7 +109,7 @@ BL.card = (function () {
     x.fillStyle = '#fff8f1'; x.fillRect(0, 0, SQ, SQ);
     roundRect(x, 32, 32, SQ - 64, heroH, 40); x.fillStyle = tc[0]; x.fill();
     x.fillStyle = tc[1]; x.font = '800 24px ' + FONT; x.fillText('두뇌실험실', 64, 86);
-    x.globalAlpha = 0.78; x.font = '500 26px ' + FONT; x.fillText(test.title, 64, 126); x.globalAlpha = 1;
+    x.globalAlpha = 0.78; x.font = '500 26px ' + FONT; x.fillText(test.title + (result.modeLabel ? ' · ' + result.modeLabel : ''), 64, 126); x.globalAlpha = 1;
     let size = 72;
     x.font = '800 ' + size + 'px ' + FONT;
     while (x.measureText(result.headline).width > SQ - 128 && size > 40) { size -= 4; x.font = '800 ' + size + 'px ' + FONT; }
