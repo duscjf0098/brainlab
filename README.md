@@ -16,7 +16,7 @@ node serve.cjs
 - `css/style.css` 밝고 부드러운 테마(2026-10-18, 크림 바탕·둥근 카드·알약 버튼). 색은 `:root` 토큰으로 관리한다. 사용자 결정으로 다크 모드 없이 항상 밝은 화면이다(`color-scheme: only light`, `<meta name="color-scheme" content="only light">`로 휴대폰·카카오톡 브라우저의 강제 어둡게도 막는다). 검사별 파스텔 색은 `.tint-<id>`(바탕·글자·강조·테두리)에 있고, `.tinted`를 붙인 화면은 그 색을 `--accent`로 써서 버튼·진행 막대·결과 막대가 검사 색을 따른다. 첫 화면 카드와 검사 소개의 질문형 제목은 `js/app.js`의 `LOOK`, 공유 이미지 색은 `js/card.js`의 `TINT`.
 - 진행 화면(2026-10-18): 시간 제한이 없는 검사(정서 지능·성격·애착·진로 흥미·연애 스타일)는 "← 이전 문항"으로 돌아가 답을 바꿀 수 있고(전에 고른 답이 표시됨), 이미 답한 문항에서는 "다음 →"으로 넘어간다. 인지 검사는 제한 시간과 적응형 진행 때문에 되돌리기를 두지 않는다.
 - `js/util.js` 난수(seeded RNG), HTML 이스케이프, 저장소 유틸.
-- `js/stats.js` 익명 응시 통계: 인지 검사 결과의 과제별 원점수를 수집 서버에 보내고(끌 수 있음), 집계를 받아 결과 화면에 "실제 응시자 n명 기준 상위 %"를 붙인다. 서버는 `server/`(Cloudflare Workers + D1), 기준값 생성은 `tools/norms-from-stats.cjs`. 자세한 것은 "익명 통계 서버".
+- `js/stats.js` 익명 응시 통계: 인지 검사의 문항별 정답 여부·응답 시간과 과제별 원점수를 이름 없이 수집 서버에 보내고(끌 수 있음), 집계를 받아 결과 화면에 "실제 응시자 n명 기준 상위 %"를 붙인다. 서버는 `server/`(Cloudflare Workers + D1), 기준값 생성은 `tools/norms-from-stats.cjs`. 자세한 것은 "익명 통계 서버".
 - `js/tests/*.js` 검사 정의. 각 파일은 `BL.tests.<id> = { build(), score(answers, items), ... }` 를 등록한다. 검사 정의에 `related: [{ id, why }]`를 두면 결과 화면 맨 아래에 그 검사로 가는 "이어서 해 보기" 카드가 붙는다(애착 ↔ 연애 스타일).
 - `js/card.js` 결과 카드 PNG 생성(1080×1350), 저장, 공유.
 - `js/app.js` 해시 라우팅, 문항 렌더러(choice / likert / digitspan / reaction / section), 결과·기록·안내 화면.
@@ -90,7 +90,7 @@ node serve.cjs
 - 정서 지능, 애착, 연애 스타일 문항은 이 사이트를 위해 직접 썼다. 연애 스타일은 존 리의 이론(개념)만 빌렸고 Hendrick의 사랑 태도 척도(LAS) 문항은 옮기지 않았다.
 - 진로 흥미 문항도 이 사이트를 위해 직접 썼고, 홀랜드의 여섯 유형 이론(개념)만 빌렸다. 공개 흥미 문항 모음(IIP)의 기초 흥미 척도(BIM, Liao·Armstrong·Rounds 2008)는 저자 저작권이 있고 전문가의 비상업적 사용만 무료로 허락되어 있어(2026-10-18 WSU 연구실 페이지 확인) 쓰지 않았다. RIASEC 마커는 O*NET 흥미 검사 문항에서 나온 것이라 역시 쓰지 않았고, 워크넷 직업흥미검사 문항도 옮기지 않았다. 결과의 직업은 예시로만 보여 주고, 흥미는 적성·능력과 다르다는 안내를 모든 결과에 붙인다.
 - 모든 결과 화면에 "참고용 자기평가" 면책 문구가 붙는다. IQ 숫자나 진단 표현은 쓰지 않는다.
-- 개인정보를 받지 않으며 결과는 localStorage에만 저장된다. 인지 검사 결과의 과제별 원점수만 익명 통계로 보낼 수 있고(기본 참여, 첫 결과 화면과 안내 페이지에서 끌 수 있음), 서버에도 이름·연락처·IP를 저장하지 않는다("익명 통계 서버").
+- 개인정보를 받지 않으며 결과는 localStorage에만 저장된다. 인지 검사의 문항별 정답 여부(문항 내용이 아니라 번호)·응답 시간과 과제별 원점수만 익명 통계로 보낼 수 있고(기본 참여, 첫 결과 화면과 안내 페이지에서 끌 수 있음), 서버에도 이름·연락처·IP·기기 식별자·정확한 시각을 저장하지 않는다("익명 통계 서버"). 문항 자체는 바꾸지 않았다.
 
 ## 검색 노출과 공유
 
@@ -108,14 +108,14 @@ node serve.cjs
 
 인지 검사의 임시 기준값(`NORMS`·`LEVEL_P`)을 실제 응시 자료로 보정하기 위해, 2026-10-18부터 결과의 과제별 원점수를 익명으로 모은다. 정적 사이트는 그대로 GitHub Pages에 있고, 수집 서버만 Cloudflare Workers + D1에 둔다(무료 티어: 하루 요청 10만 건, D1 읽기 500만·쓰기 10만 행, 저장 5GB. 이 사이트 규모에는 충분하다).
 
-- 보내는 것(`js/stats.js`, 인지 검사만): 검사 id, 모드, 시간 설정, 결과 시각, 기준값 버전(`NORMS_VERSION`), 종합 z, 과제별 { z, 정답 수·문항 수, 단계별 정답 수(`levels`), 적응형 여부, 기억 폭, 반응 시간 중앙값, 정확도, 터치 여부 }. 원점수는 `cognitive.js`의 `taskStats`가 `tasks[k].obs`에 넣는다(z 계산 전 값). 이름·이메일·IP·User-Agent는 받지도 저장하지도 않는다. `sid`는 결과마다 브라우저가 만든 무작위 값으로 같은 결과를 두 번 보내는 것만 막는다.
+- 보내는 것(`js/stats.js`, 인지 검사만): 검사 id, 모드, 시간 설정, 입력 방식(터치/마우스, `pointer: coarse`), 기준값 버전(`NORMS_VERSION`), 종합 z, 과제별 { z, 정답 수·문항 수, 단계별 정답 수(`levels`), 적응형 여부, 문항마다 `[풀 번호, 단계, 정답 1·오답 0·시간 초과 -1, 응답 시간(0.1초)]`(`items`), 기억 폭, 반응 시간 중앙값, 정확도, 터치 여부 }. 원점수는 `cognitive.js`의 `taskStats`가 `tasks[k].obs`에 넣는다(z 계산 전 값). 풀 번호는 언어 4과제의 고정 문항 풀 번호(`choiceItems`가 붙이는 `pid`, 풀은 뒤에만 붙이므로 번호가 바뀌지 않는다)이고, 그때그때 만드는 도형·숫자 문항은 -1과 단계만 보낸다. 문항 내용, 이름·이메일·IP·User-Agent·기기 식별자·정확한 시각은 보내지도 저장하지도 않는다. 서버는 받은 날짜만 일 단위(UTC)로 남긴다. `sid`는 결과마다 브라우저가 새로 만든 무작위 값으로 같은 결과를 두 번 보내는 것만 막는다.
 - 참여는 기본값. 인지 검사 결과를 처음 볼 때 한 번 안내(`.stats-notice`)와 스위치가 나오고, 안내 페이지(`#/about`)에서도 끌 수 있다(localStorage `bl.stats.share`가 `false`면 참여 안 함). 보내기는 큐(`bl.stats.queue`)에 넣어 결과 화면에서(첫 안내가 보일 때는 끌 시간을 주려고 8초 뒤, 화면을 먼저 떠나면 그때) 또는 다음 방문 때 보내고, 실패(429·5xx)하면 큐에 남긴다. 종합 프로필·미리보기는 보내지 않는다. `js/config.js`의 `statsUrl`이 비어 있으면 모든 기능이 꺼지고 안내·스위치도 나오지 않는다.
-- 서버(`server/src/index.js`): `POST /submit`(모양·범위 검증 뒤 저장, 본문 16KB 제한, `ALLOWED_ORIGINS`의 Origin만, IP당 60초 20회), `GET /stats`(집계), `GET /export`(원자료, `Authorization: Bearer <ADMIN_TOKEN>`, 토큰을 안 넣었으면 404), `GET /`(받은 결과 수·집계 시각). GET도 IP당 60초 60회. 빈도 제한은 Cloudflare의 `ratelimits` 바인딩(순간 계수기)이라 IP가 어디에도 남지 않는다. 표(`server/schema.sql`): `submissions`(결과 하나, payload JSON)·`task_rows`(과제 하나씩, 집계용)·`stats_cache`(집계 한 벌).
+- 서버(`server/src/index.js`): `POST /submit`(모양·범위 검증 뒤 저장, 본문 16KB 제한, `ALLOWED_ORIGINS`의 Origin만, IP당 60초 20회), `GET /stats`(집계), `GET /export`(원자료, `Authorization: Bearer <ADMIN_TOKEN>`, 토큰을 안 넣었으면 404), `GET /`(받은 결과 수·집계 시각). GET도 IP당 60초 60회. 빈도 제한은 Cloudflare의 `ratelimits` 바인딩(순간 계수기)이라 IP가 어디에도 남지 않는다. 표(`server/schema.sql`): `submissions`(결과 하나, payload JSON)·`task_rows`(과제 하나씩, 집계용)·`stats_cache`(집계 한 벌). Workers 로그 저장(`observability`)은 꺼 두어 요청 정보가 Cloudflare에 남지 않는다(실시간 확인은 `npx wrangler tail`). 모르는 필드는 버린다(예: 정확한 시각을 보내도 저장 안 됨).
 - 집계는 계산해서 `stats_cache`에 담아 두고 1시간마다(표본이 60명 미만이면 1분마다) 다시 계산한다. workers.dev 주소에서는 Cache API가 동작하지 않고, 요청마다 계산하면 D1 무료 읽기 한도(하루 500만 행)를 금방 쓰기 때문이다. 한 번 계산에 최근 결과 1만 개(`MAX_ROWS`)까지 읽어 하루 최대 약 250만 행이다. `?fresh=1`은 `ADMIN_TOKEN`을 함께 보낼 때만 바로 다시 계산한다.
-- 집계 내용: 과제별 응시자 수, 과제 z의 평균·표준편차·백분위(0~100, 101개 값; 표본이 `MIN_SAMPLE`=30 미만이면 `q: null`), 정답률 과제는 단계별 문항·정답 수(정밀 검사 응답은 `nFull`·`cFull`로 따로)와 응시자별 정답률 분포, 폭·개수 과제는 값별 인원, 반응 시간은 중앙값의 평균·표준편차(전체·마우스·터치)와 분포, 종합 z는 모드(adaptive·quick·full)별 백분위. 표준 시간(`time_factor` 1)으로 푼 결과만 집계하고 나머지는 `excludedNonStandardTime`으로 센다.
-- 결과 화면(`mountStats`): 집계가 오고 그 분포의 표본이 30명 이상이면 배지 아래에 "실제 응시자 n명 기준 상위 %"(모드별 종합 분포, 과제별 검사는 그 과제 분포), 과제 막대 옆에 "실제 상위 % (n명)"가 붙는다. 30명 미만이면 아무것도 나오지 않는다. 종합 프로필은 과제별로만 비교한다. 백분위는 같은 값을 가운데 등수로 세고 1~99%로 자른다.
+- 집계 내용: 과제별 응시자 수, 과제 z의 평균·표준편차·백분위(0~100, 101개 값; 표본이 `MIN_SAMPLE`=30 미만이면 `q: null`), 정답률 과제는 단계별 문항·정답 수(정밀 검사 응답은 `nFull`·`cFull`로 따로)와 응시자별 정답률 분포, 폭·개수 과제는 값별 인원, 반응 시간은 중앙값의 평균·표준편차(전체·마우스·터치)와 분포, 종합 z는 모드(adaptive·quick·full)별 백분위. 표준 시간(`time_factor` 1)으로 푼 결과만 집계하고 나머지는 `excludedNonStandardTime`으로 센다. 문항 기록이 있으면 단계별 시간 초과 수(`miss`)·평균 응답 시간(`t`, 초)과 언어 풀 문항별 정답률(`pool`)도 낸다. 입력 방식별 인원은 `device`.
+- 결과 화면(`mountStats`): 집계가 오고 그 분포의 표본이 30명 이상이면 배지 아래에 "실제 응시자 n명 기준 상위 %"(모드별 종합 분포, 과제별 검사는 그 과제 분포), 과제 막대 옆에 "실제 상위 % (n명)"가 붙는다. 30명 미만이면 아무것도 나오지 않는다. 종합 프로필은 과제별로만 비교한다. 백분위는 같은 값을 가운데 등수로 세고 1~99%로 자른다. 기준값이 실제 자료로 보정된 판이면(버전 이름 `data-<날짜>-n<명>`) 배지 아래에 "기준값 · 응시자 N명 자료 반영"이 붙는다. 설계값(`design-…`)이면 붙지 않는다.
 
-배포(처음 한 번, `server` 폴더에서):
+배포(처음 한 번, `server` 폴더에서). Cloudflare 무료 계정이 필요하고 로그인(`wrangler login`)은 사용자가 직접 승인한다. 비밀 값은 저장소에 넣지 않는다:
 
 ```
 cd server
@@ -138,7 +138,7 @@ npx wrangler deploy
 - 상태: `/` → 받은 결과 수(지운 것 포함)와 집계 표본 수, `/stats` → 집계, `npx wrangler tail` → 실시간 로그.
 - 시험 자료: `node tools/fake-submit.cjs <서버 주소> 35 mix`가 그럴듯한 가짜 결과를 보낸다(`norms='fake-test'`로 표시, 빈도 제한에 걸리면 60초 기다렸다 이어 보냄, 환경 변수 `ADMIN_TOKEN`이 있으면 집계를 바로 다시 계산). 실제 자료와 섞이지 않게 확인이 끝나면 지운다: `npx wrangler d1 execute brainlab-stats --remote --command "DELETE FROM task_rows WHERE sid IN (SELECT sid FROM submissions WHERE norms='fake-test'); DELETE FROM submissions WHERE norms='fake-test'"`.
 - 로컬 개발: `cd server`, `npx wrangler d1 execute brainlab-stats --local --file=schema.sql`, `npx wrangler dev --port 8787`(관리 토큰은 `server/.dev.vars`에 `ADMIN_TOKEN=...`, gitignore). `js/config.js`의 `statsUrl`을 `http://127.0.0.1:8787`로 바꾸고 `node serve.cjs`(5173, 허용 Origin에 있음)로 사이트를 띄운다. 커밋할 때 `statsUrl`을 배포 주소로 되돌린다.
-- 기준값 보정: `node tools/norms-from-stats.cjs https://brainlab-stats.<계정>.workers.dev` → 바뀌는 값과 새 `LEVEL_P`·`NORMS` 블록을 보여 준다. `--write`를 붙이면 `js/tests/cognitive.js`에 쓰고 `NORMS_VERSION`을 `data-<날짜>-n<표본>`으로 올린다. 규칙: 단계별 정답률은 정밀 검사 응답이 40개(`--min-items`) 이상이면 그 값, 아니면 적응형을 합친 값(그 단계에 도달한 사람만 푸니 치우침이 있어 출력에 `~`로 표시), 그것도 모자라면 지금 값을 둔다. 단계가 오를수록 내려가게 다듬고(인접 위반 합치기) 0.05~0.97로 자른다. 폭·개수·반응 시간은 응시자 30명(`--min`) 이상이면 평균·표준편차(반응 시간은 마우스 응시자 우선, 모자라면 터치 몫 30ms×터치 비율을 뺀 전체). `OBS`(영역·종합 규준화)는 바꾸지 않고 참고 수치(z 표준편차·정답률 과제 z 평균)만 찍는다. 상관(within·between)은 `/export` 원자료에서 따로 구해야 한다. 쓴 뒤에는 `NORMS` 위 주석("임시 기준값")과 이 README "검사 구성"의 기준값 설명을 손본다.
+- 기준값 보정: `node tools/norms-from-stats.cjs https://brainlab-stats.<계정>.workers.dev` → 바뀌는 값, 새 `LEVEL_P`·`NORMS` 블록, 실제 정답률이 단계의 기대 정답률과 0.15 넘게 어긋나는 언어 문항(30회 이상 푼 것)을 보여 준다. 자료가 수백 명 쌓이기 전에는 설계값을 그대로 쓴다: `--write`는 표본이 300명(`--min-people`) 이상일 때만 `js/tests/cognitive.js`에 쓰고(시험용은 `--force`), `NORMS_VERSION`을 `data-<날짜>-n<표본>`으로 올려 결과 화면에 "응시자 N명 자료 반영"이 나오게 한다. 규칙: 단계별 정답률은 정밀 검사 응답이 100개(`--min-items`) 이상이면 그 값, 아니면 적응형을 합친 값(그 단계에 도달한 사람만 푸니 치우침이 있어 출력에 `~`로 표시), 그것도 모자라면 지금 값을 둔다. 단계가 오를수록 내려가게 다듬고(인접 위반 합치기) 0.05~0.97로 자른다. 폭·개수·반응 시간은 응시자 30명(`--min`) 이상이면 평균·표준편차(반응 시간은 마우스 응시자 우선, 모자라면 터치 몫 30ms×터치 비율을 뺀 전체). `OBS`(영역·종합 규준화)는 바꾸지 않고 참고 수치(z 표준편차·정답률 과제 z 평균)만 찍는다. 상관(within·between)은 `/export` 원자료에서 따로 구해야 한다. 쓴 뒤에는 `NORMS` 위 주석("임시 기준값")과 이 README "검사 구성"의 기준값 설명을 손본다.
 - 가짜 자료를 지운 뒤에 보정한다. 옛 기준값으로 낸 z도 집계에 섞이지만 원점수(정답 수·폭·반응 시간)는 그대로라 보정 자체에는 문제없고, 백분위 비교만 조금 흐려진다. 보정 뒤 쌓인 자료만 쓰려면 `/export`에서 `norms`로 걸러 낸다.
 
 ## 배포

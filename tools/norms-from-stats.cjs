@@ -1,7 +1,9 @@
 /* 집계(/stats) → cognitive.js 의 LEVEL_P·NORMS 상수 생성. 실제 응시 자료로 임시 기준값을 갈아끼우는 길.
-   node tools/norms-from-stats.cjs <stats 주소 또는 저장한 JSON 파일> [--min 30] [--min-items 40] [--write] [--root <저장소>]
-   - 보기만: 바뀌는 값과 새 상수 블록을 출력한다.
+   node tools/norms-from-stats.cjs <stats 주소 또는 저장한 JSON 파일> [--min 30] [--min-items 100] [--min-people 300] [--write [--force]] [--root <저장소>]
+   - 보기만: 바뀌는 값, 새 상수 블록, 단계와 실제 정답률이 어긋나는 언어 문항을 출력한다.
    - --write: js/tests/cognitive.js 의 const LEVEL_P = {…}; / const NORMS = {…}; 블록을 바꾸고 NORMS_VERSION 을 'data-<날짜>-n<표본>' 으로 올린다.
+     결과 화면에 "기준값 · 응시자 N명 자료 반영"이 붙는다(js/app.js 가 버전 이름에서 N을 읽음).
+     표본이 --min-people(기본 300명) 미만이면 쓰지 않는다. 그 전에는 설계값을 그대로 쓴다. 시험 삼아 쓰려면 --force.
    규칙:
    - LEVEL_P(단계별 정답률): 정밀 검사(단계표대로 푼) 응답이 단계마다 --min-items 개 이상이면 그 정답률, 아니면 적응형을 합친 정답률(적응형은 그 단계에
      도달한 사람만 푸니 치우침이 있어 "~" 표시), 그것도 모자라면 지금 값을 둔다. 단계가 올라갈수록 정답률이 내려가도록 다듬고(인접 위반 합치기) 0.05~0.97 로 자른다.
@@ -14,17 +16,19 @@ const path = require('path');
 const vm = require('vm');
 
 const args = process.argv.slice(2);
-const opt = { min: 30, minItems: 40, write: false, root: path.resolve(__dirname, '..') };
+const opt = { min: 30, minItems: 100, minPeople: 300, write: false, force: false, root: path.resolve(__dirname, '..') };
 let src = null;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a === '--min') opt.min = Number(args[++i]);
   else if (a === '--min-items') opt.minItems = Number(args[++i]);
+  else if (a === '--min-people') opt.minPeople = Number(args[++i]);
   else if (a === '--write') opt.write = true;
+  else if (a === '--force') opt.force = true;
   else if (a === '--root') opt.root = path.resolve(args[++i]);
   else src = a;
 }
-if (!src) { console.error('사용법: node tools/norms-from-stats.cjs <stats 주소 또는 JSON 파일> [--min 30] [--min-items 40] [--write]'); process.exit(1); }
+if (!src) { console.error('사용법: node tools/norms-from-stats.cjs <stats 주소 또는 JSON 파일> [--min 30] [--min-items 100] [--min-people 300] [--write [--force]]'); process.exit(1); }
 
 const PROP_KEYS = ['matrix', 'figAnalogy', 'series', 'sequence', 'weights', 'analogy', 'vocab', 'logic', 'similar', 'rotation', 'fold', 'blocks'];
 const KINDS = { digitF: 'span', digitB: 'span', grid: 'span', lns: 'span', reaction: 'rt', choicert: 'rt', stroop: 'rt', symbol: 'count' };
@@ -126,7 +130,23 @@ const f1 = function (x) { return (Math.round(x * 10) / 10).toFixed(1); };
   console.log('OBS 참고: spread(z 표준편차) ' + Object.keys(spread).map(function (k) { return k + ' ' + f2(avg(spread[k])); }).join(' · ') + ' / shift(정답률 과제 z 평균) adaptive ' + (shift.adaptive.length ? f2(avg(shift.adaptive)) : '자료 부족') + ', full ' + (shift.full.length ? f2(avg(shift.full)) : '자료 부족'));
   console.log(eol + '  const LEVEL_P = ' + fmtLP(newLP) + ';');
   console.log('  const NORMS = ' + fmtNM(newNM) + ';');
-  if (!opt.write) { console.log(eol + '(--write 를 붙이면 js/tests/cognitive.js 에 바로 쓴다)'); return; }
+  /* 언어 풀 문항: 실제 정답률이 그 문항 단계의 (새) 기대 정답률과 0.15 넘게 어긋나면 단계를 다시 볼 후보로 출력 (문항을 30번 이상 푼 것만) */
+  const flagged = [];
+  PROP_KEYS.forEach(function (k) {
+    const t = stats.tasks && stats.tasks[k];
+    if (!t || !t.pool) return;
+    const lp = newLP[k] || newLP.default;
+    Object.keys(t.pool).forEach(function (i) {
+      const e = t.pool[i];
+      if (e.n < 30 || lp[e.level] == null) return;
+      const d = e.p - lp[e.level];
+      if (Math.abs(d) > 0.15) flagged.push(k + ' ' + i + '번(' + e.level + '단계): 실제 ' + f2(e.p) + ' / 기대 ' + f2(lp[e.level]) + ' (' + e.n + '회, 시간 초과 ' + e.miss + ', 평균 ' + e.t + '초) → ' + (d > 0 ? '더 쉬움' : '더 어려움'));
+    });
+  });
+  console.log(eol + '단계를 다시 볼 언어 문항(30회 이상, 기대 정답률과 0.15 넘게 차이): ' + (flagged.length ? '' : '없음'));
+  flagged.forEach(function (l) { console.log('  ' + l); });
+  if (!opt.write) { console.log(eol + '(--write 를 붙이면 js/tests/cognitive.js 에 바로 쓴다. 표본 ' + opt.minPeople + '명 미만이면 쓰지 않는다)'); return; }
+  if (stats.n < opt.minPeople && !opt.force) { console.log(eol + '표본 ' + stats.n + '명이 --min-people ' + opt.minPeople + '명보다 적어서 쓰지 않았다. 설계값을 그대로 둔다(시험 삼아 쓰려면 --force).'); return; }
   const ver = 'data-' + new Date().toISOString().slice(0, 10) + '-n' + stats.n;
   text = text.replace(LP.all, LP.head + fmtLP(newLP) + ';').replace(NM.all, NM.head + fmtNM(newNM) + ';');
   if (!/const NORMS_VERSION = '[^']*'/.test(text)) throw new Error('NORMS_VERSION 을 찾지 못했다');

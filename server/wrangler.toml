@@ -5,8 +5,9 @@ main = "src/index.js"
 compatibility_date = "2026-09-01"
 workers_dev = true
 
+# Workers 로그 저장은 끈다(요청 정보가 Cloudflare에 남지 않게). 실시간으로만 보려면 npx wrangler tail.
 [observability]
-enabled = true
+enabled = false
 
 [vars]
 # 전송(POST /submit)을 받아 주는 사이트 주소. 쉼표로 구분. 로컬 미리보기(node serve.cjs)도 포함.

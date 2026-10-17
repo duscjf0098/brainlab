@@ -13,6 +13,7 @@ const LEVEL_P = { default: { 1: 0.92, 2: 0.80, 3: 0.62, 4: 0.42, 5: 0.25, 6: 0.1
 const SPAN = { digitF: [7.0, 1.1], digitB: [5.2, 1.2], grid: [6.0, 1.1], lns: [5.3, 1.1] };
 const RT = { reaction: [280, 45], choicert: [480, 80], stroop: [800, 130] };
 const QUICK = ['matrix', 'sequence', 'vocab', 'rotation', 'fold', 'digitB', 'symbol'];
+const POOL_SIZE = { analogy: 35, vocab: 35, logic: 35, similar: 35 };   // 언어 풀: 단계마다 7개 (가짜 번호)
 
 function randn() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -23,17 +24,21 @@ function propTask(key, ability, full) {
   const LP = LEVEL_P[key] || LEVEL_P.default, maxL = Object.keys(LP).length;
   const seq = full ? (key === 'matrix' ? [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6] : key === 'series' ? [1, 1, 2, 2, 3, 3] : [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]) : null;
   const n = full ? seq.length : PROP[key];
-  const levels = {};
+  const levels = {}, items = [], pool = POOL_SIZE[key] ? [] : null;
   let level = 3, c = 0;
   for (let i = 0; i < n; i++) {
     const l = full ? seq[i] : level;
     const b = Math.log((1 - LP[l]) / LP[l]);
     const ok = Math.random() < 0.2 + 0.8 / (1 + Math.exp(-(ability - b)));
+    const miss = !ok && Math.random() < 0.05;
     levels[l] = levels[l] || { n: 0, c: 0 }; levels[l].n++;
     if (ok) { levels[l].c++; c++; }
+    let pid = -1;
+    if (pool) { do { pid = (l - 1) * 7 + Math.floor(Math.random() * 7); } while (pool.indexOf(pid) >= 0); pool.push(pid); }
+    items.push([pid, l, ok ? 1 : miss ? -1 : 0, Math.round(50 + Math.random() * 250)]);
     if (!full) level = clamp(level + (ok ? 1 : -1), 1, maxL);
   }
-  return { z: r3(clamp(ability + 0.4 * randn(), -3, 3)), n, c, levels, adaptive: !full, rtAvg: Math.round(8 + Math.random() * 20) };
+  return { z: r3(clamp(ability + 0.4 * randn(), -3, 3)), n, c, levels, items, adaptive: !full, rtAvg: Math.round(8 + Math.random() * 20) };
 }
 function make(mode) {
   const g = randn();
@@ -50,7 +55,7 @@ function make(mode) {
   });
   const zs = Object.values(tasks).map(t => t.z), m = zs.length;
   const overall = r3(clamp(zs.reduce((s, z) => s + z, 0) / Math.sqrt(m * (1 + (m - 1) * 0.25)), -3, 3));
-  return { sid: sid(), testId: 'cognitive', mode, timeFactor: 1, at: Date.now(), norms: 'fake-test', overall, tasks };
+  return { sid: sid(), testId: 'cognitive', mode, timeFactor: 1, device: Math.random() < 0.6 ? 'touch' : 'mouse', norms: 'fake-test', overall, tasks };
 }
 async function post(p) {
   for (let tries = 0; tries < 5; tries++) {

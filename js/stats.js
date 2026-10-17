@@ -1,7 +1,8 @@
 /* 익명 응시 통계 (2026-10-18). 인지 능력 검사 결과의 과제별 원점수를 익명으로 수집 서버(server/, Cloudflare Workers + D1)에 보내고,
    집계를 받아 결과 화면에 "실제 응시자 n명 기준 상위 %"를 보여 준다.
-   - 보내는 것: 검사 id, 모드, 시간 설정, 결과 시각, 기준값 버전, 종합 z, 과제별 { z, 정답 수·문항 수, 단계별 정답 수, 적응형 여부,
-     기억 폭, 반응 시간 중앙값, 정확도, 터치 여부 } (cognitive.js taskStats 의 obs). 이름·연락처·기기 정보는 없다.
+   - 보내는 것: 검사 id, 모드, 시간 설정, 터치/마우스, 기준값 버전, 종합 z, 과제별 { z, 정답 수·문항 수, 단계별 정답 수, 적응형 여부,
+     문항마다 [풀 번호(생성 문항은 -1), 단계, 정답 여부, 응답 시간], 기억 폭, 반응 시간 중앙값, 정확도, 터치 여부 } (cognitive.js taskStats 의 obs).
+     이름·연락처·IP·기기 식별자·정확한 시각·문항 내용은 보내지 않는다(날짜는 서버가 일 단위로만 붙인다).
      sid 는 결과마다 새로 만드는 무작위 값으로, 같은 결과를 두 번 보내는 것만 막는다.
    - 참여가 기본값이고, 첫 결과 화면과 안내 페이지의 스위치로 끌 수 있다(localStorage bl.stats.share = false).
    - 보내기는 큐(bl.stats.queue)에 넣고 결과 화면에서(처음 안내가 보이면 8초 뒤) 또는 다음 방문 때 보낸다. 실패(429, 5xx)하면 큐에 남겨 다시 보낸다.
@@ -38,11 +39,19 @@
     });
     if (!Object.keys(tasks).length) return null;
     const p = { sid: result.sid || newId(), testId: 'cognitive', mode: typeof result.mode === 'string' ? result.mode : 'adaptive',
-      timeFactor: typeof result.timeFactor === 'number' ? result.timeFactor : 1, at: result.at || Date.now(), tasks: tasks };
+      timeFactor: typeof result.timeFactor === 'number' ? result.timeFactor : 1, tasks: tasks };
+    const dev = device();
+    if (dev) p.device = dev;
     if (typeof result.norms === 'string') p.norms = result.norms;
     if (typeof result.z === 'number') p.overall = r3(result.z);
     return p;
   }
+  /* 입력 방식(터치/마우스)만. 반응 시간 기준값을 나눠 보는 데 쓴다. 기기 종류·모델은 보지 않는다. */
+  function device() {
+    try { return window.matchMedia ? (matchMedia('(pointer: coarse)').matches ? 'touch' : 'mouse') : null; } catch (e) { return null; }
+  }
+  /* 결과를 낸 기준값에 반영된 실제 응시자 수. 버전 이름 'data-<날짜>-n<명>'에서 읽는다. 설계값('design-…')이면 0. */
+  function normsN(version) { const m = /-n(\d+)$/.exec(String(version || '')); return m ? Number(m[1]) : 0; }
   function queue() { const q = U.store.get(QUEUE_KEY, []); return Array.isArray(q) ? q : []; }
   function enqueue(result) {
     if (!enabled()) return false;
@@ -98,5 +107,5 @@
     return { n: dist.n, top: U.clamp(Math.round(100 - pct), 1, 99) };
   }
   BL.stats = { available: available, enabled: enabled, setEnabled: setEnabled, noticed: noticed, markNoticed: markNoticed, newId: newId, modeKind: modeKind,
-    payloadOf: payloadOf, enqueue: enqueue, flush: flush, get: get, topPct: topPct, MIN_N: MIN_N };
+    payloadOf: payloadOf, enqueue: enqueue, flush: flush, get: get, topPct: topPct, normsN: normsN, MIN_N: MIN_N };
 })();

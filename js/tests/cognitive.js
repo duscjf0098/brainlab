@@ -785,7 +785,8 @@
         type: 'choice', part: part, scored: true, level: v.level, timeLimit: tl,
         scenario: withPremise ? v.premise : undefined,
         prompt: withPremise ? (v.options.length && v.premise.indexOf('거짓말') >= 0 ? '거짓말을 하는 사람은 누구일까요?' : '다음 문장이 모두 참일 때, 반드시 참인 것은?') : v.prompt,
-        options: o.options, answer: o.answer, optionCols: cols, explain: v.explain
+        options: o.options, answer: o.answer, optionCols: cols, explain: v.explain,
+        pid: POOL[part] ? POOL[part].indexOf(v) : undefined   // 고정 문항 풀의 번호 (익명 통계에 문항 내용 대신 보낸다)
       };
     });
   }
@@ -1496,7 +1497,7 @@
       const adaptive = rows.some(function (x) { return x.it.adaptive; });
       const top = rows.filter(function (x) { return x.a === x.it.answer && x.it.level; }).map(function (x) { return x.it.level; });
       const maxReached = top.length ? Math.max.apply(null, top) : 0;
-      return { z: U.clamp(theta, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (adaptive ? (lvText ? ' · ' : '') + '맞힌 최고 단계 ' + maxReached : '') + (avg != null ? ' · 평균 ' + avg + '초' : ''), meanP: adaptive ? undefined : Math.round(meanP * 100), obs: propObs(n, c, lv, adaptive, avg) };
+      return { z: U.clamp(theta, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (adaptive ? (lvText ? ' · ' : '') + '맞힌 최고 단계 ' + maxReached : '') + (avg != null ? ' · 평균 ' + avg + '초' : ''), meanP: adaptive ? undefined : Math.round(meanP * 100), obs: propObs(rows, n, c, lv, adaptive, avg) };
     }
     if (norm.kind === 'span') {
       const it = rows[0].it;
@@ -1533,11 +1534,15 @@
     return { z: z, raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: '정확도 ' + Math.round(acc * 100) + '%' + extra + tnote, obs: med == null ? null : { value: med, acc: acc, touch: touch } };
   }
 
-  /* 익명 통계용 원점수(z 계산 전 값). 결과의 tasks[k].obs 에 들어가고 js/stats.js 가 보낸다. */
-  function propObs(n, c, lv, adaptive, avg) {
+  /* 익명 통계용 원점수(z 계산 전 값). 결과의 tasks[k].obs 에 들어가고 js/stats.js 가 보낸다.
+     items = 문항마다 [풀 번호(생성 문항은 -1), 단계, 정답 1·오답 0·시간 초과 -1, 응답 시간(0.1초)]. 문항 내용은 넣지 않는다. */
+  function propObs(rows, n, c, lv, adaptive, avg) {
     const levels = {};
     Object.keys(lv).forEach(function (l) { if (l !== '0') levels[l] = { n: lv[l].n, c: lv[l].c }; });
-    const o = { n: n, c: c, levels: levels, adaptive: adaptive };
+    const items = rows.map(function (x) {
+      return [typeof x.it.pid === 'number' && x.it.pid >= 0 ? x.it.pid : -1, x.it.level || 0, x.a == null ? -1 : x.a === x.it.answer ? 1 : 0, typeof x.t === 'number' ? Math.round(x.t / 100) : null];
+    });
+    const o = { n: n, c: c, levels: levels, adaptive: adaptive, items: items };
     if (avg != null) o.rtAvg = avg;
     return o;
   }
