@@ -50,7 +50,7 @@
   function device() {
     try { return window.matchMedia ? (matchMedia('(pointer: coarse)').matches ? 'touch' : 'mouse') : null; } catch (e) { return null; }
   }
-  /* 결과를 낸 기준값에 반영된 실제 응시자 수. 버전 이름 'data-<날짜>-n<명>'에서 읽는다. 설계값('design-…')이면 0. */
+  /* 결과를 낸 기준값에 반영된 실제 응시자 수. 버전 이름 'data-<날짜>-n<명>'에서 읽는다. 실제 자료가 아닌 판(설계값 'design-…', AI 추정값 'ai-est-…' 등)이면 0. */
   function normsN(version) { const m = /-n(\d+)$/.exec(String(version || '')); return m ? Number(m[1]) : 0; }
   function queue() { const q = U.store.get(QUEUE_KEY, []); return Array.isArray(q) ? q : []; }
   function enqueue(result) {
