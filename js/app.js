@@ -877,7 +877,7 @@
       const cleanups = [];   // 문항마다 붙는 키보드 리스너를 화면을 떠날 때 모두 뗀다
       levels.forEach(function (lv) {
         for (let i = 0; i < cnt; i++) {
-          const stub = { type: 'adaptive', part: key, scored: false, count: 999, state: { done: 0, level: lv, max: lv, used: [], levels: [], oks: [] } };
+          const stub = { type: 'adaptive', part: key, scored: false, count: 999, noHistory: true, state: { done: 0, level: lv, max: lv, used: [], levels: [], oks: [] } };
           const it = t.adaptNext(stub);
           if (!it) return;
           it.practice = true;
