@@ -8,7 +8,7 @@
    (레이븐식 회전·논리 연산·선 겹침 규칙, 다단계 수열, 고난도 어휘·삼단논법)을 따른다.
    점수는 IQ 척도(평균 100, 표준편차 15)로 환산한다. 기준값(NORMS, LEVEL_P)은 문항 설계상의 예상 정답률과
    일반 성인 추정치이며 공인 규준이 아니다. 영역·종합 점수는 가상 응시자 시뮬레이션으로 규준화한다(OBS).
-   실제 응시 데이터가 쌓이면 바꿔야 한다.
+   실제 응시 데이터가 쌓이면 바꿔야 한다. 익명 통계(js/stats.js → server/)로 모인 자료는 tools/norms-from-stats.cjs 가 NORMS·LEVEL_P 로 바꿔 준다.
    도형 행렬 · 도형 계열 · 수열 · 도형 회전 · 전개도 접기 · 블록 세기 문항은 규칙 기반으로 매번 새로 생성한다 (원본 문항). */
 (function () {
   const U = BL.util;
@@ -1254,6 +1254,8 @@
     reaction: { kind: 'rt', mean: 280, sd: 45 }, choicert: { kind: 'rt', mean: 480, sd: 80 }, stroop: { kind: 'rt', mean: 800, sd: 130 },
     symbol: { kind: 'count', mean: 24, sd: 6 }
   };
+  /* 기준값 버전. 익명 통계로 보내는 결과에 붙어서 어느 기준값으로 낸 z인지 구분한다. NORMS·LEVEL_P를 바꾸면 함께 바꾼다(tools/norms-from-stats.cjs --write 가 자동으로 바꿈). */
+  const NORMS_VERSION = 'design-2026-10-18';
   /* 터치 화면은 마우스·키보드보다 입력 지연이 길어(대략 30ms) 반응 과제 기준값에 그만큼 더한다. 응답의 절반 이상이 터치면 적용. */
   const TOUCH_MS = 30;
   const IQ_RANGE = [55, 145];
@@ -1494,18 +1496,18 @@
       const adaptive = rows.some(function (x) { return x.it.adaptive; });
       const top = rows.filter(function (x) { return x.a === x.it.answer && x.it.level; }).map(function (x) { return x.it.level; });
       const maxReached = top.length ? Math.max.apply(null, top) : 0;
-      return { z: U.clamp(theta, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (adaptive ? (lvText ? ' · ' : '') + '맞힌 최고 단계 ' + maxReached : '') + (avg != null ? ' · 평균 ' + avg + '초' : ''), meanP: adaptive ? undefined : Math.round(meanP * 100) };
+      return { z: U.clamp(theta, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (adaptive ? (lvText ? ' · ' : '') + '맞힌 최고 단계 ' + maxReached : '') + (avg != null ? ' · 평균 ' + avg + '초' : ''), meanP: adaptive ? undefined : Math.round(meanP * 100), obs: propObs(n, c, lv, adaptive, avg) };
     }
     if (norm.kind === 'span') {
       const it = rows[0].it;
       const s = typeof rows[0].a === 'number' ? rows[0].a : it.start - 1;
-      return { z: U.clamp((s - norm.mean) / norm.sd, -3, 3), raw: Math.max(s, it.start - 1) + (key === 'grid' ? '칸' : key === 'lns' ? '개' : '자리'), detail: '' };
+      return { z: U.clamp((s - norm.mean) / norm.sd, -3, 3), raw: Math.max(s, it.start - 1) + (key === 'grid' ? '칸' : key === 'lns' ? '개' : '자리'), detail: '', obs: { value: Math.max(0, s) } };
     }
     if (norm.kind === 'count') {
       const a = rows[0].a && typeof rows[0].a === 'object' ? rows[0].a : { correct: 0, wrong: 0 };
       const net = Math.max(0, (a.correct || 0) - (a.wrong || 0));
       const tot = (a.correct || 0) + (a.wrong || 0);
-      return { z: U.clamp((net - norm.mean) / norm.sd, -3, 3), raw: net + '개/60초', detail: tot ? '정답 ' + a.correct + ' · 오답 ' + a.wrong + ' · 정확도 ' + Math.round(a.correct / tot * 100) + '%' : '' };
+      return { z: U.clamp((net - norm.mean) / norm.sd, -3, 3), raw: net + '개/60초', detail: tot ? '정답 ' + a.correct + ' · 오답 ' + a.wrong + ' · 정확도 ' + Math.round(a.correct / tot * 100) + '%' : '', obs: { value: net, acc: tot ? a.correct / tot : null } };
     }
     const raw0 = rows[0].a;
     const a = Array.isArray(raw0) ? raw0 : raw0 && Array.isArray(raw0.times) ? raw0.times : [];
@@ -1514,7 +1516,7 @@
     const mean = norm.mean + (touch ? TOUCH_MS : 0), tnote = touch ? ' · 터치 기준' : '';
     if (key === 'reaction') {
       const med = a.length ? U.median(a) : null;
-      return { z: med == null ? -3 : U.clamp((mean - med) / norm.sd, -3, 3), raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: (a.length ? '최고 ' + Math.min.apply(null, a) + 'ms' : '') + tnote };
+      return { z: med == null ? -3 : U.clamp((mean - med) / norm.sd, -3, 3), raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: (a.length ? '최고 ' + Math.min.apply(null, a) + 'ms' : '') + tnote, obs: med == null ? null : { value: med, touch: touch } };
     }
     const ok = a.filter(function (x) { return x.ok; });
     const acc = a.length ? ok.length / a.length : 0;
@@ -1528,7 +1530,16 @@
     const med = pool.length ? U.median(pool.map(function (x) { return x.rt; })) : null;
     let z = med == null ? -3 : U.clamp((mean - med) / norm.sd, -3, 3);
     if (acc < 0.75) z = Math.min(z, -1);
-    return { z: z, raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: '정확도 ' + Math.round(acc * 100) + '%' + extra + tnote };
+    return { z: z, raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: '정확도 ' + Math.round(acc * 100) + '%' + extra + tnote, obs: med == null ? null : { value: med, acc: acc, touch: touch } };
+  }
+
+  /* 익명 통계용 원점수(z 계산 전 값). 결과의 tasks[k].obs 에 들어가고 js/stats.js 가 보낸다. */
+  function propObs(n, c, lv, adaptive, avg) {
+    const levels = {};
+    Object.keys(lv).forEach(function (l) { if (l !== '0') levels[l] = { n: lv[l].n, c: lv[l].c }; });
+    const o = { n: n, c: c, levels: levels, adaptive: adaptive };
+    if (avg != null) o.rtAvg = avg;
+    return o;
   }
 
   /* 과제별 z 모음 → 영역·종합 결과 객체 */
@@ -1585,7 +1596,7 @@
         : '여러 과제를 합친 영역·종합 점수는 실력을 미리 정해 둔 가상 응시자 수천 명에게 같은 문제를 풀게 해 보고, 점수가 이 눈금대로 퍼지도록 맞췄어요. ') +
       '"상위 %"는 그 눈금에서 내 위치고, ±' + U.josa(sem, '은', '는') + ' 오차 범위예요. 실제 값이 그 안에 있을 확률이 70% 정도고, 과제를 많이 풀수록' + (single ? '' : ', 다섯 영역을 고루 풀수록') + ' 범위가 좁아져요. ' +
       (single ? '' : '아주 높거나 낮은 점수에는 그날의 운도 섞이기 쉬워서, 다시 하면 100 쪽으로 조금 돌아오는 경우가 많아요. ') + '점수는 몇 개를 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 각 단계의 난이도는 설계할 때 정한 예상 정답률이라, 실제 응시 데이터로 보정하기 전까지는 공인 지능검사의 IQ와 같다고 볼 수 없어요. 같은 과제를 여러 번 하면 익숙해져서 점수가 올라요.' });
-    return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: tasks, z: z };
+    return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: tasks, z: z, norms: NORMS_VERSION };
   }
 
   function score(answers, items, meta) {
@@ -1655,6 +1666,7 @@
     ],
     build: build,
     score: score,
-    merge: merge
+    merge: merge,
+    normsVersion: NORMS_VERSION
   };
 })();

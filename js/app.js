@@ -237,11 +237,13 @@
     result.mode = session.mode;
     result.at = Date.now();
     result.elapsed = Date.now() - session.startedAt;
+    if (BL.stats) result.sid = BL.stats.newId();   // 익명 통계용 결과 id (무작위, 같은 결과를 두 번 보내지 않게)
     let all = results();
     all.push(result);
     if (all.length > MAX_RESULTS) all = all.slice(all.length - MAX_RESULTS);
     const saved = U.store.set(STORE_KEY, all);
     lastResult = result;
+    if (BL.stats) BL.stats.enqueue(result);   // 익명 통계 참여 중이면 결과 화면에서 보낸다
     session = null;
     U.sstore.remove(SESSION_KEY);
     go('#/result/' + t.id + '/' + (saved ? all.length - 1 : 'last'));
@@ -735,7 +737,7 @@
     const pct = U.clamp((s.value - lo) / (hi - lo) * 100, 0, 100);
     const tick = s.range ? '<div class="bar-tick" style="left:' + ((100 - lo) / (hi - lo) * 100) + '%" title="평균 100"></div>' : '';
     return '<div class="scale' + (child ? ' scale-child' : '') + (s.range ? ' scale-iq' : '') + '"><div class="scale-head"><span>' + U.esc(s.label) + '</span>' +
-      '<span class="mono">' + s.value + (s.raw ? ' <small>' + U.esc(s.raw) + '</small>' : '') + '</span></div>' +
+      '<span class="mono">' + s.value + (s.raw ? ' <small>' + U.esc(s.raw) + '</small>' : '') + (child && s.key ? '<small class="real" data-real="' + U.esc(s.key) + '"></small>' : '') + '</span></div>' +
       '<div class="bar">' + tick + '<div class="bar-fill" style="width:' + pct + '%"></div></div></div>' +
       (s.children && s.children.length ? '<div class="scale-children">' + s.children.map(function (c) { return scaleHtml(c, true); }).join('') + '</div>' : '');
   }
@@ -757,6 +759,15 @@
       return '<a class="profile-card profile-link tinted tint-' + x.id + '" href="#/test/' + x.id + '"><span class="eyebrow">이어서 해 보기</span><span class="profile-main">' + U.esc(BL.tests[x.id].title) + '</span><span class="muted small">' + U.esc(x.why) + '</span></a>';
     }).join('');
   }
+  /* 익명 통계(js/stats.js): 인지 검사 결과를 처음 볼 때 한 번 안내하고 끌 수 있는 스위치를 준다. 종합 프로필·미리보기에는 안 붙인다. */
+  function statsNoticeHtml(t, opts) {
+    if (!BL.stats || !BL.stats.available() || t.id !== 'cognitive' || opts.profile || opts.preview || BL.stats.noticed()) return '';
+    return '<div class="stats-notice" id="stats-notice"><strong>익명 통계에 참여하고 있어요</strong>' +
+      '<p>이 결과의 과제별 점수(정답 수, 기억 폭, 반응 시간)와 검사 종류만 이름·연락처·기기 정보 없이 보내요. 모인 자료로 추정 IQ의 기준값을 다듬고, ' + BL.stats.MIN_N + '명이 넘으면 결과에 "실제 응시자 기준 상위 %"를 함께 보여 드려요. 안내 페이지에서 언제든 바꿀 수 있어요.</p>' +
+      '<label class="switch"><input type="checkbox" id="stats-opt"' + (BL.stats.enabled() ? ' checked' : '') + '><span>익명 통계에 참여</span></label></div>';
+  }
+  /* "실제 응시자 n명 기준 상위 %" 자리. 집계가 오고 표본이 충분하면 mountStats 가 채운다 */
+  function realNormSlot(t) { return BL.stats && BL.stats.available() && t.id === 'cognitive' ? '<p class="real-norm" id="real-overall" hidden></p>' : ''; }
   function resultHtml(t, result, opts) {
     opts = opts || {};
     const sections = (result.sections || []).map(function (sec) {
@@ -767,8 +778,9 @@
       '<a class="back" href="#/">← 실험 목록</a>' +
       '<div class="result-hero"><p class="eyebrow">결과 · ' + U.esc(t.title) + (result.modeLabel ? ' · ' + U.esc(result.modeLabel) : '') + (result.at ? ' · ' + U.fmtDate(result.at) : '') + '</p>' +
       '<h1 class="headline">' + U.esc(result.headline) + '</h1>' +
-      (result.label ? '<span class="badge">' + U.esc(result.label) + '</span>' : '') + '</div>' +
+      (result.label ? '<span class="badge">' + U.esc(result.label) + '</span>' : '') + realNormSlot(t) + '</div>' +
       '<p class="summary">' + U.esc(result.summary) + '</p>' +
+      statsNoticeHtml(t, opts) +
       (result.plot || '') +
       '<div class="scales">' + (result.scales || []).map(function (s) { return scaleHtml(s, false); }).join('') + '</div>' +
       '<div class="actions actions-share">' +
@@ -844,6 +856,31 @@
         note.textContent = KAKAO_MSG[how] !== undefined ? KAKAO_MSG[how] : KAKAO_MSG.error;
       });
     }
+    if (BL.stats && BL.stats.available() && t.id === 'cognitive') return mountStats(result);
+  }
+  /* 익명 통계: 첫 안내의 스위치를 연결하고, 큐에 든 결과를 보내고, 집계가 오면 임시 기준값 옆에 "실제 응시자 기준 상위 %"를 채운다 */
+  function mountStats(result) {
+    const notice = document.getElementById('stats-notice');
+    if (notice) {
+      BL.stats.markNoticed();
+      notice.querySelector('#stats-opt').addEventListener('change', function (e) { BL.stats.setEnabled(e.target.checked); });
+    }
+    // 처음 안내가 보일 때는 끌 시간을 주고 8초 뒤에, 아니면 바로 보낸다. 화면을 먼저 떠나면 그때 보낸다(꺼져 있으면 안 보냄).
+    const timer = setTimeout(function () { BL.stats.flush(); }, notice ? 8000 : 300);
+    BL.stats.get().then(function (stats) {
+      const line = document.getElementById('real-overall');
+      if (!stats || !stats.tasks || !line) return;
+      const kind = result.coverage ? null : BL.stats.modeKind(result.mode);   // 종합 프로필은 과제별로만 비교
+      const dist = kind === 'task' ? (stats.tasks[result.mode.slice(5)] || {}).z : kind ? (stats.overall || {})[kind] : null;
+      const tp = BL.stats.topPct(result.z, dist);
+      if (tp) { line.textContent = '실제 응시자 ' + tp.n + '명 기준 상위 ' + tp.top + '% (표준 시간으로 푼 사람들과 비교)'; line.hidden = false; }
+      document.querySelectorAll('[data-real]').forEach(function (el) {
+        const k = el.getAttribute('data-real'), task = result.tasks && result.tasks[k];
+        const r = task ? BL.stats.topPct(task.z, stats.tasks[k] && stats.tasks[k].z) : null;
+        if (r) el.textContent = '· 실제 상위 ' + r.top + '% (' + r.n + '명)';
+      });
+    });
+    return function () { clearTimeout(timer); BL.stats.flush(); };
   }
   function renderResult(id, idx) {
     const t = BL.tests[id];
@@ -946,7 +983,7 @@
     }
     const result = t.score(answers, items, { times: items.map(function () { return r.int(4000, 20000); }), mode: mode });
     result.testId = id; result.at = Date.now();
-    setScreen(resultHtml(t, result, { banner: '미리보기 · 무작위 응답으로 만든 결과예요. 저장되지 않아요.' }), function () { mountResult(t, result); });
+    setScreen(resultHtml(t, result, { banner: '미리보기 · 무작위 응답으로 만든 결과예요. 저장되지 않아요.', preview: true }), function () { mountResult(t, result); });
   }
 
   /* ---------- 기록 ---------- */
@@ -979,11 +1016,23 @@
       '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전, 전개도 접기, 블록 세기), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따르고, 문항은 공개된 국제 성격 문항(IPIP)을 번역해서 손봤어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p><p>진로 흥미 유형 검사는 심리학자 존 홀랜드의 여섯 가지 흥미 유형(현실·탐구·예술·사회·진취·관습)을 틀로 삼아, 유형마다 두 갈래씩 해 보고 싶은 활동으로 재요. 문항은 이 사이트를 위해 직접 썼어요. 흥미는 하고 싶은 마음이라서 적성이나 능력과는 달라요.</p><p>연애 스타일 검사는 사회학자 존 리가 나눈 사랑의 여섯 가지 스타일(에로스, 루두스, 스토르게, 프래그마, 마니아, 아가페)을 틀로 삼고, 문항은 이 사이트를 위해 직접 썼어요.</p></section>' +
       '<section class="rs"><h3>점수는 어디에 쓰면 좋나요</h3><p>검사를 마치면 결과 화면에서 그 능력이나 성향이 생활 어디에 쓰이고 어떤 영향을 주는지 함께 보여 드려요. 결과는 "내가 뭘 잘하고 뭘 연습하면 좋은지" 감을 잡는 용도로 보면 딱 좋아요. 사람을 평가하거나 줄 세우는 데 쓰라고 만든 게 아니에요.</p></section>' +
       '<section class="rs"><h3>한계</h3><p>모든 결과는 참고용이에요. 많은 사람에게 실시해서 검증한 공인 검사가 아니고, 공식 IQ나 진단을 내주지 않아요. 점수는 그날 컨디션, 기기, 환경에 따라 달라져요. 마음 건강이 걱정된다면 전문가와 상담하세요.</p></section>' +
-      '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 답과 결과는 이 브라우저 안에만 저장되고 서버로 보내지 않아요. 카카오톡 공유를 누를 때만, 함께 보낼 결과 이미지가 카카오 서버에 올라가요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +
-      '</div>'
+      '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 답과 결과는 이 브라우저 안에만 저장돼요. ' + (BL.stats && BL.stats.available() ? '인지 능력 검사를 마치면 과제별 점수만 익명 통계로 보내요(아래에서 끌 수 있어요). ' : '') + '카카오톡 공유를 누를 때만, 함께 보낼 결과 이미지가 카카오 서버에 올라가요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +
+      statsAboutHtml() +
+      '</div>',
+      function () { const c = document.getElementById('stats-opt'); if (c) c.addEventListener('change', function (e) { BL.stats.setEnabled(e.target.checked); }); }
     );
+  }
+  /* 안내 페이지의 익명 통계 설명과 스위치 (수집 서버 주소가 설정돼 있을 때만) */
+  function statsAboutHtml() {
+    if (!BL.stats || !BL.stats.available()) return '';
+    return '<section class="rs"><h3>익명 통계</h3><p>인지 능력 검사를 마치면 과제별 점수(정답 수와 문항 수, 단계별 정답 수, 기억 폭, 반응 시간 중앙값), 검사 종류, 시간 설정, 날짜만 익명으로 보내요. 이름·연락처·IP 주소·기기 정보는 받지 않고, 보낸 자료를 나와 연결할 방법도 없어요. 모인 자료로 추정 IQ의 기준값을 실제 응시자에 맞게 다듬고, ' + BL.stats.MIN_N + '명이 넘으면 결과 화면에 "실제 응시자 기준 상위 %"를 함께 보여 드려요.</p>' +
+      '<label class="switch"><input type="checkbox" id="stats-opt"' + (BL.stats.enabled() ? ' checked' : '') + '><span>익명 통계에 참여</span></label></section>';
   }
 
   window.addEventListener('hashchange', route);
   route();
+  if (BL.stats && BL.stats.available()) {
+    const foot = document.getElementById('stats-foot'); if (foot) foot.hidden = false;   // 푸터의 익명 통계 문장은 수집 서버가 설정돼 있을 때만
+    BL.stats.flush();   // 아직 못 보낸 익명 통계가 있으면 보낸다
+  }
 })();

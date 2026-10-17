@@ -1,0 +1,1 @@
+{"name":"brainlab-stats","private":true,"version":"0.1.0","description":"두뇌실험실 익명 응시 통계 수집 서버 (Cloudflare Workers + D1)","scripts":{"dev":"wrangler dev","deploy":"wrangler deploy","tail":"wrangler tail"},"devDependencies":{"wrangler":"^4.42.0"}}

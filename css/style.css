@@ -428,3 +428,11 @@ svg.scale { display: block; width: 100%; max-width: 360px; margin: 0 auto; color
 .tint-interest { --tint: #ddeeff; --tint-ink: #10406e; --tint-strong: #2d72c2; --tint-on: #ffffff; --tint-line: #a9cdf3; }
 .tint-love { --tint: #fff0c9; --tint-ink: #6a4a06; --tint-strong: #9a6208; --tint-on: #ffffff; --tint-line: #f3d58a; }
 .tinted { --accent: var(--tint-strong); --accent-ink: var(--tint-on); --accent-soft: var(--tint); --accent-line: var(--tint-line); }
+/* 익명 통계 (2026-10-18): 첫 결과 화면 안내와 스위치, 임시 기준값 옆의 "실제 응시자 기준" 줄 */
+.stats-notice { background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--radius); padding: 14px 16px; margin-top: 18px; }
+.stats-notice strong { display: block; font-size: 15px; margin-bottom: 6px; }
+.stats-notice p { font-size: 13px; color: var(--ink-2); line-height: 1.6; margin: 0 0 10px; }
+.switch { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.switch input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+.rs .switch { margin-top: 10px; }
+.real-norm { font-size: 13px; color: var(--ink-2); font-weight: 600; margin: 10px 0 0; }
