@@ -1,14 +1,14 @@
 /* 실험 01 · 인지 능력 검사
-   5개 영역(규칙 찾기(유동 추론) · 언어 · 공간 · 기억 · 속도·주의), 18개 과제.
+   5개 영역(규칙 찾기(유동 추론) · 언어 · 공간 · 기억 · 속도·주의), 20개 과제.
    사용자에게 보이는 설명은 쉬운 말, 해요체. 영역·과제마다 what(무엇을 재나)·where(일상에서 어디에 쓰이나)를 둔다.
-   빠른 검사(6과제) · 정밀 검사(13과제) · 과제별 단독 검사(task:<key>)를 지원하고,
+   빠른 검사(6과제) · 정밀 검사(20과제) · 과제별 단독 검사(task:<key>)를 지원하고,
    따로 본 과제들은 merge()로 종합 프로필에 합쳐진다.
 
    난이도: 문항마다 1~5단계가 있고 쉬운 것부터 나온다. 4~5단계는 실제 지능검사의 상위 문항 유형
    (레이븐식 회전·논리 연산·선 겹침 규칙, 다단계 수열, 고난도 어휘·삼단논법)을 따른다.
    점수는 IQ 척도(평균 100, 표준편차 15)로 환산한다. 기준값(NORMS, LEVEL_P)은 문항 설계상의 예상 정답률과
    일반 성인 추정치이며 공인 규준이 아니다. 실제 응시 데이터가 쌓이면 바꿔야 한다.
-   도형 행렬 · 도형 계열 · 수열 · 도형 회전 문항은 규칙 기반으로 매번 새로 생성한다 (원본 문항). */
+   도형 행렬 · 도형 계열 · 수열 · 도형 회전 · 전개도 접기 · 블록 세기 문항은 규칙 기반으로 매번 새로 생성한다 (원본 문항). */
 (function () {
   const U = BL.util;
 
@@ -922,6 +922,270 @@
     };
   }
 
+  /* ===== 6. 전개도 접기 (1~5단계) =====
+     정육면체 전개도 11가지 중 하나에 면마다 방향이 드러나는 무늬를 넣고, 접었을 때 위·왼쪽 앞·오른쪽 앞 세 면이 보이는
+     그림 4개 중 나올 수 있는 것을 고른다. 무늬는 상자 바깥면에 있다(바깥면이 위로 오게 펼친 전개도).
+     접기: 칸마다 (바깥 법선 n, 종이 오른쪽 r, 종이 위쪽 u)를 정육면체 좌표로 옮긴다. 오른쪽 이웃 칸은 n' = r, r' = −n.
+     보기끼리, 그리고 보기와 정육면체를 놓는 24가지 방법이 같은 그림인지는 실제로 그린 무늬 꼭짓점의 화면 좌표로 비교한다
+     (무늬 자체의 대칭까지 반영된다). 오답: 마주 보는 면이 함께 보임 · 무늬 하나가 돌아감 · 두 면 자리 바뀜 · 거울상. */
+  const FOLD_NETS = [
+    ['X...', 'XXXX', 'X...'], ['X...', 'XXXX', '.X..'], ['X...', 'XXXX', '..X.'], ['X...', 'XXXX', '...X'], ['.X..', 'XXXX', '.X..'], ['.X..', 'XXXX', '..X.'],
+    ['XX..', '.XXX', '.X..'], ['XX..', '.XXX', '..X.'], ['XX..', '.XXX', '...X'], ['XX..', '.XX.', '..XX'], ['XXX..', '..XXX']
+  ];
+  const SEMI = [];
+  for (let i = 0; i <= 12; i++) SEMI.push([Math.round(50 + 34 * Math.cos(Math.PI * i / 12)), Math.round(18 + 34 * Math.sin(Math.PI * i / 12))]);
+  /* 무늬 (칸 좌표 0~100, y는 아래로). 모두 돌리면 달라 보이고, ㄴ자·깃발은 뒤집어도 달라 보인다. */
+  const FOLD_PAT = {
+    arrow: { ko: '화살표', poly: [[50, 12], [82, 46], [61, 46], [61, 88], [39, 88], [39, 46], [18, 46]] },
+    corner: { ko: '삼각형', poly: [[14, 14], [70, 14], [14, 70]] },
+    dot: { ko: '점', circle: [50, 29, 15] },
+    bar: { ko: '막대', poly: [[14, 14], [86, 14], [86, 36], [14, 36]] },
+    tee: { ko: 'T자', poly: [[14, 14], [86, 14], [86, 34], [60, 34], [60, 88], [40, 88], [40, 34], [14, 34]] },
+    semi: { ko: '반원', poly: SEMI },
+    ell: { ko: 'ㄴ자', poly: [[18, 12], [38, 12], [38, 66], [82, 66], [82, 88], [18, 88]] },
+    flag: { ko: '깃발', poly: [[24, 12], [38, 12], [82, 32], [38, 52], [38, 88], [24, 88]] }
+  };
+  const FOLD_BASIC = ['arrow', 'corner', 'dot', 'bar', 'tee', 'semi'];
+  function patPts(p) { const P = FOLD_PAT[p]; return P.poly || [[P.circle[0], P.circle[1]]]; }
+  function patEl(p) {
+    const P = FOLD_PAT[p];
+    return P.poly ? '<polygon points="' + P.poly.map(function (q) { return q.join(','); }).join(' ') + '"/>' : '<circle cx="' + P.circle[0] + '" cy="' + P.circle[1] + '" r="' + P.circle[2] + '"/>';
+  }
+  /* 2차원 아핀 행렬 [a b c d e f] (SVG matrix 순서): x' = a·x + c·y + e, y' = b·x + d·y + f */
+  function mMul(A, B) { return [A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1], A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3], A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]]; }
+  function mApply(M, q) { return [M[0] * q[0] + M[2] * q[1] + M[4], M[1] * q[0] + M[3] * q[1] + M[5]]; }
+  function mStr(M) { return 'matrix(' + M.map(function (v) { return +v.toFixed(3); }).join(' ') + ')'; }
+  /* 칸 가운데(50,50)를 중심으로 반시계 k×90° (화면은 y가 아래라 SVG 각도로는 −90k) */
+  function mRot(k) {
+    const cs = [[1, 0], [0, -1], [-1, 0], [0, 1]][((k % 4) + 4) % 4], c = cs[0], s = cs[1];
+    return [c, s, -s, c, 50 - 50 * c + 50 * s, 50 - 50 * s - 50 * c];
+  }
+  const vNeg = function (v) { return [-v[0], -v[1], -v[2]]; };
+  const vEq = function (a, b) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; };
+  const vAdd = function (a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; };
+  function netCells(rows) {
+    const cells = [];
+    rows.forEach(function (row, y) { row.split('').forEach(function (ch, x) { if (ch === 'X') cells.push([x, y]); }); });
+    return cells;
+  }
+  /* 칸 0을 윗면으로 두고 이웃 칸을 차례로 아래로 접는다. 칸마다 { n: 바깥 법선, r: 종이 오른쪽, u: 종이 위쪽 } (격자는 y가 아래로) */
+  function foldNet(cells) {
+    const at = {};
+    cells.forEach(function (c, i) { at[c[0] + ',' + c[1]] = i; });
+    const fr = [{ n: [0, 0, 1], r: [1, 0, 0], u: [0, 1, 0] }], queue = [0];
+    while (queue.length) {
+      const i = queue.shift(), c = cells[i], f = fr[i];
+      [[1, 0], [-1, 0], [0, -1], [0, 1]].forEach(function (d) {
+        const j = at[(c[0] + d[0]) + ',' + (c[1] + d[1])];
+        if (j == null || fr[j]) return;
+        fr[j] = d[0] === 1 ? { n: f.r, r: vNeg(f.n), u: f.u } : d[0] === -1 ? { n: vNeg(f.r), r: f.n, u: f.u }
+          : d[1] === -1 ? { n: f.u, r: f.r, u: vNeg(f.n) } : { n: vNeg(f.u), r: f.r, u: f.n };
+        queue.push(j);
+      });
+    }
+    return fr;
+  }
+  /* 칸 안에서 무늬를 반시계로 j×90° 돌려 놓았을 때 무늬의 오른쪽·위쪽 */
+  function patFrame(f, j) { return [{ r: f.r, u: f.u }, { r: f.u, u: vNeg(f.r) }, { r: vNeg(f.r), u: vNeg(f.u) }, { r: vNeg(f.u), u: f.r }][j]; }
+  /* 정육면체를 놓는 24가지 방법 (행렬식이 +1인 부호 있는 순열 행렬) */
+  const ROT24 = [];
+  [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]].forEach(function (p) {
+    for (let s = 0; s < 8; s++) {
+      const M = [0, 1, 2].map(function (i) { const row = [0, 0, 0]; row[p[i]] = (s >> i) & 1 ? -1 : 1; return row; });
+      if (M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]) === 1) ROT24.push(M);
+    }
+  });
+  function mv(M, v) { return M.map(function (row) { return row[0] * v[0] + row[1] * v[1] + row[2] * v[2]; }); }
+  function mtv(M, v) { return [0, 1, 2].map(function (i) { return M[0][i] * v[0] + M[1][i] * v[1] + M[2][i] * v[2]; }); }
+  /* 등각 투영: 정육면체(모서리 42)가 100×100 가운데에 오고, 위(+z)·왼쪽 앞(−y)·오른쪽 앞(+x) 세 면이 보인다 */
+  const ISO_C = Math.sqrt(3) / 2, CUBE_S = 42;
+  function isoP(p) { return [50 + (p[0] + p[1] - 1) * ISO_C * CUBE_S, 50 + CUBE_S / 2 + (p[0] - p[1]) * CUBE_S / 2 - p[2] * CUBE_S]; }
+  /* 보이는 면: N = 바깥 법선, R·U = 밖에서 볼 때 오른쪽·위쪽, o = 왼쪽 아래 꼭짓점. M = 무늬 좌표 → 화면 */
+  const CUBE_VIEW = [
+    { N: [0, 0, 1], R: [1, 0, 0], U: [0, 1, 0], o: [0, 0, 1] },
+    { N: [0, -1, 0], R: [1, 0, 0], U: [0, 0, 1], o: [0, 0, 0] },
+    { N: [1, 0, 0], R: [0, 1, 0], U: [0, 0, 1], o: [1, 0, 0] }
+  ];
+  CUBE_VIEW.forEach(function (v) {
+    const o = isoP(v.o), a = isoP(vAdd(v.o, v.R)), b = isoP(vAdd(v.o, v.U)), ab = isoP(vAdd(vAdd(v.o, v.R), v.U));
+    v.M = [(a[0] - o[0]) / 100, (a[1] - o[1]) / 100, (o[0] - b[0]) / 100, (o[1] - b[1]) / 100, b[0], b[1]];
+    v.pts = [o, a, ab, b].map(function (q) { return +q[0].toFixed(2) + ',' + +q[1].toFixed(2); }).join(' ');
+  });
+  const MIRROR_M = [-1, 0, 0, 1, 100, 0];
+  /* 몸체를 Q로 돌렸을 때 보이는 세 면: { i: 전개도 칸, k: 그 면에서 무늬가 반시계로 돈 양(90° 단위) } */
+  function cubeView(fr, pf, Q) {
+    return CUBE_VIEW.map(function (v) {
+      const b = mtv(Q, v.N);
+      let i = 0;
+      while (!vEq(fr[i].n, b)) i++;
+      const w = mv(Q, pf[i].r);
+      return { i: i, k: vEq(w, v.R) ? 0 : vEq(w, v.U) ? 1 : vEq(w, vNeg(v.R)) ? 2 : 3 };
+    });
+  }
+  function viewFaces(spec, pats) {
+    return spec.f.map(function (x, pos) {
+      const M = mMul(CUBE_VIEW[pos].M, mRot(x.k));
+      return { p: pats[x.i], M: spec.mirror ? mMul(MIRROR_M, M) : M };
+    });
+  }
+  /* 두 그림이 같은지: 무늬마다 꼭짓점 화면 좌표가 (순서와 상관없이) 모두 겹치면 같다 */
+  function sameView(A, B) {
+    return A.every(function (fa) {
+      const fb = B.filter(function (x) { return x.p === fa.p; })[0];
+      if (!fb) return false;
+      const pb = patPts(fb.p).map(function (q) { return mApply(fb.M, q); });
+      return patPts(fa.p).every(function (q) { const a = mApply(fa.M, q); return pb.some(function (b) { return Math.abs(a[0] - b[0]) < 0.5 && Math.abs(a[1] - b[1]) < 0.5; }); });
+    });
+  }
+  function cubeSVG(spec, pats) {
+    return '<svg class="cell cube" viewBox="0 0 100 100" aria-hidden="true">' +
+      CUBE_VIEW.map(function (v) { return '<polygon class="cf" points="' + v.pts + '"/>'; }).join('') +
+      '<polygon class="cs cs-l" points="' + CUBE_VIEW[1].pts + '"/><polygon class="cs cs-r" points="' + CUBE_VIEW[2].pts + '"/>' +
+      viewFaces(spec, pats).map(function (f) { return '<g data-p="' + f.p + '" transform="' + mStr(f.M) + '">' + patEl(f.p) + '</g>'; }).join('') + '</svg>';
+  }
+  function netSVG(cells, pats, rots) {
+    const W = Math.max.apply(null, cells.map(function (c) { return c[0]; })) + 1, H = Math.max.apply(null, cells.map(function (c) { return c[1]; })) + 1;
+    return '<svg class="fold-net" style="--c:' + W + '" viewBox="0 0 ' + (W * 100 + 16) + ' ' + (H * 100 + 16) + '" aria-hidden="true">' + cells.map(function (c, i) {
+      const x = 8 + c[0] * 100, y = 8 + c[1] * 100;
+      return '<rect class="sq" x="' + x + '" y="' + y + '" width="100" height="100"/><g data-p="' + pats[i] + '" transform="' + mStr(mMul([1, 0, 0, 1, x, y], mRot(rots[i]))) + '">' + patEl(pats[i]) + '</g>';
+    }).join('') + '</svg>';
+  }
+  const FOLD_WRONG = { opp: '마주 보는 두 면이 함께 보이는', rot: '무늬 하나가 돌아간', rot2: '무늬 하나가 거꾸로 된', swap: '두 면의 자리가 서로 바뀐', mirror: '전체를 거울에 비춘' };
+  const FOLD_KINDS = { 1: ['opp', 'opp', 'opp'], 2: ['opp', 'opp', 'rot2'], 3: ['opp', 'rot', 'swap'], 4: ['rot', 'swap', 'mirror'], 5: ['rot', 'rot', 'mirror'] };
+  /* 1~2단계는 1-4-1 꼴 6가지, 3단계는 2-3-1 꼴까지, 4단계는 11가지 모두, 5단계는 1-4-1이 아닌 5가지 */
+  const FOLD_NET_POOL = { 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5], 3: [0, 1, 2, 3, 4, 5, 6, 7, 8], 4: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5: [6, 7, 8, 9, 10] };
+  function makeFold(r, level) {
+    for (let guard = 0; guard < 200; guard++) {
+      // 전개도 모양은 돌리거나 뒤집어 8가지 놓임 중 하나로
+      let cells = netCells(FOLD_NETS[r.pick(FOLD_NET_POOL[level])]);
+      if (r.next() < 0.5) cells = cells.map(function (c) { return [-c[0], c[1]]; });
+      for (let t = r.int(0, 3); t > 0; t--) cells = cells.map(function (c) { return [-c[1], c[0]]; });
+      cells = normalize(cells);
+      const fr = foldNet(cells);
+      const pats = r.sample(level <= 3 ? FOLD_BASIC : Object.keys(FOLD_PAT), 6);
+      const rots = cells.map(function () { return level <= 2 ? 0 : r.int(0, 3); });
+      const pf = fr.map(function (f, i) { return patFrame(f, rots[i]); });
+      const opp = fr.map(function (f) { let j = 0; while (!vEq(fr[j].n, vNeg(f.n))) j++; return j; });
+      const valid = ROT24.map(function (Q) { return { f: cubeView(fr, pf, Q), mirror: false }; });
+      const validFaces = valid.map(function (s) { return viewFaces(s, pats); });
+      // 쉬운 단계는 보이는 세 면이 전개도에서도 이어 붙은 그림을 정답으로 고른다
+      const adj = function (a, b) { return Math.abs(cells[a][0] - cells[b][0]) + Math.abs(cells[a][1] - cells[b][1]) === 1 ? 1 : 0; };
+      const need = level === 1 ? 2 : level === 2 ? 1 : 0;
+      const ans = r.pick(valid.filter(function (s) { return adj(s.f[0].i, s.f[1].i) + adj(s.f[0].i, s.f[2].i) + adj(s.f[1].i, s.f[2].i) >= need; }));
+      const opts = [ans], seen = [viewFaces(ans, pats)];
+      let rotAt = -1;
+      const wrong = function (kind) {
+        for (let t = 0; t < 40; t++) {
+          const s = { f: ans.f.map(function (x) { return { i: x.i, k: x.k }; }), mirror: kind === 'mirror' };
+          let p = -1;
+          if (kind === 'opp') {
+            p = r.int(0, 2);
+            const q = r.pick([0, 1, 2].filter(function (x) { return x !== p; }));
+            s.f[p] = { i: opp[s.f[q].i], k: r.int(0, 3) };   // 남아 있는 면의 맞은편 면을 그 옆에 둔다
+          } else if (kind === 'rot' || kind === 'rot2') {
+            p = r.pick([0, 1, 2].filter(function (x) { return x !== rotAt; }));
+            s.f[p].k = (s.f[p].k + (kind === 'rot2' ? 2 : level >= 5 ? r.pick([1, 3]) : r.int(1, 3))) % 4;
+          } else if (kind === 'swap') {
+            const pq = r.sample([0, 1, 2], 2), tmp = s.f[pq[0]];
+            s.f[pq[0]] = s.f[pq[1]]; s.f[pq[1]] = tmp;
+          }
+          const fs = viewFaces(s, pats);
+          if (validFaces.some(function (v) { return sameView(v, fs); }) || seen.some(function (v) { return sameView(v, fs); })) continue;
+          if (kind === 'rot') rotAt = p;
+          opts.push(s); seen.push(fs);
+          return true;
+        }
+        return false;
+      };
+      if (!FOLD_KINDS[level].every(wrong)) continue;
+      const pairs = [];
+      opp.forEach(function (j, i) { if (i < j) pairs.push([FOLD_PAT[pats[i]].ko, FOLD_PAT[pats[j]].ko]); });
+      const faceKo = ans.f.map(function (x) { return FOLD_PAT[pats[x.i]].ko; });
+      const kinds = FOLD_KINDS[level].filter(function (k, i, a) { return a.indexOf(k) === i; });
+      const o = shuffleOptions(r, opts, 0);
+      return {
+        type: 'choice', part: 'fold', scored: true, level: level, timeLimit: level >= 4 ? 60 : 45,
+        prompt: '이 전개도를 접었을 때 나올 수 있는 정육면체는?',
+        promptHtml: '<div class="fold-prompt">' + netSVG(cells, pats, rots) + '</div>',
+        optionsHtml: o.options.map(function (s) { return cubeSVG(s, pats); }), answer: o.answer, optionCols: 2,
+        explain: '접었을 때 마주 보는 면은 ' + pairs.map(function (p, i) { return U.josa(p[0], '과', '와') + ' ' + (i === pairs.length - 1 ? U.josa(p[1], '이에요', '예요') : p[1]); }).join(', ') +
+          '. 마주 보는 두 면은 한 그림에 함께 보일 수 없어요. 정답은 위에 ' + faceKo[0] + ', 왼쪽에 ' + faceKo[1] + ', 오른쪽에 ' + U.josa(faceKo[2], '이', '가') + ' 보이는 그림이에요. ' +
+          (kinds.length === 1 ? '오답은 모두 ' + FOLD_WRONG[kinds[0]] + ' 그림이에요.' : '오답에는 ' + kinds.map(function (k) { return FOLD_WRONG[k] + ' 것'; }).join(', ') + '이 있어요.')
+      };
+    }
+    return makeFold(r, Math.max(1, level - 1));
+  }
+
+  /* ===== 7. 블록 세기 (1~5단계) =====
+     뒤쪽 구석이 가장 높고 앞(왼쪽 앞·오른쪽 앞)으로 올수록 낮거나 같은 모양으로만 쌓는다. 그러면 모든 기둥의 윗면이 다 보이고
+     보이는 면이 끊김 없이 이어져, 그림 하나로 기둥 높이가 하나로 정해진다. 문항에 적는 규칙: 위에 블록이 있으면 그 아래에도
+     블록이 있고, 그 밖에 숨은 블록은 없다. h[a][b]: a는 오른쪽 앞(+x), b는 왼쪽 앞(−y)으로 갈수록 커진다.
+     오답은 정답 ±1~3. 작은 수부터 늘어놓되 정답 자리는 고르게 하고, 가려진 블록이 1~3개면 보이는 블록만 센 수를 오답에 넣는다. */
+  const BLK_SPEC = {
+    1: { a: [2, 3], b: [2, 2], h: 2, n: [4, 8], hid: 0, t: 30 },
+    2: { a: [2, 3], b: [3, 3], h: 3, n: [7, 13], hid: 1, t: 40 },
+    3: { a: [3, 3], b: [3, 3], h: 3, n: [11, 18], hid: 2, t: 45 },
+    4: { a: [3, 4], b: [4, 4], h: 4, n: [16, 26], hid: 3, t: 55 },
+    5: { a: [4, 4], b: [4, 4], h: 4, n: [24, 34], hid: 5, t: 60 }
+  };
+  function blocksSVG(h, A, B) {
+    const S = 20, H = function (a, b) { return a < A && b < B ? h[a][b] : 0; };
+    const P = function (x, y, z) { return [(x + y) * ISO_C * S, (x - y) * S / 2 - z * S]; };
+    const faces = [];
+    for (let a = 0; a < A; a++) for (let b = 0; b < B; b++) for (let z = 0; z < h[a][b]; z++) {
+      const x = a, y = B - 1 - b, d = x - y + z;   // d가 클수록 보는 사람에게 가깝다 → 작은 것부터 그린다
+      if (z === h[a][b] - 1) faces.push([d, 'bt', [P(x, y, z + 1), P(x + 1, y, z + 1), P(x + 1, y + 1, z + 1), P(x, y + 1, z + 1)]]);
+      if (H(a, b + 1) <= z) faces.push([d, 'bl', [P(x, y, z), P(x + 1, y, z), P(x + 1, y, z + 1), P(x, y, z + 1)]]);
+      if (H(a + 1, b) <= z) faces.push([d, 'br', [P(x + 1, y, z), P(x + 1, y + 1, z), P(x + 1, y + 1, z + 1), P(x + 1, y, z + 1)]]);
+    }
+    faces.sort(function (p, q) { return p[0] - q[0]; });
+    const xs = [], ys = [];
+    faces.forEach(function (f) { f[2].forEach(function (q) { xs.push(q[0]); ys.push(q[1]); }); });
+    const x0 = Math.min.apply(null, xs) - 2, y0 = Math.min.apply(null, ys) - 2, w = Math.max.apply(null, xs) + 2 - x0, hh = Math.max.apply(null, ys) + 2 - y0;
+    const f2 = function (v) { return +v.toFixed(2); };
+    return '<svg class="blk" style="--w:' + Math.round(w) + '" viewBox="' + [x0, y0, w, hh].map(f2).join(' ') + '" aria-hidden="true">' + faces.map(function (f) {
+      return '<polygon class="' + f[1] + '" points="' + f[2].map(function (q) { return f2(q[0]) + ',' + f2(q[1]); }).join(' ') + '"/>';
+    }).join('') + '</svg>';
+  }
+  function makeBlocks(r, level) {
+    const sp = BLK_SPEC[level];
+    let h, A, B, total, hidden;
+    for (let guard = 0; guard < 500; guard++) {
+      A = r.int(sp.a[0], sp.a[1]); B = r.int(sp.b[0], sp.b[1]);
+      if (r.next() < 0.5) { const t = A; A = B; B = t; }
+      h = [];
+      for (let a = 0; a < A; a++) {
+        h.push([]);
+        for (let b = 0; b < B; b++) h[a].push(Math.max(0, Math.min(a ? h[a - 1][b] : sp.h, b ? h[a][b - 1] : sp.h) - r.pick([0, 0, 0, 1, 1, 2])));
+      }
+      if (!h[A - 1][0] || !h[0][B - 1]) continue;   // 바닥 칸을 양쪽 끝까지 쓴다
+      total = 0; hidden = 0;
+      for (let a = 0; a < A; a++) for (let b = 0; b < B; b++) {
+        total += h[a][b];
+        // 가려진 블록: 기둥 맨 위가 아니고, 오른쪽 앞·왼쪽 앞 이웃 기둥이 그 높이까지 차 있다
+        for (let z = 0; z < h[a][b] - 1; z++) if ((a + 1 < A ? h[a + 1][b] : 0) > z && (b + 1 < B ? h[a][b + 1] : 0) > z) hidden++;
+      }
+      if (h[0][0] >= 2 && total >= sp.n[0] && total <= sp.n[1] && hidden >= sp.hid) break;   // 뒤 구석(가장 높은 기둥)은 두 층 이상
+    }
+    const below = r.int(0, 3);   // 정답보다 작은 보기 수 (정답 자리가 고르게 바뀐다)
+    const lows = r.sample([1, 2, 3], below);
+    if (below && hidden >= 1 && hidden <= 3 && lows.indexOf(hidden) < 0) lows[0] = hidden;   // 보이는 블록만 센 수
+    const vals = lows.map(function (d) { return total - d; }).concat([total], r.sample([1, 2, 3], 3 - below).map(function (d) { return total + d; })).sort(function (p, q) { return p - q; });
+    const layers = [];
+    for (let z = 0; ; z++) {
+      let c = 0;
+      h.forEach(function (row) { row.forEach(function (v) { if (v > z) c++; }); });
+      if (!c) break;
+      layers.push((z + 1) + '층 ' + c + '개');
+    }
+    return {
+      type: 'choice', part: 'blocks', scored: true, level: level, timeLimit: sp.t,
+      prompt: '블록은 모두 몇 개일까요?',
+      promptHtml: '<div class="blk-prompt">' + blocksSVG(h, A, B) + '<p class="blk-rule">위에 블록이 있으면 그 아래에도 블록이 있어요. 그 밖에 숨은 블록은 없어요.</p></div>',
+      options: vals.map(function (v) { return v + '개'; }), answer: vals.indexOf(total), optionCols: 2,
+      explain: '층별로 세면 ' + layers.join(', ') + '로 모두 ' + total + '개예요. ' + (hidden ? '겉에서 보이는 블록은 ' + (total - hidden) + '개이고, 나머지 ' + hidden + '개는 위에 블록이 있어서 아래도 차 있다고 세야 하는 가려진 블록이에요.' : '이 그림에서는 모든 블록이 겉에서 보여요.')
+    };
+  }
   /* ===== 구성 ===== */
   const DOMAINS = [
     { key: 'fluid', label: '규칙 찾기',
@@ -931,8 +1195,8 @@
       what: '단어의 뜻을 알고, 말과 글의 앞뒤를 따져서 맞는 결론을 내는 힘이에요.',
       where: '글을 빨리 정확하게 읽기, 내 생각을 말이나 글로 전하기, 계약서나 안내문에서 중요한 조건 골라내기, 시험 공부에 바로 쓰여요. 외국어를 배우는 속도와도 관계가 있어요.' },
     { key: 'spatial', label: '공간',
-      what: '머릿속에서 모양을 돌리고 뒤집어 보는 힘이에요.',
-      where: '주차할 때, 지도를 보고 길을 찾을 때, 가구를 어디에 놓을지 그려 볼 때, 뭔가 조립할 때 쓰여요. 그림, 설계, 운동처럼 손과 눈을 함께 쓰는 일에서 특히 중요해요.' },
+      what: '머릿속에서 모양을 돌리고, 뒤집고, 접어 보는 힘이에요. 그림에서 안 보이는 쪽까지 그려 보는 힘도 여기에 들어가요.',
+      where: '주차할 때, 지도를 보고 길을 찾을 때, 가구를 어디에 놓을지 그려 볼 때, 상자를 접거나 짐을 쌓을 때, 뭔가 조립할 때 쓰여요. 그림, 설계, 운동처럼 손과 눈을 함께 쓰는 일에서 특히 중요해요.' },
     { key: 'memory', label: '기억',
       what: '방금 본 것을 머릿속에 잠깐 붙들어 두고, 그대로 떠올리거나 순서를 바꾸는 힘이에요. "작업 기억"이라고 하는데, 오래 기억하는 것과는 달라요. 성인은 보통 숫자를 앞으로 5~9개, 거꾸로 4~7개쯤 외워요.',
       where: '암산, 전화번호나 주문 외우기, 여러 지시를 한 번에 듣고 처리하기, 긴 대화에서 요점을 놓치지 않기에 쓰여요. 이게 약하면 여러 일을 같이 할 때 자꾸 뭔가를 빠뜨려요.' },
@@ -951,6 +1215,8 @@
     logic: { label: '논리 추론', domain: 'verbal', minutes: 6, desc: '문장이 참이라고 칠 때 반드시 참인 결론을 골라요. 그럴듯한 게 아니라 "반드시" 맞는 걸 찾는 게 포인트예요.', where: '말이 되는지 아닌지 따지는 힘이에요. 계약서나 규정 읽기, 토론, 가짜 뉴스 걸러내기에 쓰여요.' },
     similar: { label: '공통점 찾기', domain: 'verbal', minutes: 4, desc: '두 낱말이 공통으로 속하는 묶음이나 하는 일을 골라요. 겉모습이 아니라 본질적인 공통점을 찾아야 해요.', where: '서로 다른 것에서 공통점을 찾는 힘이에요. 개념을 정리하고 분류하고 요약하는 데 쓰여요.' },
     rotation: { label: '도형 회전', domain: 'spatial', minutes: 3, desc: '위 도형을 돌리기만 해서 만들 수 있는 걸 골라요. 거울처럼 뒤집은 건 정답이 아니에요.', where: '머릿속에서 모양을 돌리는 힘이에요. 주차, 지도 읽기, 조립, 그림 그리기에 쓰여요.' },
+    fold: { label: '전개도 접기', domain: 'spatial', minutes: 4, desc: '펼쳐 놓은 전개도를 접어 정육면체를 만들었을 때 나올 수 있는 모양을 골라요. 무늬는 상자 바깥쪽에 그려져 있고, 무늬가 놓인 방향까지 맞아야 해요.', where: '평면을 머릿속에서 입체로 접어 보는 힘이에요. 상자 포장, 종이접기, 옷 개기, 설명서 보고 조립하기에 쓰여요.' },
+    blocks: { label: '블록 세기', domain: 'spatial', minutes: 4, desc: '쌓아 놓은 블록이 모두 몇 개인지 세요. 블록은 바닥부터 쌓여 있어서, 위에 블록이 있으면 그 아래에도 블록이 있어요. 그 밖에 안 보이는 곳에 숨은 블록은 없어요.', where: '보이는 모습만으로 안 보이는 부분까지 그려 보는 힘이에요. 짐 싣기, 창고 정리, 도면 읽기, 물건이 몇 개 들었는지 어림하기에 쓰여요.' },
     digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 보이는 순서 그대로 입력해요.', where: '들은 걸 그대로 잠깐 기억하는 힘이에요. 전화번호나 주문을 외우는 데 쓰여요.' },
     digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '보이는 순서를 거꾸로 뒤집어 입력해요. 예: 3 7 1 → 1 7 3', where: '기억한 걸 머릿속에서 뒤집는 힘이에요. 암산이나 순서를 거꾸로 따져 보는 일에 쓰여요.' },
     grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 차례로 켜져요. 켜진 순서 그대로 눌러요.', where: '위치를 순서대로 기억하는 힘이에요. 길을 기억하거나 물건 둔 자리를 떠올릴 때 쓰여요.' },
@@ -970,12 +1236,15 @@
   const LEVEL_P = {
     default: { 1: 0.92, 2: 0.80, 3: 0.62, 4: 0.42, 5: 0.25, 6: 0.12 },
     rotation: { 1: 0.85, 2: 0.75, 3: 0.60, 4: 0.45, 5: 0.35 },
+    fold: { 1: 0.88, 2: 0.76, 3: 0.60, 4: 0.45, 5: 0.32 },
+    blocks: { 1: 0.92, 2: 0.80, 3: 0.64, 4: 0.48, 5: 0.34 },
     series: { 1: 0.90, 2: 0.72, 3: 0.50 }
   };
   /* 임시 기준값: prop = 정답률(평균은 LEVEL_P로 계산), span = 폭, rt = 반응 시간(ms, 낮을수록 좋음). 공인 규준이 아니다. */
   const NORMS = {
     matrix: { kind: 'prop', sd: 0.20 }, figAnalogy: { kind: 'prop', sd: 0.20 }, series: { kind: 'prop', sd: 0.22 }, sequence: { kind: 'prop', sd: 0.20 }, weights: { kind: 'prop', sd: 0.22 },
     analogy: { kind: 'prop', sd: 0.18 }, vocab: { kind: 'prop', sd: 0.18 }, logic: { kind: 'prop', sd: 0.20 }, similar: { kind: 'prop', sd: 0.18 }, rotation: { kind: 'prop', sd: 0.22 },
+    fold: { kind: 'prop', sd: 0.22 }, blocks: { kind: 'prop', sd: 0.22 },
     /* 폭 과제: 한 개씩 보여 주고 같은 길이를 두 번까지 시도하는 방식(공인 검사와 같은 규칙)의 20~30대 기준.
        숫자 앞으로 7, 거꾸로 5, 위치(코르시) 6, 숫자-문자 5~6 정도가 보통이라 그 근처에 둔다. 기준을 낮게 잡으면 기억 IQ가 부풀어 보인다. */
     digitF: { kind: 'span', mean: 7.0, sd: 1.1 }, digitB: { kind: 'span', mean: 5.2, sd: 1.2 }, grid: { kind: 'span', mean: 6.0, sd: 1.1 }, lns: { kind: 'span', mean: 5.3, sd: 1.1 },
@@ -1015,6 +1284,8 @@
     series: { full: [1, 1, 2, 2, 3, 3] },
     sequence: { full: [1, 2, 2, 3, 3, 4, 4, 5], quick: [1, 2, 3, 4, 5] },
     rotation: { full: [1, 2, 3, 4, 5, 5], quick: [1, 2, 4, 5] },
+    fold: { full: [1, 2, 3, 4, 5, 5] },
+    blocks: { full: [1, 2, 3, 4, 5, 5] },
     /* 언어 4과제: 문항 풀(단계마다 7개)에서 단계마다 2~3개씩 뽑는다 */
     analogy: { full: [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5], quick: [1, 2, 3, 4, 5, 5] },
     vocab: { full: [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5] },
@@ -1035,6 +1306,8 @@
     vocab: function (r) { return choiceItems(r, byLevel(drawPool(r, 'vocab', LEVELS.vocab.full)), 'vocab', 35, 1); },
     logic: function (r) { return choiceItems(r, byLevel(drawPool(r, 'logic', LEVELS.logic.full)), 'logic', function (l) { return l >= 4 ? 75 : 60; }, 1, true); },
     rotation: function (r, full) { return (full ? LEVELS.rotation.full : LEVELS.rotation.quick).map(function (l) { return makeRotation(r, l); }); },
+    fold: function (r) { return LEVELS.fold.full.map(function (l) { return makeFold(r, l); }); },
+    blocks: function (r) { return LEVELS.blocks.full.map(function (l) { return makeBlocks(r, l); }); },
     digitF: function () { return [{ type: 'digitspan', part: 'digitF', scored: true, mode: 'forward', start: 3, max: 9, title: '숫자 앞으로 외우기', desc: TASKS.digitF.desc }]; },
     digitB: function () { return [{ type: 'digitspan', part: 'digitB', scored: true, mode: 'backward', start: 2, max: 8, title: '숫자 거꾸로 외우기', desc: TASKS.digitB.desc }]; },
     grid: function () { return [{ type: 'gridspan', part: 'grid', scored: true, start: 3, max: 9, title: '위치 기억', desc: TASKS.grid.desc }]; },
@@ -1046,7 +1319,8 @@
     matrix: function (f) { return (f ? 12 : 6) + '문항 · 60~120초 · 1~6단계 · 보기 8개'; }, series: function () { return '6문항 · 40~50초 · 1~3단계'; },
     figAnalogy: function () { return '10문항 · 45~60초 · 1~5단계'; }, weights: function () { return '8문항 · 60~90초 · 1~5단계'; }, similar: function () { return '12문항 · 35초 · 1~5단계'; },
     sequence: function (f) { return (f ? 8 : 5) + '문항 · 50~60초 · 1~5단계'; }, analogy: function (f) { return (f ? 12 : 6) + '문항 · 40~45초 · 1~5단계'; },
-    vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '12문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~50초 · 1~5단계'; }
+    vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '12문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~50초 · 1~5단계'; },
+    fold: function () { return '6문항 · 45~60초 · 1~5단계'; }, blocks: function () { return '6문항 · 30~60초 · 1~5단계'; }
   };
 
   /* 처음 보는 과제 앞에 붙는 연습 문제 (시간 제한 없음, 점수 없음, 풀고 나면 정답과 규칙을 보여 준다) */
@@ -1058,6 +1332,8 @@
     series: function (r) { return makeSeries(r, 1); },
     sequence: function (r) { return makeSequence(r, 1); },
     rotation: function (r) { return makeRotation(r, 1); },
+    fold: function (r) { return makeFold(r, 1); },
+    blocks: function (r) { return makeBlocks(r, 1); },
     analogy: function (r) { return choiceItems(r, [VERBAL[PRACTICE_ITEM.analogy]], 'analogy', 0, 2)[0]; },
     logic: function (r) { return choiceItems(r, [LOGIC[PRACTICE_ITEM.logic]], 'logic', 0, 1, true)[0]; }
   };
@@ -1080,9 +1356,10 @@
   const ADAPT = {
     matrix: { n: 8, start: 3, max: 6 }, figAnalogy: { n: 7, start: 3, max: 5 }, series: { n: 5, start: 2, max: 3 },
     sequence: { n: 6, start: 3, max: 5 }, weights: { n: 6, start: 2, max: 5 }, rotation: { n: 5, start: 3, max: 5 },
+    fold: { n: 5, start: 3, max: 5 }, blocks: { n: 5, start: 3, max: 5 },
     analogy: { n: 7, start: 3, max: 5 }, vocab: { n: 7, start: 3, max: 5 }, logic: { n: 7, start: 3, max: 5 }, similar: { n: 7, start: 3, max: 5 }
   };
-  const GEN = { matrix: makeMatrix, figAnalogy: makeFigAnalogy, series: makeSeries, sequence: makeSequence, weights: makeWeights, rotation: makeRotation };
+  const GEN = { matrix: makeMatrix, figAnalogy: makeFigAnalogy, series: makeSeries, sequence: makeSequence, weights: makeWeights, rotation: makeRotation, fold: makeFold, blocks: makeBlocks };
   const POOL = { analogy: VERBAL, vocab: VOCAB, logic: LOGIC, similar: SIMILAR };
   const POOL_OPTS = { analogy: [40, 2, false], vocab: [35, 1, false], logic: [60, 1, true], similar: [35, 1, false] };
   function adaptStub(key) {
@@ -1150,7 +1427,7 @@
     };
     part(1, DOMAINS[0], '도형과 숫자에 숨은 규칙을 찾아요. 문제마다 제한 시간이 있고, 시간이 다 되면 자동으로 넘어가요.', ['matrix', 'figAnalogy', 'series', 'sequence', 'weights']);
     part(2, DOMAINS[1], '단어의 뜻과 관계, 문장의 앞뒤를 따져요.', ['analogy', 'vocab', 'logic', 'similar']);
-    part(3, DOMAINS[2], '머릿속에서 도형을 돌려 봐요.', ['rotation']);
+    part(3, DOMAINS[2], '머릿속에서 도형을 돌리고, 접고, 쌓인 블록을 세어 봐요.', ['rotation', 'fold', 'blocks']);
     part(4, DOMAINS[3], '숫자와 위치를 잠깐 기억했다가 그대로, 거꾸로, 또는 정리해서 떠올려요. 틀려도 같은 길이로 한 번 더 기회가 있어요.', ['digitF', 'digitB', 'grid', 'lns']);
     part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응해요. 조용한 곳에서 화면을 똑바로 보고 해 주세요.', ['reaction', 'choicert', 'stroop', 'symbol']);
     return items;
@@ -1315,14 +1592,14 @@
     kind: 'measure',
     kindLabel: '측정',
     title: '인지 능력 검사',
-    subtitle: '규칙 찾기, 언어, 공간 감각, 기억력, 반응 속도와 집중. 머리 쓰는 힘 다섯 가지를 18개 과제로 재서 추정 IQ로 보여 줘요. 한 번에 다 풀어도 되고 하나씩 해도 돼요.',
+    subtitle: '규칙 찾기, 언어, 공간 감각, 기억력, 반응 속도와 집중. 머리 쓰는 힘 다섯 가지를 20개 과제로 재서 추정 IQ로 보여 줘요. 한 번에 다 풀어도 되고 하나씩 해도 돼요.',
     duration: '과제당 1~9분',
-    length: '18과제',
+    length: '20과제',
     timed: true,
     modes: [
-      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 다음 문제가 어려워지고 틀리면 쉬워져요. 내 실력 근처에서 집중해서 재니까 짧아도 정확해요. 처음이면 이걸 추천해요.', duration: '약 35분', length: '18과제' },
+      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 다음 문제가 어려워지고 틀리면 쉬워져요. 내 실력 근처에서 집중해서 재니까 짧아도 정확해요. 처음이면 이걸 추천해요.', duration: '약 40분', length: '20과제' },
       { id: 'quick', label: '빠른 검사', desc: '다섯 영역에서 대표 과제 6개만 골라, 적응형처럼 내 실력에 맞춰 문제를 내요. 시간이 없을 때 좋아요. 과제가 적은 만큼 오차 범위는 더 넓어요.', duration: '약 13분', length: '6과제' },
-      { id: 'full', label: '정밀 검사', desc: '18개 과제의 모든 단계를 처음부터 끝까지 다 풀어요. 가장 길지만, 단계별 정답률과 틀린 문제 다시 보기까지 볼 수 있어요.', duration: '약 50분', length: '18과제' }
+      { id: 'full', label: '정밀 검사', desc: '20개 과제의 모든 단계를 처음부터 끝까지 다 풀어요. 가장 길지만, 단계별 정답률과 틀린 문제 다시 보기까지 볼 수 있어요.', duration: '약 1시간', length: '20과제' }
     ],
     glyphSVG: glyphSVG,
     adaptNext: adaptNext,
