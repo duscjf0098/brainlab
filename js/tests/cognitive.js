@@ -70,7 +70,8 @@
       el = '<polygon points="' + polygonPoints(cx, cy, rr, n, off) + '" ' + attrs + '/>';
     }
     const tf = (flip ? 'translate(' + (2 * cx) + ' 0) scale(-1 1) ' : '') + (rot ? 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' : '');
-    return tf ? '<g transform="' + tf.trim() + '">' + el + '</g>' : el;
+    // 변환은 요소에 바로 붙인다. <g>로 감싸면 빗금 칠하기의 clipPath 안에서 <g>가 무시돼, 돌리거나 뒤집은 도형의 빗금이 사라졌다.
+    return tf ? el.replace(/^<(\w+) /, '<$1 transform="' + tf.trim() + '" ') : el;
   }
   function frameEl(frame) {
     const a = 'fill="none" stroke="currentColor" stroke-width="1.8" opacity=".9"';
