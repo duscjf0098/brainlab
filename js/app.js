@@ -2,7 +2,7 @@
 (function () {
   const U = BL.util;
   const app = document.getElementById('app');
-  const ORDER = ['cognitive', 'eq', 'personality', 'attachment', 'love'];
+  const ORDER = ['cognitive', 'eq', 'personality', 'attachment', 'interest', 'love'];
   const STORE_KEY = 'bl.results';
   const SESSION_KEY = 'bl.session';
   const MAX_RESULTS = 40;
@@ -66,10 +66,10 @@
       '<section class="hero">' +
       '<img class="hero-banner" src="banner.svg" alt="두뇌실험실 배너" width="1200" height="420">' +
       '<p class="eyebrow mono">무료 · 로그인 없음</p>' +
-      '<h1>나를 측정하는<br><em>다섯 가지 실험</em></h1>' +
-      '<p class="lead">머리가 얼마나 잘 돌아가는지, 남의 기분을 얼마나 잘 읽는지, 나는 어떤 성격이고 연애할 때는 어떤 사람인지. 검사마다 그 능력이 생활 어디에 쓰이는지도 같이 알려 드려요. 결과는 내 폰이나 컴퓨터에만 남아요.</p>' +
+      '<h1>나를 측정하는<br><em>여섯 가지 실험</em></h1>' +
+      '<p class="lead">머리가 얼마나 잘 돌아가는지, 남의 기분을 얼마나 잘 읽는지, 나는 어떤 성격이고 연애할 때는 어떤 사람인지, 어떤 일에 끌리는지. 검사마다 그 능력이 생활 어디에 쓰이는지도 같이 알려 드려요. 결과는 내 폰이나 컴퓨터에만 남아요.</p>' +
       '</section>' +
-      '<section class="grid">' + ORDER.map(testCard).join('') + '</section>' +
+      '<section class="grid">' + ORDER.filter(function (id) { return BL.tests[id]; }).map(testCard).join('') + '</section>' +
       profileHtml +
       recentHtml +
       '</div>'
@@ -323,7 +323,7 @@
     likert: function (it, el, done) {
       const labels = it.labels || ['전혀 아니다', '아니다', '보통이다', '그렇다', '매우 그렇다'];
       let finished = false;
-      el.innerHTML = '<p class="q-prompt q-likert">' + U.esc(it.text) + '</p>' +
+      el.innerHTML = (it.lead ? '<p class="q-lead">' + U.esc(it.lead) + '</p>' : '') + '<p class="q-prompt q-likert">' + U.esc(it.text) + '</p>' +
         '<div class="likert">' + labels.map(function (l, i) {
           return '<button class="lk lk-' + (i + 1) + '" data-v="' + (i + 1) + '"><span class="lk-dot"></span><span class="lk-label">' + U.esc(l) + '</span></button>';
         }).join('') + '</div>';
@@ -934,8 +934,8 @@
       '<div class="wrap about">' +
       '<a class="back" href="#/">← 실험 목록</a>' +
       '<p class="eyebrow mono">ABOUT</p><h1 class="title">두뇌실험실 안내</h1>' +
-      '<section class="rs"><h3>무엇을 하는 곳인가요</h3><p>머리 쓰는 힘, 감정 다루는 힘, 성격, 연애 패턴을 스스로 재 보는 곳이에요. 돈을 받지 않고 로그인도 없어요. 문항은 전부 이 사이트를 위해 직접 만들었거나, 누구나 쓸 수 있게 공개된 문항을 우리말로 옮긴 거예요.</p></section>' +
-      '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따르고, 문항은 공개된 국제 성격 문항(IPIP)을 번역해서 손봤어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p><p>연애 스타일 검사는 사회학자 존 리가 나눈 사랑의 여섯 가지 스타일(에로스, 루두스, 스토르게, 프래그마, 마니아, 아가페)을 틀로 삼고, 문항은 이 사이트를 위해 직접 썼어요.</p></section>' +
+      '<section class="rs"><h3>무엇을 하는 곳인가요</h3><p>머리 쓰는 힘, 감정 다루는 힘, 성격, 연애 패턴, 끌리는 일을 스스로 재 보는 곳이에요. 돈을 받지 않고 로그인도 없어요. 문항은 전부 이 사이트를 위해 직접 만들었거나, 누구나 쓸 수 있게 공개된 문항을 우리말로 옮긴 거예요.</p></section>' +
+      '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따르고, 문항은 공개된 국제 성격 문항(IPIP)을 번역해서 손봤어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p><p>진로 흥미 유형 검사는 심리학자 존 홀랜드의 여섯 가지 흥미 유형(현실·탐구·예술·사회·진취·관습)을 틀로 삼아, 유형마다 두 갈래씩 해 보고 싶은 활동으로 재요. 문항은 이 사이트를 위해 직접 썼어요. 흥미는 하고 싶은 마음이라서 적성이나 능력과는 달라요.</p><p>연애 스타일 검사는 사회학자 존 리가 나눈 사랑의 여섯 가지 스타일(에로스, 루두스, 스토르게, 프래그마, 마니아, 아가페)을 틀로 삼고, 문항은 이 사이트를 위해 직접 썼어요.</p></section>' +
       '<section class="rs"><h3>점수는 어디에 쓰면 좋나요</h3><p>검사를 마치면 결과 화면에서 그 능력이나 성향이 생활 어디에 쓰이고 어떤 영향을 주는지 함께 보여 드려요. 결과는 "내가 뭘 잘하고 뭘 연습하면 좋은지" 감을 잡는 용도로 보면 딱 좋아요. 사람을 평가하거나 줄 세우는 데 쓰라고 만든 게 아니에요.</p></section>' +
       '<section class="rs"><h3>한계</h3><p>모든 결과는 참고용이에요. 많은 사람에게 실시해서 검증한 공인 검사가 아니고, 공식 IQ나 진단을 내주지 않아요. 점수는 그날 컨디션, 기기, 환경에 따라 달라져요. 마음 건강이 걱정된다면 전문가와 상담하세요.</p></section>' +
       '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 답과 결과는 이 브라우저 안에만 저장되고 서버로 보내지 않아요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +

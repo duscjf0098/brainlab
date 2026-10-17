@@ -73,6 +73,8 @@ BL.card = (function () {
     lines.forEach(function (l) { x.fillText(l, 80, y + 20); y += 50; });
     y += 50;
 
+    // 막대가 많으면(진로 흥미 6유형 등) 간격을 줄여 아래 안내 문구와 겹치지 않게 한다
+    const step = Math.min(84, Math.floor((H - 150 - y) / Math.max(1, (result.scales || []).length)));
     (result.scales || []).forEach(function (s) {
       x.fillStyle = '#15181d'; x.font = '600 30px ' + FONT; x.fillText(s.label, 80, y);
       x.fillStyle = '#0f766e'; x.font = '700 30px ' + MONO; x.textAlign = 'right'; x.fillText(String(s.value), W - 80, y); x.textAlign = 'left';
@@ -81,7 +83,7 @@ BL.card = (function () {
       const fw = (W - 160) * U.clamp((s.value - lo) / (hi - lo), 0, 1);
       if (fw > 0) { roundRect(x, 80, y + 18, Math.max(fw, 16), 16, 8); x.fillStyle = '#0f766e'; x.fill(); }
       if (s.range) { x.fillStyle = '#9ca3af'; x.fillRect(80 + (W - 160) * (100 - lo) / (hi - lo) - 1, y + 12, 2, 28); }
-      y += 84;
+      y += step;
     });
 
     x.fillStyle = '#9ca3af'; x.font = '400 23px ' + FONT;

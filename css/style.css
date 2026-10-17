@@ -197,6 +197,7 @@ p { margin: 0; }
 .scenario { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius-s); padding: 14px 16px; font-size: 15px; line-height: 1.65; color: var(--ink-2); margin-bottom: 16px; }
 .q-prompt { font-size: 18px; font-weight: 700; line-height: 1.4; margin-bottom: 16px; }
 .q-likert { font-size: 20px; min-height: 84px; display: flex; align-items: center; }
+.q-lead { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 
 .options { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .options.cols-2 { grid-template-columns: 1fr 1fr; }

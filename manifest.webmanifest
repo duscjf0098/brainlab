@@ -1,7 +1,7 @@
 {
   "name": "두뇌실험실",
   "short_name": "두뇌실험실",
-  "description": "인지 능력(추정 IQ), 정서 지능, 성격, 연애 애착 유형 자기평가 실험실",
+  "description": "인지 능력(추정 IQ), 정서 지능, 성격, 연애 애착 유형, 연애 스타일, 진로 흥미 유형 자기평가 실험실",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
