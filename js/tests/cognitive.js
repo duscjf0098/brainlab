@@ -1264,9 +1264,9 @@
     rotation: { label: '도형 회전', domain: 'spatial', minutes: 4, desc: '위 도형을 돌리기만 해서 만들 수 있는 걸 골라요. 거울처럼 뒤집은 건 정답이 아니에요.', where: '머릿속에서 모양을 돌리는 힘이에요. 주차, 지도 읽기, 조립, 그림 그리기에 쓰여요.' },
     fold: { label: '전개도 접기', domain: 'spatial', minutes: 5, desc: '펼쳐 놓은 전개도를 접어 정육면체를 만들었을 때 나올 수 있는 모양을 골라요. 무늬는 상자 바깥쪽에 그려져 있어요. 화살표처럼 방향이 있는 무늬는 놓인 방향까지 맞아야 하고, 점처럼 돌려도 똑같은 무늬는 방향을 따지지 않아요.', where: '평면을 머릿속에서 입체로 접어 보는 힘이에요. 상자 포장, 종이접기, 옷 개기, 설명서 보고 조립하기에 쓰여요.' },
     blocks: { label: '블록 세기', domain: 'spatial', minutes: 5, desc: '쌓아 놓은 블록이 모두 몇 개인지 세요. 블록은 모두 바닥이나 다른 블록 위에 놓여 있어서, 위에 블록이 있으면 그 아래에도 블록이 있어요. 예를 들어 2층 블록 아래 1층 자리가 가려져 안 보여도 거기에 블록이 있다고 세요. 또 블록은 옆 블록과 면이 맞닿아 한 덩어리로 붙어 있어요. 따로 떨어져 선 블록은 없고, 그 밖에 숨은 블록도 없어요.', where: '보이는 모습만으로 안 보이는 부분까지 그려 보는 힘이에요. 짐 싣기, 창고 정리, 도면 읽기, 물건이 몇 개 들었는지 어림하기에 쓰여요.' },
-    digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 보이는 순서 그대로 입력해요.', where: '들은 걸 그대로 잠깐 기억하는 힘이에요. 전화번호나 주문을 외우는 데 쓰여요.' },
-    digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '보이는 순서를 거꾸로 뒤집어 입력해요. 예: 3 7 1 → 1 7 3', where: '기억한 걸 머릿속에서 뒤집는 힘이에요. 암산이나 순서를 거꾸로 따져 보는 일에 쓰여요.' },
-    grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 차례로 켜져요. 켜진 순서 그대로 눌러요.', where: '위치를 순서대로 기억하는 힘이에요. 길을 기억하거나 물건 둔 자리를 떠올릴 때 쓰여요.' },
+    digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 다 나온 뒤 화면의 숫자 버튼으로 보인 순서 그대로 눌러요.', where: '들은 걸 그대로 잠깐 기억하는 힘이에요. 전화번호나 주문을 외우는 데 쓰여요.' },
+    digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 다 나온 뒤 거꾸로 뒤집어 눌러요. 예: 3 7 1 → 1 7 3', where: '기억한 걸 머릿속에서 뒤집는 힘이에요. 암산이나 순서를 거꾸로 따져 보는 일에 쓰여요.' },
+    grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 하나씩 차례로 켜져요. 다 켜진 뒤 켜진 순서 그대로 눌러요. 한 번 켜진 칸은 다시 켜지지 않아요.', where: '위치를 순서대로 기억하는 힘이에요. 길을 기억하거나 물건 둔 자리를 떠올릴 때 쓰여요.' },
     lns: { label: '숫자-문자 순서', domain: 'memory', minutes: 3, desc: '숫자와 한글 자음이 섞여 하나씩 나타나요. 다 본 뒤 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 눌러요. 예: 7 ㄷ 2 ㄱ → 2 7 ㄱ ㄷ', where: '기억하면서 동시에 정리하는 힘이에요. 여러 지시를 한 번에 받아 순서대로 처리하는 일에 쓰여요.' },
     reaction: { label: '단순 반응', domain: 'speed', minutes: 1, desc: '어두운 화면이 밝아지면서 가운데에 흰 동그라미와 "지금!"이 뜨면 최대한 빨리 눌러요. 바뀌는 때가 매번 달라서 박자를 짐작해 미리 누르면 안 돼요.', where: '신호에 얼마나 빨리 반응하는지 봐요. 운전 중 급브레이크, 공 받기 같은 순발력이에요.' },
     choicert: { label: '선택 반응', domain: 'speed', minutes: 1, desc: '화살표가 나타나면 같은 방향 버튼을 최대한 빨리 눌러요. 휴대폰은 두 손으로 잡고 양쪽 엄지를 두 버튼 바로 위에 올려 두세요. PC에서는 마우스 대신 방향키(← →)로 해 주세요.', where: '보고 판단해서 맞는 쪽으로 반응하는 속도예요. 게임, 운동, 신호 보고 움직이기에 쓰여요.' },
@@ -1311,8 +1311,10 @@
     matrix: { kind: 'prop', sd: 0.20 }, figAnalogy: { kind: 'prop', sd: 0.20 }, series: { kind: 'prop', sd: 0.22 }, sequence: { kind: 'prop', sd: 0.20 }, weights: { kind: 'prop', sd: 0.22 },
     analogy: { kind: 'prop', sd: 0.18 }, vocab: { kind: 'prop', sd: 0.18 }, logic: { kind: 'prop', sd: 0.20 }, similar: { kind: 'prop', sd: 0.18 }, rotation: { kind: 'prop', sd: 0.22 },
     fold: { kind: 'prop', sd: 0.22 }, blocks: { kind: 'prop', sd: 0.22 },
-    /* 폭 과제: 한 개씩 보여 주고 같은 길이를 두 번까지 시도하는 방식(공인 검사와 같은 규칙)의 20~30대 기준.
-       숫자 앞으로 7, 거꾸로 5, 위치(코르시) 6, 숫자-문자 5~6 정도가 보통이라 그 근처에 둔다. 기준을 낮게 잡으면 기억 IQ가 부풀어 보인다. */
+    /* 폭 과제: 한 개씩 보여 주고 같은 길이를 두 번까지 시도하는 방식(공인 검사와 같은 규칙)의 20~30대 기준. 값은 '맞힌 가장 긴 길이'(최장 폭)의 평균·sd.
+       숫자 앞으로 7, 거꾸로 5, 위치(코르시) 6, 숫자-문자 5~6 정도가 보통이라 그 근처에 둔다. 기준을 낮게 잡으면 기억 IQ가 부풀어 보인다.
+       2026-10-18: 한 시행 안에서 같은 숫자·칸이 다시 나오지 않게 바꿔(SPAN_GEN) 이 값을 가져온 검사와 조건을 맞췄고, 최대 길이를 늘렸다
+       (숫자 앞으로 9 → 10, 거꾸로 8 → 9, 숫자-문자 8 → 9). 최장 폭의 평균·sd는 그대로 두고, 채점은 이 값을 SPAN_PART로 바꾼 부분 점수 기준으로 한다. */
     digitF: { kind: 'span', mean: 7.0, sd: 1.1 }, digitB: { kind: 'span', mean: 5.2, sd: 1.2 }, grid: { kind: 'span', mean: 6.0, sd: 1.1 }, lns: { kind: 'span', mean: 5.3, sd: 1.1 },
     /* 반응 과제(2026-10-18 절차를 바꾸며 어림해 고침. 실제 응시 자료가 쌓이면 그 값으로 바꾼다).
        단순 반응 280±45 → 290±40: 대기 시간을 1.5~4초 균등에서 1초 + 지수분포(평균 1.2초)로 바꿔 오래 기다릴수록 곧 바뀐다는 준비 이득이 없어져
@@ -1329,6 +1331,12 @@
   };
   /* 기준값 버전. 익명 통계로 보내는 결과에 붙어서 어느 기준값으로 낸 z인지 구분한다. NORMS·LEVEL_P를 바꾸면 함께 바꾼다(tools/norms-from-stats.cjs --write 가 자동으로 바꿈). */
   const NORMS_VERSION = 'ai-est-2026-10-18b';
+  /* 폭 과제 부분 점수(spanScore의 part)의 기준값(2026-10-18): NORMS의 최장 폭 평균·sd에서 바꿔 쓴다. part = 최장 폭 − 0.5 × (두 번째 시도에서만 맞힌 길이 수)라
+     평균은 shift만큼 낮고 퍼짐은 scale배다. 시행 단위 모형(한 시행의 정답 확률 σ((μ − 길이)/τ), μ = a + b·θ, a·b는 지금 진행 규칙과 새 최대 길이로 푼 최장 폭이
+     NORMS 평균·sd와 같아지게 맞춤, 4만 명)에서 τ = 0.55일 때 네 과제 모두 shift 0.24~0.25, scale 0.96~0.97이었다(τ 0.4면 0.18~0.19·0.97~0.98, 0.7이면 0.29~0.30·0.94).
+     익명 통계 서버는 최장 폭(obs.value)만 모으므로, NORMS 평균·sd를 실제 자료로 바꿔도 이 변환으로 따라간다. part를 직접 모으게 되면 그 분포로 바꾼다.
+     기준값 버전은 같은 날 공간·속도 과제 고침이 올린 ai-est-2026-10-18b(아직 배포 전)를 함께 쓴다. */
+  const SPAN_PART = { shift: 0.25, scale: 0.96 };
   /* 터치 화면은 마우스·키보드보다 입력 지연이 길어(대략 30ms) 반응 과제 기준값에 그만큼 더한다. 응답의 절반 이상이 터치면 적용. */
   const TOUCH_MS = 30;
   const IQ_RANGE = [55, 145];
@@ -1413,7 +1421,7 @@
     figAnalogy: function (r) { return LEVELS.figAnalogy.full.map(function (l) { return makeFigAnalogy(r, l); }); },
     weights: function (r) { return LEVELS.weights.full.map(function (l) { return makeWeights(r, l); }); },
     similar: function (r) { return choiceItems(r, byLevel(drawPool(r, 'similar', LEVELS.similar.full)), 'similar', 35, 1); },
-    lns: function () { return [{ type: 'seqspan', part: 'lns', scored: true, start: 2, max: 8, title: '숫자-문자 순서', desc: TASKS.lns.desc }]; },
+    lns: function () { return [{ type: 'seqspan', part: 'lns', scored: true, start: 2, max: 9, title: '숫자-문자 순서', desc: TASKS.lns.desc }]; },
     symbol: function () { return [{ type: 'symsearch', part: 'symbol', scored: true, seconds: 60, title: '기호 찾기', desc: TASKS.symbol.desc }]; },
     series: function (r) { return LEVELS.series.full.map(function (l) { return makeSeries(r, l); }); },
     sequence: function (r, full) { return (full ? LEVELS.sequence.full : LEVELS.sequence.quick).map(function (l) { return makeSequence(r, l); }); },
@@ -1423,8 +1431,10 @@
     rotation: function (r, full) { return (full ? LEVELS.rotation.full : LEVELS.rotation.quick).map(function (l) { return makeRotation(r, l); }); },
     fold: function (r) { return LEVELS.fold.full.map(function (l) { return makeFold(r, l); }); },
     blocks: function (r) { return LEVELS.blocks.full.map(function (l) { return makeBlocks(r, l); }); },
-    digitF: function () { return [{ type: 'digitspan', part: 'digitF', scored: true, mode: 'forward', start: 3, max: 9, title: '숫자 앞으로 외우기', desc: TASKS.digitF.desc }]; },
-    digitB: function () { return [{ type: 'digitspan', part: 'digitB', scored: true, mode: 'backward', start: 2, max: 8, title: '숫자 거꾸로 외우기', desc: TASKS.digitB.desc }]; },
+    /* 기억 폭 과제 최대 길이(2026-10-18): 끝까지 맞혀도 숫자 앞으로 127(9자리)·거꾸로 135(8자리)·숫자-문자 137(8개)에서 막혀서 늘렸다.
+       잘하는 사람만 가는 길이라 평균 시간은 거의 그대로다. 위치 기억은 칸을 다시 쓰지 않아 9칸이 끝이다. */
+    digitF: function () { return [{ type: 'digitspan', part: 'digitF', scored: true, mode: 'forward', start: 3, max: 10, title: '숫자 앞으로 외우기', desc: TASKS.digitF.desc }]; },
+    digitB: function () { return [{ type: 'digitspan', part: 'digitB', scored: true, mode: 'backward', start: 2, max: 9, title: '숫자 거꾸로 외우기', desc: TASKS.digitB.desc }]; },
     grid: function () { return [{ type: 'gridspan', part: 'grid', scored: true, start: 3, max: 9, title: '위치 기억', desc: TASKS.grid.desc }]; },
     reaction: function () { return [{ type: 'reaction', part: 'reaction', scored: true, trials: 10, title: '단순 반응', desc: TASKS.reaction.desc }]; },
     choicert: function () { return [{ type: 'choicert', part: 'choicert', scored: true, trials: 16, title: '선택 반응', desc: TASKS.choicert.desc }]; },
@@ -1436,6 +1446,36 @@
     sequence: function (f) { return (f ? 8 : 5) + '문항 · 50~60초 · 1~5단계'; }, analogy: function (f) { return (f ? 12 : 6) + '문항 · 40~45초 · 1~5단계'; },
     vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '12문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~55초 · 1~5단계'; },
     fold: function () { return '6문항 · 45~60초 · 1~5단계'; }, blocks: function () { return '6문항 · 30~60초 · 1~5단계'; }
+  };
+
+  /* ===== 기억 폭 과제의 순서 만들기 (2026-10-18) =====
+     한 시행 안에서는 같은 숫자·같은 칸을 다시 쓰지 않는다(비복원 추출). 예전에는 바로 앞과 같은 것만 막아서 숫자 7자리의 89%, 위치 6칸의 80%에
+     같은 숫자나 칸이 다시 나왔다. 기준값을 가져온 공인 숫자 외우기·코르시 블록 검사는 한 문항 안에서 같은 숫자나 블록을 다시 쓰지 않고, 다시 나오면
+     순서를 떠올리기가 더 어려워져서(란슈버그 효과) 같은 길이라도 문항마다 난이도가 우연히 달라졌다.
+     묶어 외우기 쉬운 패턴도 거른다: 숫자는 1씩 오르거나 내리는 세 개(1 2 3, 9 8 7)가 이어지면, 칸은 한 줄(가로·세로·대각)에 놓인 세 칸이 순서와 상관없이
+     연달아 나오면 다시 뽑는다. 숫자는 0~9라 10자리, 칸은 9칸, 숫자-문자는 숫자 1~9 중 5개와 자음 7개 중 4개라 9개까지 만든다.
+     rand = 0 이상 1 미만을 주는 함수(기본 Math.random). 렌더러(js/app.js)가 시행마다 이 함수로 새 순서를 만든다. */
+  const GRID_LINES = ['0,1,2', '3,4,5', '6,7,8', '0,3,6', '1,4,7', '2,5,8', '0,4,8', '2,4,6'];
+  const LNS_LETTERS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ'];
+  function drawN(arr, n, rand) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a.slice(0, Math.min(n, a.length));
+  }
+  function redraw(make, bad) { let s = make(); for (let i = 0; i < 200 && bad(s); i++) s = make(); return s; }
+  function stepRun(d) { for (let i = 2; i < d.length; i++) { const a = d[i - 1] - d[i - 2]; if ((a === 1 || a === -1) && d[i] - d[i - 1] === a) return true; } return false; }
+  function lineRun(s) { for (let i = 2; i < s.length; i++) if (GRID_LINES.indexOf([s[i - 2], s[i - 1], s[i]].sort().join(',')) >= 0) return true; return false; }
+  const SPAN_GEN = {
+    digits: function (n, rand) { rand = rand || Math.random; return redraw(function () { return drawN([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], n, rand); }, stepRun); },
+    cells: function (n, rand) { rand = rand || Math.random; return redraw(function () { return drawN([0, 1, 2, 3, 4, 5, 6, 7, 8], n, rand); }, lineRun); },
+    lns: function (n, rand) {
+      rand = rand || Math.random;
+      const m = Math.min(n, 9), nNum = Math.ceil(m / 2);
+      const nums = drawN(['1', '2', '3', '4', '5', '6', '7', '8', '9'], nNum, rand), lets = drawN(LNS_LETTERS, m - nNum, rand);
+      const order = function (a, b) { return LNS_LETTERS.indexOf(a) - LNS_LETTERS.indexOf(b); };
+      return { seq: drawN(nums.concat(lets), m, rand), target: nums.slice().sort(function (a, b) { return a - b; }).concat(lets.slice().sort(order)) };
+    },
+    letters: LNS_LETTERS
   };
 
   /* 처음 보는 과제 앞에 붙는 연습 문제 (시간 제한 없음, 점수 없음, 풀고 나면 정답과 규칙을 보여 준다) */
@@ -1462,13 +1502,17 @@
     const items = [];
     if (COUNT_KO[key]) items.push({ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' 쉬운 것부터 나오고 뒤로 갈수록 어려워져요.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 볼게요. 연습은 점수에 안 들어가요.' : ''), where: TASKS[key].where, count: COUNT_KO[key](full) });
     if (withPractice && PRACTICE[key]) items.push(practiceItem(r, key));
-    return items.concat(BUILD[key](r, full).map(function (it) { return speedPractice(it, key, withPractice); }));
+    return items.concat(BUILD[key](r, full).map(function (it) { return taskPractice(it, key, withPractice); }));
   }
   /* 반응·기호 찾기 과제의 연습(2026-10-18, 점수에 안 들어감): 렌더러가 it.practiceTrials 번을 먼저 해 보게 한다. 처음 하는 과제만.
      단순 반응은 해 본 사람도 첫 1번을 몸풀기로 빼고 잰다(처음 몇 번이 느린 몸풀기 효과). 예전 세션의 문항에는 이 값이 없어 연습 없이 진행한다. */
   const SPEED_PRACTICE = { reaction: [3, 1], choicert: [4, 0], stroop: [4, 0], symbol: [4, 0] };
-  function speedPractice(it, key, withPractice) {
-    const p = SPEED_PRACTICE[key];
+  /* 기억 폭 과제의 연습(2026-10-18, 점수에 안 들어감): 처음 하는 과제만, 2자리·2칸·2개짜리 짧은 순서를 최대 it.practiceTrials 번 해 본다.
+     맞히면 바로 끝나고, 틀리면 정답과 규칙(예: 거꾸로라서 7 3 → 3 7)을 보여 주고 한 번 더 한다. 예전에는 연습 없이 첫 시도부터 점수에 들어가서,
+     규칙을 잘못 알고 첫 길이를 두 번 틀리면 그대로 과제가 끝나 바닥 점수가 됐다. */
+  const SPAN_PRACTICE = { digitF: [2, 0], digitB: [2, 0], grid: [2, 0], lns: [2, 0] };
+  function taskPractice(it, key, withPractice) {
+    const p = SPEED_PRACTICE[key] || SPAN_PRACTICE[key];
     if (p) { const n = withPractice ? p[0] : p[1]; if (n) it.practiceTrials = n; }
     return it;
   }
@@ -1553,12 +1597,33 @@
     part(1, DOMAINS[0], '도형과 숫자에 숨은 규칙을 찾아요. 문제마다 제한 시간이 있고, 시간이 다 되면 자동으로 넘어가요.', ['matrix', 'figAnalogy', 'series', 'sequence', 'weights']);
     part(2, DOMAINS[1], '단어의 뜻과 관계, 문장의 앞뒤를 따져요.', ['analogy', 'vocab', 'logic', 'similar']);
     part(3, DOMAINS[2], '머릿속에서 도형을 돌리고, 접고, 쌓인 블록을 세어 봐요.', ['rotation', 'fold', 'blocks']);
-    part(4, DOMAINS[3], '숫자와 위치를 잠깐 기억했다가 그대로, 거꾸로, 또는 정리해서 떠올려요. 틀려도 같은 길이로 한 번 더 기회가 있어요.', ['digitF', 'digitB', 'grid', 'lns']);
+    part(4, DOMAINS[3], '숫자와 위치를 잠깐 기억했다가 그대로, 거꾸로, 또는 정리해서 떠올려요. 틀려도 같은 길이로 한 번 더 기회가 있어요. 답은 화면 버튼으로 누르고, 처음 하는 과제는 점수에 안 들어가는 짧은 연습부터 해요.', ['digitF', 'digitB', 'grid', 'lns']);
     part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응해요. 조용한 곳에서 화면을 똑바로 보고, 휴대폰은 두 손으로 잡고 해 주세요. 처음 하는 과제는 점수에 안 들어가는 연습부터 해요.', ['reaction', 'choicert', 'stroop', 'symbol']);
     return items;
   }
 
   /* ===== 과제별 통계 → z ===== */
+  /* 폭 과제 점수(2026-10-18). 예전에는 '맞힌 가장 긴 길이' 정수 하나라 한 자리가 IQ 12.5~13.6점이었고, 시행 하나를 맞히고 틀리는 데 따라 점수가
+     한 단계씩 뛰었다(시행 단위 모형의 재검사 r .55~.63, 빠른 검사 기억 영역은 여덟 값뿐). 진행 규칙(맞히면 한 길이 늘림, 같은 길이를 두 번 틀리면 끝)은
+     그대로 두고, 맞힌 길이마다 첫 시도에 맞혔으면 1점, 두 번째 시도에서만 맞혔으면 0.5점을 줘서 부분 점수를 낸다: part = (시작 길이 − 1) + 합.
+     같은 모형에서 재검사 r이 .04~.05 오르고(.60~.67) 걸리는 시간은 그대로다. 길이마다 꼭 두 번씩 하는 방식(r .67~.75)은 과제마다 40~50초가
+     늘어 휴대폰으로 푸는 시간을 생각해 쓰지 않았다. 답 = { best: 최장 폭, log: [[길이, 정답 1·오답 0], …], restarts }.
+     part는 기록(log)으로 다시 계산하고, 기록이 없거나 최장 폭과 맞지 않으면 null이다(그때는 예전처럼 최장 폭으로 채점). */
+  function spanScore(it, a) {
+    const lo = it.start - 1;
+    const best = typeof a.best === 'number' && isFinite(a.best) ? U.clamp(Math.round(a.best), lo, it.max) : lo;
+    const res = { best: best, part: null, first: 0, second: 0 };
+    if (!Array.isArray(a.log)) return res;
+    let part = lo, top = lo, prev = null;
+    a.log.forEach(function (e) {
+      if (!Array.isArray(e) || typeof e[0] !== 'number') return;
+      const ok = !!e[1], retry = !!prev && prev[0] === e[0] && !prev[1];
+      if (ok) { part += retry ? 0.5 : 1; if (retry) res.second++; else res.first++; top = Math.max(top, e[0]); }
+      prev = [e[0], ok];
+    });
+    if (top === best) res.part = U.clamp(part, lo, best);
+    return res;
+  }
   function taskStats(key, rows, review) {
     const norm = NORMS[key];
     if (norm.kind === 'prop') {
@@ -1591,9 +1656,18 @@
       return { z: U.clamp(theta, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (adaptive ? (lvText ? ' · ' : '') + '맞힌 최고 단계 ' + maxReached : '') + (avg != null ? ' · 평균 ' + avg + '초' : ''), meanP: adaptive ? undefined : Math.round(meanP * 100), obs: propObs(rows, n, c, lv, adaptive, avg) };
     }
     if (norm.kind === 'span') {
-      const it = rows[0].it;
-      const s = typeof rows[0].a === 'number' ? rows[0].a : it.start - 1;
-      return { z: U.clamp((s - norm.mean) / norm.sd, -3, 3), raw: Math.max(s, it.start - 1) + (key === 'grid' ? '칸' : key === 'lns' ? '개' : '자리'), detail: '', obs: { value: Math.max(0, s) } };
+      const it = rows[0].it, a0 = rows[0].a, unit = key === 'grid' ? '칸' : key === 'lns' ? '개' : '자리';
+      // 2026-10-18부터 답은 { best, log, restarts }(spanScore). 예전 렌더러가 넘긴 답은 최장 폭 숫자 하나라 예전처럼 최장 폭 기준값으로 채점한다.
+      if (a0 && typeof a0 === 'object') {
+        const sc = spanScore(it, a0), lo = it.start - 1, has = sc.part != null;
+        const z = has ? (sc.part - (norm.mean - SPAN_PART.shift)) / (norm.sd * SPAN_PART.scale) : (sc.best - norm.mean) / norm.sd;
+        const note = !has ? '' : sc.best <= lo ? '첫 길이에서 두 번 다 틀림' : sc.second ? '두 번째 시도에서 맞힌 길이 ' + sc.second + '개는 반만 반영' : sc.best >= it.max ? '최대 길이까지 모두 첫 시도에 맞힘' : '맞힌 길이 모두 첫 시도에 맞힘';
+        const obs = { value: Math.max(0, sc.best), restarts: a0.restarts || 0 };
+        if (has) obs.part = sc.part;
+        return { z: U.clamp(z, -3, 3), raw: sc.best + unit, detail: note + (note ? cnt(a0.restarts, '처음부터 다시 시작 #번') : cnt(a0.restarts, '처음부터 다시 시작 #번').slice(3)), obs: obs };
+      }
+      const s = typeof a0 === 'number' ? a0 : it.start - 1;
+      return { z: U.clamp((s - norm.mean) / norm.sd, -3, 3), raw: Math.max(s, it.start - 1) + unit, detail: '', obs: { value: Math.max(0, s) } };
     }
     if (norm.kind === 'count') {
       // 기호 찾기: 정답 − 오답. 정확도가 70% 미만이면 찍기(50%)와 가려지지 않으니 점수 대신 "측정 안 됨"을 낸다(아래 VALID).
@@ -1849,6 +1923,7 @@
       { id: 'full', label: '정밀 검사', desc: '20개 과제의 모든 단계를 처음부터 끝까지 다 풀어요. 가장 길지만, 단계별 정답률과 틀린 문제 다시 보기까지 볼 수 있어요.', duration: '약 1시간', length: '20과제' }
     ],
     glyphSVG: glyphSVG,
+    spanGen: SPAN_GEN,
     adaptNext: adaptNext,
     adaptRecord: adaptRecord,
     _internals: { cellSVG: cellSVG, legible: legible, OPS: OPS, logicRows: logicRows, logicK: logicK, kUnique: kUnique, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },

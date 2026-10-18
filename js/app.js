@@ -276,6 +276,102 @@
     el.querySelector('#go').addEventListener('click', onGo);
   }
 
+  /* ---------- 기억 폭 과제 공용 (2026-10-18) ----------
+     흐름: 시작 카드 → 연습(처음 하는 과제만. 2자리·2칸·2개짜리 순서로 최대 it.practiceTrials 번, 맞히면 바로 끝, 점수 없음) → "이제 진짜예요" 카드 → 본 시행.
+     본 시행은 it.start 길이부터 맞히면 한 길이 늘리고, 같은 길이에서 두 번 틀리면 끝난다(it.max까지).
+     순서는 엔진(cognitive.js SPAN_GEN)이 만들어서 한 시행 안에 같은 숫자·칸이 다시 나오지 않는다.
+     입력은 화면 버튼으로만 받는다(휴대폰 키보드를 띄우지 않아, 키보드가 늦게 뜨거나 화면이 밀리는 동안 기억을 붙들고 있지 않아도 된다).
+     길이만큼 다 넣어야 "확인"이 켜지고, 확인 전에는 "하나 지우기"로 고칠 수 있다. 바로 앞과 같은 숫자·칸을 또 누르면 두 번 탭으로 보고 무시한다
+     (정답에 그런 경우가 없어서 맞는 답을 막지 않는다). PC는 숫자키(숫자 과제)·Backspace·Enter도 받는다.
+     답 = { best: 맞힌 가장 긴 길이, log: [[길이, 정답 1·오답 0], …], restarts: 본 시행을 처음부터 다시 시작한 횟수 }. 엔진이 log로 부분 점수를 낸다.
+     예전 세션에서 만든 문항(practiceTrials 없음, 예전 최대 길이)도 그대로 돈다(연습 없이 바로 본 시행).
+     spec = { gen(n), show(stim, n, practice, T, then), ask(stim, n, practice, judge) → 정리 함수, answerHtml(stim), intro, rule, real } */
+  const SPAN_PRACTICE_LEN = 2;
+  function spanTask(it, el, done, ctx, spec) {
+    const timers = [], log = [];
+    let gone = false, finished = false, askOff = null;
+    let pdone = 0, len = it.start, fails = 0, best = it.start - 1, starts = 0;
+    const practiceN = it.practiceTrials || 0;
+    const T = function (fn, ms) { timers.push(setTimeout(function () { if (!gone) fn(); }, ms)); };
+    function trial(n, practice, then) {
+      const stim = spec.gen(n);
+      spec.show(stim, n, practice, T, function () {
+        askOff = spec.ask(stim, n, practice, function (ok) {
+          if (askOff) { askOff(); askOff = null; }
+          then(ok, stim);
+        });
+      });
+    }
+    function practiceStep() {
+      trial(SPAN_PRACTICE_LEN, true, function (ok, stim) {
+        pdone += 1;
+        const again = !ok && pdone < practiceN;
+        el.innerHTML = '<div class="practice-fb ' + (ok ? 'ok' : 'bad') + '"><p class="practice-title">' + (ok ? '정답이에요.' : '아쉽네요. 틀렸어요.') + '</p>' +
+          (ok ? '' : spec.answerHtml(stim)) + '<p class="practice-explain">' + U.esc(spec.rule) + '</p>' +
+          '<button class="btn btn-primary btn-block" id="pnext">' + (again ? '한 번 더 연습' : '연습 끝내기') + '</button></div>';
+        el.querySelector('#pnext').addEventListener('click', function () {
+          if (gone) return;
+          if (again) practiceStep(); else practiceEnd(el, spec.real, startRun);
+        });
+      });
+    }
+    function startRun() { starts = markStart(it, ctx); next(); }
+    function next() {
+      trial(len, false, function (ok, stim) {
+        log.push([len, ok ? 1 : 0]);
+        el.innerHTML = '<div class="span-stage"><p class="span-fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '정답' : '오답') + '</p>' + (ok ? '' : spec.answerHtml(stim)) + '</div>';
+        if (ok) { best = len; fails = 0; len += 1; } else fails += 1;
+        T(len > it.max || fails >= 2 ? end : next, ok ? 900 : 1400);
+      });
+    }
+    function end() { if (finished) return; finished = true; done({ best: best, log: log, restarts: starts }); }
+    introCard(el, it, function () { if (practiceN) practiceStep(); else startRun(); },
+      spec.intro + (practiceN ? ' 먼저 짧은 순서로 연습해요. 연습은 점수에 안 들어가요.' : ''));
+    return function () { gone = true; timers.forEach(clearTimeout); if (askOff) { askOff(); askOff = null; } };
+  }
+  function practiceTag(p) { return p ? '<div class="practice-tag">연습 · 점수에 안 들어가요</div>' : ''; }
+  // 넣은 답 칸: 넣은 것은 글자(위치 기억은 점)로, 남은 자리는 빈 밑줄로 보여 줘서 몇 개를 더 넣어야 하는지 보이게 한다
+  function spanSlots(vals, n, dot) {
+    let h = '';
+    for (let i = 0; i < n; i++) h += i < vals.length ? '<span class="on">' + U.esc(dot ? '●' : vals[i]) + '</span>' : '<span></span>';
+    return h;
+  }
+  // 넣은 개수·하나 지우기·확인을 한 줄에 둬서 작은 폰에서도 키패드와 확인이 한 화면에 든다
+  const SPAN_INPUT_TOOLS = '<div class="span-tools"><span class="mono muted small" id="cnt"></span><button class="btn btn-ghost" id="undo">하나 지우기</button>' +
+    '<button class="btn btn-primary" id="ok" disabled>확인</button></div>';
+  // 버튼 입력 공용: put(값) 넣기(꽉 찼거나 바로 앞과 같은 값이면 false), 하나 지우기, 확인(다 채워야 켜짐). 화면에 #slots·#cnt·#undo·#ok가 있어야 한다.
+  function spanInput(el, n, opts, judge) {
+    const vals = [];
+    let sent = false;
+    const slots = el.querySelector('#slots'), cnt = el.querySelector('#cnt'), ok = el.querySelector('#ok'), undo = el.querySelector('#undo');
+    function refresh() {
+      slots.innerHTML = spanSlots(vals, n, opts.dot);
+      cnt.textContent = vals.length + ' / ' + n;
+      ok.disabled = vals.length !== n;
+      undo.disabled = !vals.length;
+      if (opts.onChange) opts.onChange(vals);
+    }
+    function put(v) {
+      if (sent || vals.length >= n) return false;
+      if (vals.length && vals[vals.length - 1] === v) return false;
+      vals.push(v); refresh(); return true;
+    }
+    function pop() { if (sent || !vals.length) return; vals.pop(); refresh(); }
+    function submit() { if (sent || vals.length !== n) return; sent = true; ok.disabled = true; undo.disabled = true; judge(vals.slice()); }
+    undo.addEventListener('click', pop);
+    ok.addEventListener('click', submit);
+    // Enter는 기본 동작(포커스된 버튼 누르기)을 막아 마지막에 누른 버튼이 한 번 더 들어가지 않게 한다
+    const onKey = function (e) {
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Backspace') { e.preventDefault(); pop(); }
+      else if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      else if (opts.key) opts.key(e.key);
+    };
+    document.addEventListener('keydown', onKey);
+    refresh();
+    return { put: put, off: function () { document.removeEventListener('keydown', onKey); } };
+  }
+
   const RENDER = {
     section: function (it, el, done) {
       el.innerHTML = '<div class="section-card' + (it.sub ? ' section-sub' : '') + '">' +
@@ -391,155 +487,113 @@
       return function () { gone = true; document.removeEventListener('keydown', onKey); };
     },
 
-    digitspan: function (it, el, done) {
-      let timers = [];
-      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
-      let len = it.start, fails = 0, best = it.start - 1, finished = false;
-      function genDigits(n) {
-        const d = [];
-        while (d.length < n) { const x = Math.floor(Math.random() * 10); if (d.length && d[d.length - 1] === x) continue; d.push(x); }
-        return d;
-      }
-      function trial() {
-        const digits = genDigits(len);
-        el.innerHTML = '<div class="span-stage"><p class="mono muted">' + len + '자리 · ' + (it.mode === 'backward' ? '거꾸로' : '순서대로') + '</p><div class="span-digit mono" id="digit">&nbsp;</div><p class="muted small">숫자를 잘 보세요</p></div>';
-        const box = el.querySelector('#digit');
-        digits.forEach(function (d, i) {
-          T(function () { box.textContent = String(d); box.classList.add('on'); }, 500 + i * 1000);
-          T(function () { box.textContent = ' '; box.classList.remove('on'); }, 500 + i * 1000 + 750);
-        });
-        T(function () { ask(digits); }, 500 + digits.length * 1000 + 150);
-      }
-      function ask(digits) {
-        const expect = (it.mode === 'backward' ? digits.slice().reverse() : digits).join('');
-        el.innerHTML = '<div class="span-stage"><p class="q-prompt">' + (it.mode === 'backward' ? '거꾸로 뒤집어' : '보인 순서대로') + ' 입력하세요</p>' +
-          '<input id="inp" class="span-input mono" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="' + len + '" aria-label="숫자 입력">' +
-          '<button class="btn btn-primary btn-block" id="ok">확인</button></div>';
-        const inp = el.querySelector('#inp');
-        setTimeout(function () { inp.focus(); }, 50);
-        let submitted = false;
-        const submit = function () {
-          const v = inp.value.replace(/\D/g, '');
-          if (!v || submitted) return;
-          submitted = true;
-          const ok = v === expect;
-          el.innerHTML = '<div class="span-stage"><p class="span-fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '정답' : '오답') + '</p>' +
-            (ok ? '' : '<p class="mono muted">정답은 ' + expect.split('').join(' ') + '</p>') + '</div>';
-          if (ok) { best = len; fails = 0; len += 1; } else { fails += 1; }
-          if (len > it.max || fails >= 2) T(end, 1000); else T(trial, 1000);
-        };
-        el.querySelector('#ok').addEventListener('click', submit);
-        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
-      }
-      function end() { if (finished) return; finished = true; done(best); }
-      introCard(el, it, trial, it.start + '자리부터 시작해서 맞힐 때마다 한 자리씩 늘어나요. 최대 ' + it.max + '자리까지예요.');
-      return function () { timers.forEach(clearTimeout); };
+    digitspan: function (it, el, done, ctx) {
+      const back = it.mode === 'backward', G = BL.tests.cognitive.spanGen;
+      const expectOf = function (d) { return back ? d.slice().reverse() : d; };
+      return spanTask(it, el, done, ctx, {
+        gen: function (n) { return G.digits(n); },
+        show: function (d, n, p, T, then) {
+          el.innerHTML = '<div class="span-stage">' + practiceTag(p) + '<p class="mono muted">' + n + '자리 · ' + (back ? '거꾸로' : '순서대로') + '</p><div class="span-digit mono" id="digit">&nbsp;</div><p class="muted small">숫자를 잘 보세요</p></div>';
+          const box = el.querySelector('#digit');
+          d.forEach(function (x, i) {
+            T(function () { box.textContent = String(x); box.classList.add('on'); }, 500 + i * 1000);
+            T(function () { box.textContent = ' '; box.classList.remove('on'); }, 500 + i * 1000 + 750);
+          });
+          T(then, 500 + d.length * 1000 + 150);
+        },
+        ask: function (d, n, p, judge) {
+          const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+          el.innerHTML = '<div class="span-stage">' + practiceTag(p) + '<p class="q-prompt">' + (back ? '거꾸로 뒤집어' : '보인 순서대로') + ' 누르세요</p>' +
+            '<div class="span-slots mono" id="slots" aria-live="polite"></div>' +
+            '<div class="lns-btns digit-pad">' + keys.map(function (k) { return '<button class="lns-btn mono" data-v="' + k + '">' + k + '</button>'; }).join('') + '</div>' +
+            SPAN_INPUT_TOOLS + '</div>';
+          const expect = expectOf(d).join('');
+          const inp = spanInput(el, n, { key: function (k) { if (/^[0-9]$/.test(k)) inp.put(k); } }, function (vals) { judge(vals.join('') === expect); });
+          el.querySelectorAll('.lns-btn').forEach(function (b) { b.addEventListener('click', function () { inp.put(b.getAttribute('data-v')); }); });
+          return inp.off;
+        },
+        answerHtml: function (d) { return '<p class="mono muted">정답은 ' + expectOf(d).join(' ') + '</p>'; },
+        intro: it.start + '자리부터 시작해서 맞힐 때마다 한 자리씩 늘어나요. 같은 길이에서 두 번 틀리면 끝나요. 최대 ' + it.max + '자리까지예요. 다 나온 뒤 화면의 숫자 버튼으로 누르고 확인을 눌러요.',
+        rule: back ? '거꾸로 뒤집어 눌러요. 예를 들어 7 3이 보였으면 3 7, 2 8 5가 보였으면 5 8 2를 눌러요. 잘못 눌렀으면 확인 전에 하나 지우기로 고쳐요.'
+          : '보인 순서 그대로 눌러요. 예를 들어 4 9가 보였으면 4 9를 눌러요. 잘못 눌렀으면 확인 전에 하나 지우기로 고쳐요.',
+        real: '이제부터 점수에 들어가요. ' + it.start + '자리부터 시작해서 맞히면 한 자리씩 늘어나고, 같은 길이에서 두 번 틀리면 끝나요.'
+      });
     },
 
-    gridspan: function (it, el, done) {
-      let timers = [];
-      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
-      let len = it.start, fails = 0, best = it.start - 1, finished = false;
-      function gridHtml(cls) {
+    gridspan: function (it, el, done, ctx) {
+      const G = BL.tests.cognitive.spanGen;
+      // cls: show(보여 주기) · input(누르기) · answer(틀렸을 때 정답 순서를 번호로)
+      function gridHtml(cls, labels) {
         let h = '<div class="gspan ' + cls + '">';
-        for (let i = 0; i < 9; i++) h += '<button class="gcell" data-i="' + i + '" aria-label="칸 ' + (i + 1) + '"></button>';
+        for (let i = 0; i < 9; i++) h += cls === 'answer' ? '<div class="gcell' + (labels[i] ? ' num' : '') + '">' + (labels[i] || '') + '</div>' : '<button class="gcell" data-i="' + i + '" aria-label="칸 ' + (i + 1) + '"></button>';
         return h + '</div>';
       }
-      function trial() {
-        const seq = [];
-        while (seq.length < len) { const x = Math.floor(Math.random() * 9); if (seq.length && seq[seq.length - 1] === x) continue; seq.push(x); }
-        el.innerHTML = '<div class="span-stage"><p class="mono muted">' + len + '칸 · 잘 보세요</p>' + gridHtml('show') + '</div>';
-        const cells = el.querySelectorAll('.gcell');
-        seq.forEach(function (c, i) {
-          T(function () { cells[c].classList.add('on'); }, 500 + i * 900);
-          T(function () { cells[c].classList.remove('on'); }, 500 + i * 900 + 600);
-        });
-        T(function () { ask(seq); }, 500 + seq.length * 900 + 200);
-      }
-      function ask(seq) {
-        el.innerHTML = '<div class="span-stage"><p class="q-prompt">켜진 순서대로 탭하세요</p>' + gridHtml('input') + '<p class="mono muted" id="cnt">0 / ' + len + '</p></div>';
-        const taps = [];
-        el.querySelectorAll('.gcell').forEach(function (b) {
-          b.addEventListener('click', function () {
-            if (taps.length >= len) return;
-            taps.push(Number(b.getAttribute('data-i')));
-            b.classList.add('tap');
-            setTimeout(function () { b.classList.remove('tap'); }, 250);
-            el.querySelector('#cnt').textContent = taps.length + ' / ' + len;
-            if (taps.length === len) T(function () { judge(seq, taps); }, 250);
+      return spanTask(it, el, done, ctx, {
+        gen: function (n) { return G.cells(n); },
+        show: function (seq, n, p, T, then) {
+          el.innerHTML = '<div class="span-stage">' + practiceTag(p) + '<p class="mono muted">칸 ' + n + '개 · 잘 보세요</p>' + gridHtml('show') + '</div>';
+          const cells = el.querySelectorAll('.gcell');
+          seq.forEach(function (c, i) {
+            T(function () { cells[c].classList.add('on'); }, 500 + i * 900);
+            T(function () { cells[c].classList.remove('on'); }, 500 + i * 900 + 600);
           });
-        });
-      }
-      function judge(seq, taps) {
-        const ok = seq.every(function (v, i) { return v === taps[i]; });
-        el.innerHTML = '<div class="span-stage"><p class="span-fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '정답' : '오답') + '</p></div>';
-        if (ok) { best = len; fails = 0; len += 1; } else { fails += 1; }
-        if (len > it.max || fails >= 2) T(end, 900); else T(trial, 900);
-      }
-      function end() { if (finished) return; finished = true; done(best); }
-      introCard(el, it, trial, it.start + '칸부터 시작해서 맞힐 때마다 한 칸씩 늘어나요. 최대 ' + it.max + '칸까지예요.');
-      return function () { timers.forEach(clearTimeout); };
+          T(then, 500 + seq.length * 900 + 200);
+        },
+        ask: function (seq, n, p, judge) {
+          el.innerHTML = '<div class="span-stage">' + practiceTag(p) + '<p class="q-prompt">켜진 순서대로 누르세요</p>' + gridHtml('input') +
+            '<div class="span-slots" id="slots" aria-live="polite"></div>' + SPAN_INPUT_TOOLS + '</div>';
+          const inp = spanInput(el, n, { dot: true }, function (vals) { judge(vals.join(',') === seq.join(',')); });
+          el.querySelectorAll('.gcell').forEach(function (b) {
+            b.addEventListener('click', function () {
+              if (!inp.put(Number(b.getAttribute('data-i')))) return;
+              // 누른 칸은 0.3초 동안 진하게 칠해서 눌렸는지 바로 보이게 한다
+              b.classList.add('tap');
+              setTimeout(function () { b.classList.remove('tap'); }, 300);
+            });
+          });
+          return inp.off;
+        },
+        answerHtml: function (seq) { const lab = []; seq.forEach(function (c, i) { lab[c] = i + 1; }); return '<p class="muted small">정답 순서</p>' + gridHtml('answer', lab); },
+        intro: '켜지는 칸이 ' + it.start + '개부터 시작해서 맞힐 때마다 하나씩 늘어나요. 같은 길이에서 두 번 틀리면 끝나요. 같은 칸이 두 번 켜지지는 않아서' +
+          (it.max >= 9 ? ', 가장 길면 아홉 칸이 모두 한 번씩 켜져요.' : ' 최대 ' + it.max + '개까지예요.') + ' 다 누른 뒤 확인을 눌러요.',
+        rule: '칸이 켜진 순서 그대로 눌러요. 다 누른 뒤 확인을 눌러야 채점돼요. 잘못 눌렀으면 확인 전에 하나 지우기로 고쳐요.',
+        real: '이제부터 점수에 들어가요. 칸 ' + it.start + '개부터 시작해서 맞히면 하나씩 늘어나고, 같은 길이에서 두 번 틀리면 끝나요.'
+      });
     },
 
-    seqspan: function (it, el, done) {
-      const LETTERS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ'];
-      let timers = [], len = it.start, fails = 0, best = it.start - 1, finished = false;
-      const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
-      const sampleN = function (arr, n) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a.slice(0, n); };
-      function gen(n) {
-        const nNum = Math.ceil(n / 2), nLet = Math.floor(n / 2);
-        const nums = sampleN([1, 2, 3, 4, 5, 6, 7, 8, 9], nNum).map(String);
-        const lets = sampleN(LETTERS, nLet);
-        const seq = sampleN(nums.concat(lets), n);
-        const target = nums.slice().sort(function (a, b) { return a - b; }).concat(lets.slice().sort(function (a, b) { return LETTERS.indexOf(a) - LETTERS.indexOf(b); }));
-        return { seq: seq, target: target };
-      }
-      function trial() {
-        const g = gen(len);
-        el.innerHTML = '<div class="span-stage"><p class="mono muted">' + len + '개 · 잘 보세요</p><div class="span-digit mono" id="digit">&nbsp;</div><p class="muted small">숫자와 자음이 섞여 나와요</p></div>';
-        const box = el.querySelector('#digit');
-        g.seq.forEach(function (d, i) {
-          T(function () { box.textContent = d; box.classList.add('on'); }, 500 + i * 1000);
-          T(function () { box.textContent = ' '; box.classList.remove('on'); }, 500 + i * 1000 + 750);
-        });
-        T(function () { ask(g); }, 500 + g.seq.length * 1000 + 150);
-      }
-      /* 응답은 전체 키패드(숫자 1~9, 자음 ㄱ~ㅅ)에서 고른다. 방금 본 것만 버튼으로 주면 외울 필요 없이 정렬만 하면 되어
-         기억 과제가 아니게 된다 (실제로 점수가 부풀었던 원인). */
-      function ask(g) {
-        const n = g.seq.length;
-        const btn = function (k) { return '<button class="lns-btn mono" data-v="' + k + '">' + k + '</button>'; };
-        el.innerHTML = '<div class="span-stage"><p class="q-prompt">본 것을 떠올려 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 누르세요</p><div class="lns-picked mono" id="picked">&nbsp;</div>' +
-          '<div class="lns-pad"><div class="lns-grp"><span class="lns-grp-label mono">숫자</span><div class="lns-btns lns-nums">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(btn).join('') + '</div></div>' +
-          '<div class="lns-grp"><span class="lns-grp-label mono">자음</span><div class="lns-btns lns-cons">' + LETTERS.map(btn).join('') + '</div></div></div>' +
-          '<div class="lns-tools"><span class="mono muted small" id="cnt">0 / ' + n + '</span><button class="btn btn-ghost" id="undo">하나 지우기</button></div></div>';
-        const taps = [];
-        const refresh = function () { el.querySelector('#picked').textContent = taps.length ? taps.join(' ') : ' '; el.querySelector('#cnt').textContent = taps.length + ' / ' + n; };
-        el.querySelectorAll('.lns-btn').forEach(function (b) {
-          b.addEventListener('click', function () {
-            if (b.disabled || taps.length >= n) return;
-            b.disabled = true;
-            taps.push(b.getAttribute('data-v'));
-            refresh();
-            if (taps.length === n) T(function () { judge(g, taps); }, 250);
+    seqspan: function (it, el, done, ctx) {
+      const G = BL.tests.cognitive.spanGen, LETTERS = G.letters;
+      return spanTask(it, el, done, ctx, {
+        gen: function (n) { return G.lns(n); },
+        show: function (g, n, p, T, then) {
+          el.innerHTML = '<div class="span-stage">' + practiceTag(p) + '<p class="mono muted">' + n + '개 · 잘 보세요</p><div class="span-digit mono" id="digit">&nbsp;</div><p class="muted small">숫자와 자음이 섞여 나와요</p></div>';
+          const box = el.querySelector('#digit');
+          g.seq.forEach(function (x, i) {
+            T(function () { box.textContent = x; box.classList.add('on'); }, 500 + i * 1000);
+            T(function () { box.textContent = ' '; box.classList.remove('on'); }, 500 + i * 1000 + 750);
           });
-        });
-        el.querySelector('#undo').addEventListener('click', function () {
-          if (!taps.length || taps.length >= n) return;
-          const v = taps.pop();
-          const b = el.querySelector('.lns-btn[data-v="' + v + '"]'); if (b) b.disabled = false;
-          refresh();
-        });
-      }
-      function judge(g, taps) {
-        const ok = taps.join('') === g.target.join('');
-        el.innerHTML = '<div class="span-stage"><p class="span-fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '정답' : '오답') + '</p>' + (ok ? '' : '<p class="mono muted">정답 순서: ' + g.target.join(' ') + '</p>') + '</div>';
-        if (ok) { best = len; fails = 0; len += 1; } else { fails += 1; }
-        if (len > it.max || fails >= 2) T(end, 1000); else T(trial, 1000);
-      }
-      function end() { if (finished) return; finished = true; done(best); }
-      introCard(el, it, trial, it.start + '개부터 시작해서 맞힐 때마다 하나씩 늘어나요. 최대 ' + it.max + '개까지예요.');
-      return function () { timers.forEach(clearTimeout); };
+          T(then, 500 + g.seq.length * 1000 + 150);
+        },
+        /* 응답은 전체 키패드(숫자 1~9, 자음 ㄱ~ㅅ)에서 고른다. 방금 본 것만 버튼으로 주면 외울 필요 없이 정렬만 하면 되어
+           기억 과제가 아니게 된다 (실제로 점수가 부풀었던 원인). 누른 버튼은 꺼 두고, 하나 지우면 다시 켠다. */
+        ask: function (g, n, p, judge) {
+          const btn = function (k) { return '<button class="lns-btn mono" data-v="' + k + '">' + k + '</button>'; };
+          el.innerHTML = '<div class="span-stage">' + practiceTag(p) + '<p class="q-prompt">본 것을 떠올려 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 누르세요</p>' +
+            '<div class="span-slots mono" id="slots" aria-live="polite"></div>' +
+            '<div class="lns-pad"><div class="lns-grp"><span class="lns-grp-label mono">숫자</span><div class="lns-btns lns-nums">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(btn).join('') + '</div></div>' +
+            '<div class="lns-grp"><span class="lns-grp-label mono">자음</span><div class="lns-btns lns-cons">' + LETTERS.map(btn).join('') + '</div></div></div>' +
+            SPAN_INPUT_TOOLS + '</div>';
+          const btns = el.querySelectorAll('.lns-btn');
+          const inp = spanInput(el, n, { onChange: function (vals) { btns.forEach(function (b) { b.disabled = vals.indexOf(b.getAttribute('data-v')) >= 0; }); } },
+            function (vals) { judge(vals.join('') === g.target.join('')); });
+          btns.forEach(function (b) { b.addEventListener('click', function () { if (!b.disabled) inp.put(b.getAttribute('data-v')); }); });
+          return inp.off;
+        },
+        answerHtml: function (g) { return '<p class="mono muted">정답 순서: ' + g.target.join(' ') + '</p>'; },
+        intro: it.start + '개부터 시작해서 맞힐 때마다 하나씩 늘어나요. 같은 길이에서 두 번 틀리면 끝나요. 최대 ' + it.max + '개까지예요. 다 누른 뒤 확인을 눌러요.',
+        rule: '숫자를 작은 것부터 먼저 누르고, 그다음 자음을 ㄱㄴㄷ 순서로 눌러요. 예를 들어 7 ㄷ 2 ㄱ이 보였으면 2 7 ㄱ ㄷ을 눌러요. 잘못 눌렀으면 확인 전에 하나 지우기로 고쳐요.',
+        real: '이제부터 점수에 들어가요. ' + it.start + '개부터 시작해서 맞히면 하나씩 늘어나고, 같은 길이에서 두 번 틀리면 끝나요.'
+      });
     },
 
     symsearch: function (it, el, done, ctx) {
@@ -1094,7 +1148,13 @@
   function randomAnswer(it, r) {
     if (it.type === 'choice') return r.int(0, (it.options || it.optionsHtml).length - 1);
     if (it.type === 'likert') return r.int(1, 5);
-    if (it.type === 'digitspan' || it.type === 'gridspan' || it.type === 'seqspan') return r.int(it.start, it.max);
+    if (it.type === 'digitspan' || it.type === 'gridspan' || it.type === 'seqspan') {
+      // 기억 폭 과제: 맞힌 길이마다 가끔 두 번째 시도에서 맞히고, 다음 길이에서 두 번 틀려 끝나는 시행 기록
+      const best = r.int(it.start - 1, it.max), log = [];
+      for (let L = it.start; L <= best; L++) { if (r.next() < 0.3) log.push([L, 0]); log.push([L, 1]); }
+      if (best < it.max) log.push([best + 1, 0], [best + 1, 0]);
+      return { best: best, log: log, restarts: 0 };
+    }
     if (it.type === 'symsearch') return { correct: r.int(14, 34), wrong: r.int(0, 4) };
     if (it.type === 'reaction') { const n = it.trials || 5; const times = []; for (let i = 0; i < n; i++) times.push(r.int(190, 380)); return { times: times, touch: 0, mouse: n, early: r.int(0, 2) }; }
     if (it.type === 'choicert') { const a = []; for (let i = 0; i < it.trials; i++) a.push({ rt: r.int(320, 650), ok: r.next() < 0.95, inp: 'k' }); return { trials: a, fast: 0 }; }
