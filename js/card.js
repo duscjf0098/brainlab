@@ -170,7 +170,7 @@ BL.card = (function () {
       content: {
         title: '두뇌실험실 · ' + test.title,
         description: result.headline + (result.label ? ' · ' + result.label : ''),
-        imageUrl: img ? img.url : url + 'og.png?v=20261018', imageWidth: img ? img.w : 1200, imageHeight: img ? img.h : 630,
+        imageUrl: img ? img.url : url + 'og.png?v=20261018b', imageWidth: img ? img.w : 1200, imageHeight: img ? img.h : 630,
         link: { mobileWebUrl: url, webUrl: url }
       },
       buttons: [{ title: '나도 해보기', link: { mobileWebUrl: url, webUrl: url } }],
