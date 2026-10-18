@@ -3,6 +3,8 @@
    가상 응시자는 cognitive.js 엔진을 그대로 쓴다(tools/cognitive-model.cjs): build 로 문항을 만들고, 적응형은 adaptNext·adaptRecord 로 진행하고,
    score 로 채점해 사이트(js/stats.js payloadOf)와 같은 모양으로 보낸다. 정답 확률은 점수 계산과 같은 모형 c + (1 − c)·σ(θ − b),
    b = ln((1 − p)/p), p = LEVEL_P, c = 1/보기 수. 그래서 LEVEL_P·문항 풀·LEVELS 가 바뀌어도 이 파일을 고칠 필요가 없다.
+   기억 폭·반응·기호 찾기 답은 2026-10-18 렌더러와 같은 꼴(폭 { best, log, restarts }, 단순 반응 { times, … }, 선택·색-단어 { trials, … })로 만들어
+   지금 채점 경로(폭 부분 점수, 실수 감점, 시행 수)를 그대로 탄다. 예전 꼴(숫자·배열)도 엔진이 받지만 예전 채점으로 간다.
    보낸 뒤 지우기(배포 서버): server 폴더에서
    npx wrangler d1 execute brainlab-stats --remote --command "DELETE FROM task_rows WHERE sid IN (SELECT sid FROM submissions WHERE norms='fake-test'); DELETE FROM submissions WHERE norms='fake-test'"
    빈도 제한·전송 상한(429)에 걸리면 기다렸다가 다시 보낸다. 환경 변수 ADMIN_TOKEN 이 있으면 끝에 집계를 바로 다시 계산하게 한다. */
@@ -31,12 +33,18 @@ function answerFor(it, a, touch) {
     if (Math.random() < P) return it.answer;
     return Math.random() < 0.05 ? null : (it.answer + rint(1, n - 1)) % n;   // 5%는 시간 초과
   }
-  if (it.type === 'digitspan' || it.type === 'gridspan' || it.type === 'seqspan') return clamp(Math.round(norm.mean + norm.sd * (a + 0.3 * randn())), it.start - 1, it.max);
-  if (it.type === 'symsearch') return { correct: clamp(Math.round(norm.mean + norm.sd * a) + rint(0, 1), 0, 60), wrong: rint(0, 2) };
-  const mean = norm.mean + (touch ? 30 : 0), rt = function () { return Math.max(150, Math.round(mean - norm.sd * a + norm.sd * 0.5 * randn())); };
-  if (it.type === 'reaction') return { times: [0, 1, 2, 3, 4].map(rt), touch: touch ? 5 : 0 };
-  if (it.type === 'choicert') { const out = []; for (let i = 0; i < (it.trials || 20); i++) out.push({ rt: rt(), ok: Math.random() < 0.95, touch: touch }); return out; }
-  if (it.type === 'stroop') { const out = []; for (let i = 0; i < (it.trials || 24); i++) { const cong = i % 2 === 0; out.push({ rt: rt() - (cong ? 120 : 0), ok: Math.random() < 0.93, cong: cong, touch: touch }); } return out; }
+  /* 기억 폭: 시행 하나의 정답 확률 σ((μ − 길이)/0.55), 맞히면 한 길이 늘리고 같은 길이를 두 번 틀리면 끝(렌더러 진행 규칙). μ는 최장 폭이 NORMS 근처가 되게 둔 값 */
+  if (it.type === 'digitspan' || it.type === 'gridspan' || it.type === 'seqspan') {
+    const mu = norm.mean + 0.1 + 0.78 * norm.sd * a, log = [];
+    let len = it.start, fails = 0, best = it.start - 1;
+    while (len <= it.max && fails < 2) { const ok = Math.random() < 1 / (1 + Math.exp((len - mu) / 0.55)); log.push([len, ok ? 1 : 0]); if (ok) { best = len; fails = 0; len += 1; } else fails += 1; }
+    return { best: best, log: log, restarts: 0 };
+  }
+  if (it.type === 'symsearch') return { correct: clamp(Math.round(norm.mean + norm.sd * a) + rint(0, 1), 0, 60), wrong: rint(0, 2), fast: 0, pauses: 0, restarts: 0 };
+  const inp = touch ? 't' : 'm', mean = norm.mean + (touch ? 30 : 0), rt = function () { return Math.max(150, Math.round(mean - norm.sd * a + norm.sd * 0.5 * randn())); };
+  if (it.type === 'reaction') { const n = it.trials || 10; return { times: Array.from({ length: n }, rt), touch: touch ? n : 0, mouse: touch ? 0 : n, early: 0, slow: 0, away: 0, restarts: 0 }; }
+  if (it.type === 'choicert') { const out = []; for (let i = 0; i < (it.trials || 16); i++) out.push({ rt: rt(), ok: Math.random() < 0.95, touch: touch, inp: inp }); return { trials: out, fast: 0, slow: 0, away: 0, restarts: 0 }; }
+  if (it.type === 'stroop') { const out = []; for (let i = 0; i < (it.trials || 32); i++) { const cong = i % 2 === 0; out.push({ rt: rt() - (cong ? 120 : 0), ok: Math.random() < 0.93, cong: cong, touch: touch, inp: inp }); } return { trials: out, fast: 0, slow: 0, away: 0, restarts: 0 }; }
   return null;
 }
 /* 가상 응시자 한 명: 공통 능력 g + 과제마다 고유 몫 */

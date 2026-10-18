@@ -22,9 +22,13 @@
      TOUCH_MS 는 두 집단이 모두 --min 명 이상인 반응 과제의 (터치 중앙값 − 비터치 중앙값)의 중앙값으로 다시 어림해 --write 때 함께 쓴다(0~120ms로 자름).
      집계(/stats)만 주면 정확도로 거를 수 없고 터치·비터치 백분위가 따로 없어서, 전체 백분위(q)의 중앙값과 사분위 범위/1.349를 쓰고
      평균에서 TOUCH_MS × 터치 비율을 뺀다(경고를 찍는다). 어느 쪽이든 sd 가 지금 값의 1.5배 넘게 바뀌면 경고를 찍는다.
-   - OBS(영역·종합 규준화 상수)는 바꾸지 않고 참고 수치만 출력한다: 과제 z 의 표준편차(spread)·정답률 과제 z 평균(shift). 상관(within·between)은 원자료(/export)가 필요하다.
+   - OBS(영역·종합 규준화 상수)는 바꾸지 않고 참고 수치만 출력한다: 과제 z 의 표준편차(spread)·정답률 과제 z 평균(shift). 상관(within, 다른 영역은 과제별 부하 load)은 원자료(/export)가 필요하다.
    집계에는 표준 시간으로 푼 결과만 들어 있다(서버가 그렇게 집계). 원자료로 돌리면 정답률 과제는 표준 시간 결과만, 제한 시간이 없는 기억·속도 과제는
-   시간 설정과 상관없이 넣고, norms='fake-test'(가짜 자료)는 뺀다. 집계로 돌릴 때는 가짜 자료를 지우고 돌릴 것. */
+   시간 설정과 상관없이 넣고, norms='fake-test'(가짜 자료)는 뺀다. 집계로 돌릴 때는 가짜 자료를 지우고 돌릴 것.
+   - 절차가 바뀐 과제(2026-10-18, 기준값 버전 ai-est-2026-10-18b): 회전·전개도·블록은 문항 생성기(단계별 문항), 기억 폭 4과제는 순서 만들기(같은 숫자·칸
+     반복 없음, 쉬운 패턴 거름)와 최대 길이, 반응 3과제는 대기 시간·시행 수·잰 시각·실수 감점(값에 들어감)이 바뀌어 그 전 버전(PROC_OLD)의 원점수는
+     뜻이 다르다. 원자료로 돌리면 이 과제들은 PROC_OLD 버전·버전 없는 행을 빼고, 기호 찾기는 정확도 0.7 미만 행을 뺀다(지금 채점은 이런 결과를
+     "측정 안 됨"으로 두고 보내지 않는다). 집계(/stats)는 서버가 버전을 가리지 않고 합치므로 이 과제들이 있으면 경고를 찍는다. */
 const fs = require('fs');
 const path = require('path');
 const model = require('./cognitive-model.cjs');
@@ -48,6 +52,9 @@ const PROP_KEYS = ['matrix', 'figAnalogy', 'series', 'sequence', 'weights', 'ana
 const KINDS = { digitF: 'span', digitB: 'span', grid: 'span', lns: 'span', reaction: 'rt', choicert: 'rt', stroop: 'rt', symbol: 'count' };
 const RT_CAP = { reaction: 1000, choicert: 1500, stroop: 2500 };   // 원자료: 응시자 한 명의 반응 시간(중앙값·감점 포함)이 이보다 길면 딴짓으로 보고 뺀다
 const RT_ACC = 0.85;   // 원자료: 선택 반응·색-단어 간섭 정확도가 이보다 낮은 결과는 뺀다(서툴게 찍은 판)
+const PROC_CHANGED = { rotation: 1, fold: 1, blocks: 1, digitF: 1, digitB: 1, grid: 1, lns: 1, reaction: 1, choicert: 1, stroop: 1 };   // 2026-10-18b 에서 문항·절차가 바뀐 과제
+const PROC_OLD = ['design-2026-10-18', 'ai-est-2026-10-18'];   // 위 과제들이 옛 절차였던 기준값 버전(이 버전의 행은 그 과제만 뺀다)
+const SYMBOL_ACC = 0.7;   // 원자료: 기호 찾기 정확도가 이보다 낮은 행은 뺀다(cognitive.js VALID.symbol 과 같은 값)
 const SD_WARN = 1.5;   // 새 sd 가 지금 값의 이 배수보다 크거나 작으면 경고
 const KIND_OF = {};
 PROP_KEYS.forEach(function (k) { KIND_OF[k] = 'prop'; });
@@ -69,7 +76,7 @@ function exportRows(data) {
   return data && Array.isArray(data.rows) ? data.rows : null;
 }
 function fromExport(rows) {
-  const out = { generated: Date.now(), n: 0, raw: true, fake: 0, tasks: {} }, byTask = {};
+  const out = { generated: Date.now(), n: 0, raw: true, fake: 0, oldProc: {}, lowAcc: 0, tasks: {} }, byTask = {};
   rows.forEach(function (r) {
     if (!r || !r.tasks || typeof r.tasks !== 'object' || (r.test_id && r.test_id !== 'cognitive')) return;
     if (r.norms === 'fake-test') { out.fake++; return; }
@@ -78,6 +85,8 @@ function fromExport(rows) {
     Object.keys(r.tasks).forEach(function (k) {
       if (!KIND_OF[k]) return;
       if (KIND_OF[k] === 'prop' && !std) return;   // 제한 시간을 늘려 푼 정답률 과제는 기준값에 넣지 않는다
+      if (PROC_CHANGED[k] && (r.norms == null || PROC_OLD.indexOf(r.norms) >= 0)) { out.oldProc[k] = (out.oldProc[k] || 0) + 1; return; }   // 옛 절차로 낸 원점수
+      if (k === 'symbol' && r.tasks[k] && typeof r.tasks[k].acc === 'number' && r.tasks[k].acc < SYMBOL_ACC) { out.lowAcc++; return; }
       (byTask[k] = byTask[k] || []).push(r.tasks[k]);
     });
   });
@@ -258,6 +267,8 @@ const f1 = function (x) { return (Math.round(x * 10) / 10).toFixed(1); };
   const fmtLP = function (o) { return '{' + eol + Object.keys(o).map(function (k) { return '    ' + k + ': { ' + Object.keys(o[k]).map(function (l) { return l + ': ' + f2(o[k][l]); }).join(', ') + ' }'; }).join(',' + eol) + eol + '  }'; };
   const fmtNM = function (o) { return '{' + eol + Object.keys(o).map(function (k) { const v = o[k]; return '    ' + k + ': { kind: \'' + v.kind + '\'' + (v.mean != null ? ', mean: ' + v.mean : '') + ', sd: ' + v.sd + ' }'; }).join(',' + eol) + eol + '  }'; };
   console.log((stats.raw ? '원자료' : '집계') + ': 표본 ' + stats.n + '명 (표준 시간)' + (stats.raw && stats.fake ? ', 가짜 자료 ' + stats.fake + '건 뺌' : '') + ', 생성 ' + new Date(stats.generated).toISOString() + ', 지금 기준값 ' + M.NORMS_VERSION + ', 기준 --min ' + opt.min + ' --min-items ' + opt.minItems);
+  if (stats.raw) { const old = Object.keys(stats.oldProc || {}); if (old.length || stats.lowAcc) console.log('  옛 절차(' + PROC_OLD.join('·') + '·버전 없음)로 낸 행 뺌: ' + (old.length ? old.map(function (k) { return k + ' ' + stats.oldProc[k]; }).join(', ') : '없음') + (stats.lowAcc ? ' / 기호 찾기 정확도 ' + SYMBOL_ACC + ' 미만 ' + stats.lowAcc + '건 뺌' : '')); }
+  else if (Object.keys(stats.tasks || {}).some(function (k) { return PROC_CHANGED[k]; })) console.log('  ⚠ 집계(/stats)는 기준값 버전을 가리지 않고 합친 값이에요. 회전·전개도·블록·기억 폭·반응 과제는 ai-est-2026-10-18b 에서 문항·절차가 바뀌어서, 그 전 자료가 섞였으면 /export 원자료 JSON으로 돌리세요(옛 버전 행을 뺍니다).');
   if (rawWarn) console.log('  ⚠ 반응 시간을 집계(/stats)로 잡았어요. 정확도 낮은 결과·너무 느린 결과를 거르고 터치 기준을 따로 잡으려면 /export 원자료 JSON으로 돌리세요.');
   log.forEach(function (l) { console.log('  ' + l); });
   console.log('OBS 참고: spread(z 표준편차) ' + Object.keys(spread).map(function (k) { return k + ' ' + f2(avg(spread[k])); }).join(' · ') + ' / shift(정답률 과제 z 평균) adaptive ' + (shift.adaptive.length ? f2(avg(shift.adaptive)) : '자료 부족') + ', full ' + (shift.full.length ? f2(avg(shift.full)) : '자료 부족'));
