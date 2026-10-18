@@ -1268,10 +1268,10 @@
     digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '보이는 순서를 거꾸로 뒤집어 입력해요. 예: 3 7 1 → 1 7 3', where: '기억한 걸 머릿속에서 뒤집는 힘이에요. 암산이나 순서를 거꾸로 따져 보는 일에 쓰여요.' },
     grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 차례로 켜져요. 켜진 순서 그대로 눌러요.', where: '위치를 순서대로 기억하는 힘이에요. 길을 기억하거나 물건 둔 자리를 떠올릴 때 쓰여요.' },
     lns: { label: '숫자-문자 순서', domain: 'memory', minutes: 3, desc: '숫자와 한글 자음이 섞여 하나씩 나타나요. 다 본 뒤 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 눌러요. 예: 7 ㄷ 2 ㄱ → 2 7 ㄱ ㄷ', where: '기억하면서 동시에 정리하는 힘이에요. 여러 지시를 한 번에 받아 순서대로 처리하는 일에 쓰여요.' },
-    reaction: { label: '단순 반응', domain: 'speed', minutes: 1, desc: '화면이 초록색으로 바뀌는 순간 최대한 빨리 눌러요.', where: '신호에 얼마나 빨리 반응하는지 봐요. 운전 중 급브레이크, 공 받기 같은 순발력이에요.' },
-    choicert: { label: '선택 반응', domain: 'speed', minutes: 1, desc: '화살표가 나타나면 같은 방향 버튼을 최대한 빨리 눌러요. PC에서는 방향키도 돼요.', where: '보고 판단해서 맞는 쪽으로 반응하는 속도예요. 게임, 운동, 신호 보고 움직이기에 쓰여요.' },
-    stroop: { label: '색-단어 간섭', domain: 'speed', minutes: 1, desc: '글자의 "색"을 골라요. 글자가 뜻하는 색 이름은 무시해요. 예: 파란색으로 쓰인 "주황" → 파랑.', where: '습관적인 반응을 참고 필요한 것에 집중하는 힘이에요. 딴생각 누르고 할 일 하기, 실수 줄이기에 쓰여요.' },
-    symbol: { label: '기호 찾기', domain: 'speed', minutes: 2, desc: '왼쪽 기호 두 개 중 하나라도 오른쪽 다섯 개 안에 있으면 "있음", 없으면 "없음"을 골라요. 60초 동안 최대한 많이, 정확하게요.', where: '많은 것 중에서 찾는 걸 빨리 골라내는 힘이에요. 명단에서 이름 찾기, 오타 찾기, 서류 검토에 쓰여요.' }
+    reaction: { label: '단순 반응', domain: 'speed', minutes: 1, desc: '어두운 화면이 밝아지면서 가운데에 흰 동그라미와 "지금!"이 뜨면 최대한 빨리 눌러요. 바뀌는 때가 매번 달라서 박자를 짐작해 미리 누르면 안 돼요.', where: '신호에 얼마나 빨리 반응하는지 봐요. 운전 중 급브레이크, 공 받기 같은 순발력이에요.' },
+    choicert: { label: '선택 반응', domain: 'speed', minutes: 1, desc: '화살표가 나타나면 같은 방향 버튼을 최대한 빨리 눌러요. 휴대폰은 두 손으로 잡고 양쪽 엄지를 두 버튼 바로 위에 올려 두세요. PC에서는 마우스 대신 방향키(← →)로 해 주세요.', where: '보고 판단해서 맞는 쪽으로 반응하는 속도예요. 게임, 운동, 신호 보고 움직이기에 쓰여요.' },
+    stroop: { label: '색-단어 간섭', domain: 'speed', minutes: 2, desc: '글자의 "색"을 골라요. 글자가 뜻하는 색 이름은 무시해요. 예: 파란색으로 쓰인 "주황" → 파랑. 휴대폰은 두 손으로 잡고 왼쪽 엄지는 1·3번, 오른쪽 엄지는 2·4번 버튼 위에 올려 두세요. PC에서는 마우스 대신 숫자키 1~4로 해 주세요.', where: '습관적인 반응을 참고 필요한 것에 집중하는 힘이에요. 딴생각 누르고 할 일 하기, 실수 줄이기에 쓰여요.' },
+    symbol: { label: '기호 찾기', domain: 'speed', minutes: 2, desc: '왼쪽 기호 두 개 중 하나라도 오른쪽 다섯 개 안에 똑같은 게 있으면 "있음", 없으면 "없음"을 골라요. 모양과 방향이 모두 같아야 같은 기호예요. 모양이 같아도 돌아가 있으면 다른 기호예요. 60초 동안 최대한 많이, 정확하게요. 틀린 답은 맞힌 수에서 빼요.', where: '많은 것 중에서 찾는 걸 빨리 골라내는 힘이에요. 명단에서 이름 찾기, 오타 찾기, 서류 검토에 쓰여요.' }
   };
   const TASK_KEYS = Object.keys(TASKS);
   /* 빠른 검사: 영역마다 대표 과제를 골라 적응형으로 푼다. 숫자 앞으로·단순 반응은 지능과의 관계가 약해 숫자 거꾸로·기호 찾기로,
@@ -1314,7 +1314,17 @@
     /* 폭 과제: 한 개씩 보여 주고 같은 길이를 두 번까지 시도하는 방식(공인 검사와 같은 규칙)의 20~30대 기준.
        숫자 앞으로 7, 거꾸로 5, 위치(코르시) 6, 숫자-문자 5~6 정도가 보통이라 그 근처에 둔다. 기준을 낮게 잡으면 기억 IQ가 부풀어 보인다. */
     digitF: { kind: 'span', mean: 7.0, sd: 1.1 }, digitB: { kind: 'span', mean: 5.2, sd: 1.2 }, grid: { kind: 'span', mean: 6.0, sd: 1.1 }, lns: { kind: 'span', mean: 5.3, sd: 1.1 },
-    reaction: { kind: 'rt', mean: 280, sd: 45 }, choicert: { kind: 'rt', mean: 480, sd: 80 }, stroop: { kind: 'rt', mean: 800, sd: 130 },
+    /* 반응 과제(2026-10-18 절차를 바꾸며 어림해 고침. 실제 응시 자료가 쌓이면 그 값으로 바꾼다).
+       단순 반응 280±45 → 290±40: 대기 시간을 1.5~4초 균등에서 1초 + 지수분포(평균 1.2초)로 바꿔 오래 기다릴수록 곧 바뀐다는 준비 이득이 없어져
+       평균이 10ms쯤 늘고, 5번이 아니라 10번의 중앙값이라 한 사람 안의 흔들림이 줄어 사람들 사이 퍼짐이 45 → 40ms쯤으로 준다(재검사 모형 어림).
+       선택 반응 480 → 470: 화살표가 실제로 그려진 프레임 시각부터 재게 되어 60Hz 화면에서 1.5프레임(약 25ms), 120Hz에서 그 절반이 빠지고(−20),
+       실수 두 개째부터 채점 시간에 더하는 감점이 보통 응시자(오답 3~5%)에게 평균 10ms쯤 붙는다(+10).
+       색-단어 간섭 800±130 → 800±125: 그리기 지연이 빠지는 몫(−20)과 실수 감점(색이 다른 문제 오답 6% 안팎이면 평균 +13ms)이 거의 상쇄되고,
+       색이 다른 문제가 8개에서 16개로 늘어 중앙값의 흔들림이 줄지만 감점이 사람마다 달라 퍼짐은 조금만 준다.
+       영역·종합 규준화 상수(OBS)는 반응 모형을 이 기준값에 맞춘 가상 응시자(적응형 4000·정밀 3000명)로 바꾸기 전과 뒤를 같은 식으로 돌려 견줬다.
+       반응 시간 과제 점수의 퍼짐 1.08 → 1.09, 속도 영역 안 상관 0.24 → 0.26으로 표본 흔들림(±0.02) 안이라 OBS는 그대로 둔다.
+       기준값 버전은 같은 날 공간 과제 고침이 올린 ai-est-2026-10-18b(아직 배포 전)를 함께 쓴다. */
+    reaction: { kind: 'rt', mean: 290, sd: 40 }, choicert: { kind: 'rt', mean: 470, sd: 80 }, stroop: { kind: 'rt', mean: 800, sd: 125 },
     symbol: { kind: 'count', mean: 24, sd: 6 }
   };
   /* 기준값 버전. 익명 통계로 보내는 결과에 붙어서 어느 기준값으로 낸 z인지 구분한다. NORMS·LEVEL_P를 바꾸면 함께 바꾼다(tools/norms-from-stats.cjs --write 가 자동으로 바꿈). */
@@ -1416,9 +1426,9 @@
     digitF: function () { return [{ type: 'digitspan', part: 'digitF', scored: true, mode: 'forward', start: 3, max: 9, title: '숫자 앞으로 외우기', desc: TASKS.digitF.desc }]; },
     digitB: function () { return [{ type: 'digitspan', part: 'digitB', scored: true, mode: 'backward', start: 2, max: 8, title: '숫자 거꾸로 외우기', desc: TASKS.digitB.desc }]; },
     grid: function () { return [{ type: 'gridspan', part: 'grid', scored: true, start: 3, max: 9, title: '위치 기억', desc: TASKS.grid.desc }]; },
-    reaction: function () { return [{ type: 'reaction', part: 'reaction', scored: true, trials: 5, title: '단순 반응', desc: TASKS.reaction.desc }]; },
+    reaction: function () { return [{ type: 'reaction', part: 'reaction', scored: true, trials: 10, title: '단순 반응', desc: TASKS.reaction.desc }]; },
     choicert: function () { return [{ type: 'choicert', part: 'choicert', scored: true, trials: 16, title: '선택 반응', desc: TASKS.choicert.desc }]; },
-    stroop: function () { return [{ type: 'stroop', part: 'stroop', scored: true, trials: 16, title: '색-단어 간섭', desc: TASKS.stroop.desc }]; }
+    stroop: function () { return [{ type: 'stroop', part: 'stroop', scored: true, trials: 32, title: '색-단어 간섭', desc: TASKS.stroop.desc }]; }
   };
   const COUNT_KO = {
     matrix: function (f) { return (f ? 12 : 6) + '문항 · 60~120초 · 1~6단계 · 보기 8개'; }, series: function () { return '6문항 · 40~50초 · 1~3단계'; },
@@ -1452,7 +1462,15 @@
     const items = [];
     if (COUNT_KO[key]) items.push({ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' 쉬운 것부터 나오고 뒤로 갈수록 어려워져요.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 볼게요. 연습은 점수에 안 들어가요.' : ''), where: TASKS[key].where, count: COUNT_KO[key](full) });
     if (withPractice && PRACTICE[key]) items.push(practiceItem(r, key));
-    return items.concat(BUILD[key](r, full));
+    return items.concat(BUILD[key](r, full).map(function (it) { return speedPractice(it, key, withPractice); }));
+  }
+  /* 반응·기호 찾기 과제의 연습(2026-10-18, 점수에 안 들어감): 렌더러가 it.practiceTrials 번을 먼저 해 보게 한다. 처음 하는 과제만.
+     단순 반응은 해 본 사람도 첫 1번을 몸풀기로 빼고 잰다(처음 몇 번이 느린 몸풀기 효과). 예전 세션의 문항에는 이 값이 없어 연습 없이 진행한다. */
+  const SPEED_PRACTICE = { reaction: [3, 1], choicert: [4, 0], stroop: [4, 0], symbol: [4, 0] };
+  function speedPractice(it, key, withPractice) {
+    const p = SPEED_PRACTICE[key];
+    if (p) { const n = withPractice ? p[0] : p[1]; if (n) it.practiceTrials = n; }
+    return it;
   }
 
   /* ===== 적응형 진행: 맞히면 한 단계 위, 틀리면 한 단계 아래. 문항은 그때그때 생성한다. =====
@@ -1536,7 +1554,7 @@
     part(2, DOMAINS[1], '단어의 뜻과 관계, 문장의 앞뒤를 따져요.', ['analogy', 'vocab', 'logic', 'similar']);
     part(3, DOMAINS[2], '머릿속에서 도형을 돌리고, 접고, 쌓인 블록을 세어 봐요.', ['rotation', 'fold', 'blocks']);
     part(4, DOMAINS[3], '숫자와 위치를 잠깐 기억했다가 그대로, 거꾸로, 또는 정리해서 떠올려요. 틀려도 같은 길이로 한 번 더 기회가 있어요.', ['digitF', 'digitB', 'grid', 'lns']);
-    part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응해요. 조용한 곳에서 화면을 똑바로 보고 해 주세요.', ['reaction', 'choicert', 'stroop', 'symbol']);
+    part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응해요. 조용한 곳에서 화면을 똑바로 보고, 휴대폰은 두 손으로 잡고 해 주세요. 처음 하는 과제는 점수에 안 들어가는 연습부터 해요.', ['reaction', 'choicert', 'stroop', 'symbol']);
     return items;
   }
 
@@ -1578,35 +1596,106 @@
       return { z: U.clamp((s - norm.mean) / norm.sd, -3, 3), raw: Math.max(s, it.start - 1) + (key === 'grid' ? '칸' : key === 'lns' ? '개' : '자리'), detail: '', obs: { value: Math.max(0, s) } };
     }
     if (norm.kind === 'count') {
+      // 기호 찾기: 정답 − 오답. 정확도가 70% 미만이면 찍기(50%)와 가려지지 않으니 점수 대신 "측정 안 됨"을 낸다(아래 VALID).
       const a = rows[0].a && typeof rows[0].a === 'object' ? rows[0].a : { correct: 0, wrong: 0 };
-      const net = Math.max(0, (a.correct || 0) - (a.wrong || 0));
-      const tot = (a.correct || 0) + (a.wrong || 0);
-      return { z: U.clamp((net - norm.mean) / norm.sd, -3, 3), raw: net + '개/60초', detail: tot ? '정답 ' + a.correct + ' · 오답 ' + a.wrong + ' · 정확도 ' + Math.round(a.correct / tot * 100) + '%' : '', obs: { value: net, acc: tot ? a.correct / tot : null } };
+      const cc = a.correct || 0, ww = a.wrong || 0, tot = cc + ww;
+      const net = Math.max(0, cc - ww), acc = tot ? cc / tot : 0;
+      if (!tot) return invalidStat('답한 문항이 없어 측정 안 됨 · 다시 해 주세요', '60초 동안 답한 문항이 없어서 점수를 내지 못했어요. 다시 해 주세요.');
+      if (acc < VALID.symbol) return invalidStat('정확도가 낮아 측정 안 됨 · 다시 해 주세요',
+        '정답 ' + cc + '개, 오답 ' + ww + '개로 정확도가 ' + Math.round(acc * 100) + '%예요. 아무렇게나 누를 때(50%)와 구분이 안 돼서 점수를 내지 않았어요. 모양과 방향이 모두 같아야 같은 기호예요. 모양이 같아도 돌아가 있으면 다른 기호예요. 천천히 정확하게 다시 해 주세요.');
+      return { z: U.clamp((net - norm.mean) / norm.sd, -3, 3), raw: net + '개/60초',
+        detail: '정답 ' + cc + ' · 오답 ' + ww + ' · 정확도 ' + Math.round(acc * 100) + '%' + cnt(a.fast, '문제가 바뀌자마자 누른 #번은 세지 않음') + cnt(a.pauses, '화면을 벗어나 #번 멈춤') + cnt(a.restarts, '처음부터 다시 시작 #번'),
+        obs: { value: net, acc: acc, fast: a.fast || 0, pauses: a.pauses || 0, restarts: a.restarts || 0 } };
     }
+    // 반응 과제의 답: 예전에는 배열(선택 반응·색-단어 간섭) 또는 { times, touch }(단순 반응). 2026-10-18부터 { trials | times, 일찍 누름·너무 빠름 등 횟수 }.
     const raw0 = rows[0].a;
-    const a = Array.isArray(raw0) ? raw0 : raw0 && Array.isArray(raw0.times) ? raw0.times : [];
-    const touchN = Array.isArray(raw0) ? a.filter(function (x) { return x && x.touch; }).length : (raw0 && raw0.touch) || 0;
+    const ex = raw0 && typeof raw0 === 'object' && !Array.isArray(raw0) ? raw0 : {};
+    const a = Array.isArray(raw0) ? raw0 : Array.isArray(ex.times) ? ex.times : Array.isArray(ex.trials) ? ex.trials : [];
+    const perTrial = a.length > 0 && !!a[0] && typeof a[0] === 'object';
+    const touchN = perTrial ? a.filter(function (x) { return x && x.touch; }).length : (ex.touch || 0);
     const touch = a.length > 0 && touchN / a.length >= 0.5;
     const mean = norm.mean + (touch ? TOUCH_MS : 0), tnote = touch ? ' · 터치 기준' : '';
+    const inp = inputMode(a, perTrial, touch, ex);
+    const again = cnt(ex.restarts, '처음부터 다시 시작 #번');
     if (key === 'reaction') {
+      const early = ex.early || 0;
       const med = a.length ? U.median(a) : null;
-      return { z: med == null ? -3 : U.clamp((mean - med) / norm.sd, -3, 3), raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: (a.length ? '최고 ' + Math.min.apply(null, a) + 'ms' : '') + tnote, obs: med == null ? null : { value: med, touch: touch } };
+      if (med == null) return invalidStat('기록된 반응이 없어 측정 안 됨 · 다시 해 주세요', '기록된 반응이 없어서 점수를 내지 못했어요. 다시 해 주세요.');
+      if (early >= RT_EARLY.invalid) return invalidStat('일찍 누른 횟수가 많아 측정 안 됨 · 다시 해 주세요',
+        '"지금!"이 뜨기 전이나 뜨자마자 누른 게 ' + early + '번이에요. 바뀔 때를 짐작해서 누르면 반응 속도를 잴 수 없어서 점수를 내지 않았어요. 화면이 밝아지는 걸 보고 눌러 주세요.');
+      let z = U.clamp((mean - med) / norm.sd, -3, 3);
+      const capped = early >= RT_EARLY.cap && z > 0;
+      if (early >= RT_EARLY.cap) z = Math.min(z, 0);
+      return { z: z, raw: Math.round(med) + 'ms', detail: '최고 ' + Math.min.apply(null, a) + 'ms' + cnt(early, '일찍 누름 #번' + (capped ? '이라 평균(100)까지만 인정' : '')) + again + tnote,
+        obs: { value: med, touch: touch, early: early, slow: ex.slow || 0, inp: inp, restarts: ex.restarts || 0 } };
     }
-    const ok = a.filter(function (x) { return x.ok; });
-    const acc = a.length ? ok.length / a.length : 0;
-    let pool = ok, extra = '';
+    const rtOf = function (x) { return x.rt; }, isOk = function (x) { return x && x.ok; };
+    const fastN = ex.fast || 0;
+    const tail = cnt(fastN, '너무 빨리 누름 #번(세지 않음)') + again + tnote + (inp === 'mouse' ? ' · 마우스로 눌러 실제보다 느리게 나왔을 수 있어요' : '');
     if (key === 'stroop') {
-      const cong = ok.filter(function (x) { return x.cong; }).map(function (x) { return x.rt; });
-      const inc = ok.filter(function (x) { return !x.cong; }).map(function (x) { return x.rt; });
-      pool = ok.filter(function (x) { return !x.cong; });
-      if (cong.length && inc.length) { const d = Math.round(U.median(inc) - U.median(cong)); extra = ' · 간섭 ' + (d >= 0 ? '+' : '') + d + 'ms'; }
+      // 색-단어 간섭은 글자를 읽어 버리는 실수가 이 과제가 재는 것이라, 정확도와 감점을 글자와 색이 다른(불일치) 문제로만 본다
+      const inc = a.filter(function (x) { return x && !x.cong; }), cong = a.filter(function (x) { return x && x.cong; });
+      const incOk = inc.filter(isOk), congOk = cong.filter(isOk);
+      const incAcc = inc.length ? incOk.length / inc.length : 0;
+      if (!incOk.length || incAcc <= VALID.stroop) return invalidStat('정확도가 낮아 측정 안 됨 · 다시 해 주세요',
+        '글자와 색이 다른 문제 ' + inc.length + '개 중 ' + incOk.length + '개를 맞혔어요(' + Math.round(incAcc * 100) + '%). 아무렇게나 누를 때와 구분이 잘 안 돼서 점수를 내지 않았어요. 글자가 뜻하는 색 이름이 아니라 글자의 색을 골라 주세요.');
+      // 글자와 색이 같은 문제도 절반 넘게 맞혀야 한다. 보지 않고 찍으면 둘 다 25% 안팎이라, 운으로 두 관문을 다 넘을 확률은 0.01% 아래다
+      const congAcc = cong.length ? congOk.length / cong.length : 1;
+      if (congAcc <= VALID.stroop) return invalidStat('정확도가 낮아 측정 안 됨 · 다시 해 주세요',
+        '글자와 색이 같은 문제 ' + cong.length + '개 중 ' + congOk.length + '개만 맞혔어요(' + Math.round(congAcc * 100) + '%). 색을 보지 않고 아무렇게나 누를 때와 구분이 잘 안 돼서 점수를 내지 않았어요. 글자의 색을 보고 골라 주세요.');
+      const medS = U.median(incOk.map(rtOf));
+      if (incOk.length + congOk.length < a.length && (mean - medS) / norm.sd > GUESS_Z) return invalidStat('짐작해서 누른 것 같아 측정 안 됨 · 다시 해 주세요',
+        '글자와 색이 다른 문제에서 맞힌 반응이 ' + Math.round(medS) + 'ms로 글자의 색을 보고 고르기 어려울 만큼 빠른데 틀린 문제도 있어요. 보기 전에 짐작해서 누르면 빠르기를 잴 수 없어서 점수를 내지 않았어요. 글자의 색을 보고 골라 주세요.');
+      const penS = errPenalty(PEN.stroop, inc.length - incOk.length, inc.length);
+      const d = congOk.length ? Math.round(medS - U.median(congOk.map(rtOf))) : null;
+      return { z: U.clamp((mean - medS - penS) / norm.sd, -3, 3), raw: Math.round(medS) + 'ms',
+        detail: '색이 다른 문제 ' + incOk.length + '/' + inc.length + ' 정답' + (d != null ? ' · 간섭 ' + (d >= 0 ? '+' : '') + d + 'ms' : '') + (penS ? ' · 실수가 많아 속도 점수를 깎았어요(+' + penS + 'ms)' : '') + tail,
+        obs: { value: medS + penS, med: medS, acc: a.filter(isOk).length / a.length, incAcc: incAcc, interf: d, touch: touch, fast: fastN, slow: ex.slow || 0, inp: inp, restarts: ex.restarts || 0 } };
     }
-    const med = pool.length ? U.median(pool.map(function (x) { return x.rt; })) : null;
-    let z = med == null ? -3 : U.clamp((mean - med) / norm.sd, -3, 3);
-    if (acc < 0.75) z = Math.min(z, -1);
-    return { z: z, raw: med == null ? '측정 안 됨' : Math.round(med) + 'ms', detail: '정확도 ' + Math.round(acc * 100) + '%' + extra + tnote, obs: med == null ? null : { value: med, acc: acc, touch: touch } };
+    // 선택 반응
+    const ok = a.filter(isOk);
+    const acc = a.length ? ok.length / a.length : 0;
+    if (!ok.length || acc <= VALID.choicert) return invalidStat('정확도가 낮아 측정 안 됨 · 다시 해 주세요',
+      '화살표 ' + a.length + '번 중 ' + ok.length + '번을 맞혔어요(' + Math.round(acc * 100) + '%). 아무렇게나 누를 때(50%)와 구분이 잘 안 돼서 점수를 내지 않았어요. 화살표와 같은 쪽 버튼을 정확하게 눌러 주세요.');
+    const med = U.median(ok.map(rtOf));
+    if (ok.length < a.length && (mean - med) / norm.sd > GUESS_Z) return invalidStat('짐작해서 누른 것 같아 측정 안 됨 · 다시 해 주세요',
+      '화살표 ' + a.length + '번 중 ' + ok.length + '번을 맞혔는데, 맞힌 반응이 ' + Math.round(med) + 'ms로 화살표를 보고 고르기 어려울 만큼 빨라요. 화살표를 보기 전에 짐작해서 누르면 빠르기를 잴 수 없어서 점수를 내지 않았어요. 화살표를 보고 같은 쪽 버튼을 눌러 주세요.');
+    const pen = errPenalty(PEN.choicert, a.length - ok.length, a.length);
+    return { z: U.clamp((mean - med - pen) / norm.sd, -3, 3), raw: Math.round(med) + 'ms',
+      detail: '정확도 ' + Math.round(acc * 100) + '%' + (pen ? ' · 실수가 많아 속도 점수를 깎았어요(+' + pen + 'ms)' : '') + tail,
+      obs: { value: med + pen, med: med, acc: acc, touch: touch, fast: fastN, slow: ex.slow || 0, inp: inp, restarts: ex.restarts || 0 } };
   }
-
+  /* 반응·기호 찾기 채점 규칙 (2026-10-18)
+     - 유효성: 정확도가 찍기와 가려지지 않으면 점수 대신 "측정 안 됨 · 다시 해 주세요"를 낸다(영역·종합 점수에서도 뺀다).
+       선택 반응은 정확도 75% 이하(16번 중 12번 이하. 아무렇게나 눌러 13번 이상 맞힐 확률 1.1%), 색-단어 간섭은 글자와 색이 다른 문제의
+       절반 이하이거나 글자와 색이 같은 문제의 절반 이하(넷 중 하나를 고르니 찍기는 25%. 두 관문을 운으로 다 넘을 확률은 0.01% 아래),
+       기호 찾기는 70% 미만(정직하게 풀면 보통 85~95%, 찍기는 50%).
+       선택 반응은 두 개 중 하나라 16번을 찍어도 1.1%는 13번 이상 맞힌다. 그런 판은 맞힌 반응이 200ms 안팎이라 IQ 130~145가 나왔다(가짜 사용자
+       흉내 0.7%). 그래서 선택 반응·색-단어 간섭 모두 실수가 하나라도 있으면서 맞힌 반응의 중앙값이 기준값으로 z +2.75(IQ 141)보다 빠르면
+       (선택 반응 터치 280ms·그 밖 250ms, 색-단어 간섭 색이 다른 문제 터치 486ms·그 밖 456ms) 짐작으로 보고 "측정 안 됨"으로 둔다.
+       이만큼 빠르면서 다 맞히면 그대로 채점한다. 정직하게 이만큼 빠른 사람은 0.3% 안쪽이고 걸려도 다시 하면 된다.
+     - 감점: 예전에는 정확도 75% 미만일 때만 z를 −1로 묶어서 오답 네 개까지는 감점이 없고 다섯 개째에 26~53점이 떨어졌다(빨리 찍을수록 유리).
+       이제 실수 한 번은 봐주고, 그다음부터 실수마다 채점용 반응 시간에 선택 반응 60ms(16번 기준, 약 0.75SD), 색-단어 간섭 80ms(색이 다른
+       문제 8개 기준, 약 0.6SD)를 더한다. 문제 수가 다르면 그 비율만큼 줄인다(색이 다른 문제 16개면 실수마다 40ms).
+     - 단순 반응: 대기 중에 누르거나 너무 빨리(터치 150ms, 마우스 130ms 미만) 누른 '일찍 누름'을 렌더러가 센다. 3번 이상이면 z를 0(IQ 100)까지만
+       인정하고, 10번 이상이면 "측정 안 됨". 시작 뒤 정해 둔 박자에 미리 누르는 요령은 일찍 누름이 수십 번 나와서 이 규칙에 걸린다. */
+  const VALID = { choicert: 0.75, stroop: 0.5, symbol: 0.7 };
+  const GUESS_Z = 2.75;   // 선택 반응·색-단어 간섭: 실수가 있으면서 맞힌 반응이 기준값으로 이 z보다 빠르면 짐작
+  const PEN = { choicert: [60, 16], stroop: [80, 8] };   // [실수마다 더하는 ms, 그 값을 정한 문제 수]
+  const RT_EARLY = { cap: 3, invalid: 10 };
+  function errPenalty(p, errs, n) { return n ? Math.round(p[0] * Math.max(0, errs - 1) * p[1] / n) : 0; }
+  function cnt(n, text) { return n ? ' · ' + text.replace('#', n) : ''; }
+  /* 측정 안 된 과제: z 대신 null. detail = 짧은 이유(결과 배지), why = 결과 요약에 쓰는 긴 설명. 익명 통계에도 보내지 않는다(obs 없음). */
+  function invalidStat(reason, why) { return { invalid: true, z: null, raw: '측정 안 됨', detail: reason, why: why, obs: null }; }
+  function isValidStat(st) { return !!st && !st.invalid && typeof st.z === 'number' && isFinite(st.z); }
+  /* 응답 방식(익명 통계용, 입력 방식별 기준을 나중에 따로 만들려고): 터치가 절반 이상이면 touch, 아니면 키보드·마우스 중 절반을 넘는 쪽. 예전 답처럼 모르면 null */
+  function inputMode(a, perTrial, touch, ex) {
+    if (!a.length) return null;
+    if (touch) return 'touch';
+    if (!perTrial) return typeof ex.mouse === 'number' ? 'mouse' : null;
+    const k = a.filter(function (x) { return x && x.inp === 'k'; }).length, m = a.filter(function (x) { return x && x.inp === 'm'; }).length;
+    return k > a.length / 2 ? 'key' : m > a.length / 2 ? 'mouse' : null;
+  }
   /* 익명 통계용 원점수(z 계산 전 값). 결과의 tasks[k].obs 에 들어가고 js/stats.js 가 보낸다.
      items = 문항마다 [풀 번호(생성 문항은 -1), 단계, 정답 1·오답 0·시간 초과 -1, 응답 시간(0.1초)]. 문항 내용은 넣지 않는다. */
   function propObs(rows, n, c, lv, adaptive, avg) {
@@ -1620,8 +1709,25 @@
     return o;
   }
 
+  /* 푼 과제가 모두 측정 안 됨이면(정확도가 찍기 수준 등) 점수 대신 이유와 다시 하기를 보여 준다 */
+  function invalidResult(allTasks, bad) {
+    const why = function (k) { return (allTasks[k] && (allTasks[k].why || allTasks[k].detail)) || '측정 안 됨'; };
+    const one = bad.length === 1 ? bad[0] : null;
+    return {
+      headline: (one ? TASKS[one].label + ' · ' : '') + '측정 안 됨',
+      value: null, sem: null, z: null,
+      label: one && allTasks[one].detail ? allTasks[one].detail : '측정 안 됨 · 다시 해 주세요',
+      summary: one ? why(one) : bad.map(function (k) { return TASKS[k].label + ': ' + why(k); }).join(' '),
+      scales: [], tasks: allTasks, invalidTasks: bad, invalidLabels: bad.map(function (k) { return TASKS[k].label; }), norms: NORMS_VERSION,
+      sections: [{ title: '왜 점수가 없나요', body: '정확도가 찍기 수준이거나 신호를 보기 전에 누른 횟수가 많으면 그 결과로는 실력을 알 수 없어서 점수를 내지 않아요. 기록에는 남지만 종합 프로필과 익명 통계에는 들어가지 않아요. 같은 과제를 다시 하면 새 결과로 바뀌어요.' }]
+    };
+  }
   /* 과제별 z 모음 → 영역·종합 결과 객체 */
-  function assemble(tasks, opts) {
+  function assemble(allTasks, opts) {
+    // 측정 안 된 과제는 영역·종합 점수에서 빼고 따로 알린다
+    const tasks = {}, bad = [];
+    Object.keys(allTasks).forEach(function (k) { if (isValidStat(allTasks[k])) tasks[k] = allTasks[k]; else bad.push(k); });
+    if (!Object.keys(tasks).length) return invalidResult(allTasks, bad);
     const scales = [], sections = [];
     const groups = [], domSem = {};
     DOMAINS.forEach(function (d) {
@@ -1674,12 +1780,16 @@
           : ' 가장 강한 쪽은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + weak.label + ' ' + U.josa(weak.value, '은', '는') + ' 연습하면 더 오를 여지가 있어요.') +
         (keys.length < TASK_KEYS.length ? (opts.quick ? ' 빠른 검사라 대표 과제 ' + keys.length + '개로 낸 점수예요. 나머지 과제도 풀면 종합 프로필이 더 정확해져요.' : ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했어요.') : '');
     }
+    if (bad.length) {
+      summary += ' ' + U.josa(bad.map(function (k) { return TASKS[k].label; }).join(', '), '은', '는') + ' 측정하지 못해서 빼고 계산했어요. 과제별 검사에서 다시 해 주세요.';
+      sections.push({ title: '측정하지 못한 과제', body: bad.map(function (k) { return TASKS[k].label + ': ' + ((allTasks[k] && (allTasks[k].why || allTasks[k].detail)) || '측정 안 됨'); }).join(' ') });
+    }
     sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균이 100, 표준편차가 15인 IQ 눈금으로 바꾼 점수예요. 열 명 중 일곱 명쯤이 85~115 사이에 들어가요. ' +
       (single ? '과제 하나만으로 낸 점수는 문항이 적어서, 실력이 아주 높거나 낮으면 실제보다 100에 가깝게 나오기 쉬워요. '
         : '여러 과제를 합친 영역·종합 점수는 실력을 미리 정해 둔 가상 응시자 수천 명에게 같은 문제를 풀게 해 보고, 점수가 이 눈금대로 퍼지도록 맞췄어요. ') +
       '"상위 %"는 그 눈금에서 내 위치고, ±' + U.josa(sem, '은', '는') + ' 오차 범위예요. 실제 값이 그 안에 있을 확률이 70% 정도고, 과제를 많이 풀수록' + (single ? '' : ', 다섯 영역을 고루 풀수록') + ' 범위가 좁아져요. ' +
       (single ? '' : '아주 높거나 낮은 점수에는 그날의 운도 섞이기 쉬워서, 다시 하면 100 쪽으로 조금 돌아오는 경우가 많아요. ') + '점수는 몇 개를 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 각 단계의 난이도는 실제 응시 자료 없이, 설계할 때 정한 값과 AI가 문제를 보고 보통 성인의 정답률을 어림한 값으로 정했어요. 그래서 실제 응시 데이터로 보정하기 전까지는 공인 지능검사의 IQ와 같다고 볼 수 없어요. 같은 과제를 여러 번 하면 익숙해져서 점수가 올라요.' });
-    return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: tasks, z: z, norms: NORMS_VERSION };
+    return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: allTasks, invalidTasks: bad.length ? bad : undefined, z: z, norms: NORMS_VERSION };
   }
 
   function score(answers, items, meta) {
@@ -1698,12 +1808,14 @@
 
   /* 저장된 결과들에서 과제별 최근 z를 모아 종합 프로필을 만든다 */
   function merge(results) {
-    const latest = {};
+    const latest = {}, failed = {};
     (results || []).forEach(function (r) {
       if (!r || r.testId !== 'cognitive' || !r.tasks) return;
       Object.keys(r.tasks).forEach(function (k) {
         if (!TASKS[k]) return;
-        if (!latest[k] || (r.at || 0) >= latest[k].at) latest[k] = { at: r.at || 0, stat: r.tasks[k] };
+        // 측정 안 된 결과는 그 과제의 예전 결과를 덮지 않는다(정확도가 찍기 수준인 판으로 점수가 바뀌지 않게)
+        const slot = isValidStat(r.tasks[k]) ? latest : failed;
+        if (!slot[k] || (r.at || 0) >= slot[k].at) slot[k] = { at: r.at || 0, stat: r.tasks[k] };
       });
     });
     const keys = Object.keys(latest);
@@ -1711,10 +1823,13 @@
     const tasks = {};
     keys.forEach(function (k) { tasks[k] = latest[k].stat; });
     const res = assemble(tasks, { merged: true });
-    const missing = TASK_KEYS.filter(function (k) { return !tasks[k]; });
+    const missing = TASK_KEYS.filter(function (k) { return !tasks[k] && !failed[k]; });
+    const redo = TASK_KEYS.filter(function (k) { return !tasks[k] && failed[k]; });
+    const labelOf = function (k) { return TASKS[k].label; };
     res.modeLabel = '종합 프로필';
-    res.coverage = { done: keys.length, total: TASK_KEYS.length, missing: missing.map(function (k) { return TASKS[k].label; }) };
-    res.sections.unshift({ title: '합친 범위', body: TASK_KEYS.length + '개 과제 중 ' + keys.length + '개의 가장 최근 결과를 합쳤어요.' + (missing.length ? ' 아직 안 한 과제: ' + res.coverage.missing.join(', ') + '.' : ' 모든 과제가 들어갔어요.') + ' 과제를 다시 풀면 그 과제의 최신 결과로 바뀌어요.' });
+    // done = 푼 과제 수(측정 안 됨 포함), scored = 그중 점수에 들어간 과제 수, redo = 측정 안 됨만 있어 다시 해야 하는 과제
+    res.coverage = { done: keys.length + redo.length, scored: keys.length, total: TASK_KEYS.length, missing: missing.map(labelOf), redo: redo.map(labelOf) };
+    res.sections.unshift({ title: '합친 범위', body: TASK_KEYS.length + '개 과제 중 ' + keys.length + '개의 가장 최근 결과를 합쳤어요.' + (missing.length ? ' 아직 안 한 과제: ' + res.coverage.missing.join(', ') + '.' : '') + (redo.length ? ' 측정이 안 돼서 다시 해야 하는 과제: ' + res.coverage.redo.join(', ') + '.' : '') + (missing.length || redo.length ? '' : ' 모든 과제가 들어갔어요.') + ' 과제를 다시 풀면 그 과제의 최신 결과로 바뀌어요.' });
     return res;
   }
 
@@ -1729,7 +1844,7 @@
     length: '20과제',
     timed: true,
     modes: [
-      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 다음 문제가 어려워지고 틀리면 쉬워져요. 내 실력 근처에서 집중해서 재니까 짧아도 정확해요. 처음이면 이걸 추천해요.', duration: '약 43분', length: '20과제' },
+      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 다음 문제가 어려워지고 틀리면 쉬워져요. 내 실력 근처에서 집중해서 재니까 짧아도 정확해요. 처음이면 이걸 추천해요.', duration: '약 44분', length: '20과제' },
       { id: 'quick', label: '빠른 검사', desc: '다섯 영역에서 대표 과제 7개만 골라, 적응형처럼 내 실력에 맞춰 문제를 내요. 시간이 없을 때 좋아요. 과제가 적은 만큼 오차 범위는 더 넓어요.', duration: '약 18분', length: '7과제' },
       { id: 'full', label: '정밀 검사', desc: '20개 과제의 모든 단계를 처음부터 끝까지 다 풀어요. 가장 길지만, 단계별 정답률과 틀린 문제 다시 보기까지 볼 수 있어요.', duration: '약 1시간', length: '20과제' }
     ],

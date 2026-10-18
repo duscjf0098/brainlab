@@ -258,9 +258,12 @@ p { margin: 0; }
 }
 .rt-big { font-size: 32px; font-weight: 800; }
 .rt-small { font-size: 14px; opacity: .8; }
-.rt-pad.wait { background: #dc2626; color: #fff; border-color: #dc2626; }
-.rt-pad.go { background: #16a34a; color: #fff; border-color: #16a34a; }
-.rt-pad.early { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+/* 신호를 색 하나에 맡기지 않는다(2026-10-18): 기다리는 동안은 어둡고, "지금!"은 아주 밝은 바탕 + 흰 동그라미 + 글자로 한꺼번에 바뀐다.
+   어두운 #1f2937 → 밝은 #4ade80의 밝기 대비는 8.4:1이고 적록 색각 이상 흉내(Machado 2009)에서도 8.0~9.0:1이다(예전 빨강→초록은 녹색맹 흉내에서 1.14:1). */
+.rt-pad.wait { background: #1f2937; color: #fff; border-color: #1f2937; }
+.rt-pad.go { background: #4ade80; color: #052e16; border-color: #4ade80; }
+.rt-pad.go::before { content: ''; width: 112px; height: 112px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 10px rgba(255, 255, 255, .35); }
+.rt-pad.early { background: #f59e0b; color: #2b1d00; border-color: #f59e0b; }
 .rt-pad.shown, .rt-pad.done { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
 .rt-pad.shown .rt-big, .rt-pad.done .rt-big { font-family: var(--mono); font-size: 44px; }
 
@@ -331,11 +334,23 @@ svg.scale { display: block; width: 100%; max-width: 360px; margin: 0 auto; color
 .ss { display: flex; flex-direction: column; gap: 12px; }
 .ss-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
 .ss-head .urgent { color: var(--bad); font-weight: 700; }
-.ss-board { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 10px; min-height: 90px; }
+.ss-board { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 8px; min-height: 90px; }
 .ss-targets { display: flex; gap: 4px; }
 .ss-div { width: 2px; align-self: stretch; background: var(--accent); border-radius: 1px; }
 .ss-row { display: flex; gap: 4px; flex: 1; justify-content: space-around; }
-.ss-board .glyph { width: 11vw; max-width: 44px; height: auto; aspect-ratio: 1; }
+/* 기호 크기를 남는 너비에 맞춘다(2026-10-18): 판의 고정 너비(간격·구분선·패딩·테두리 합 60px)와 .wrap 좌우 패딩 32px을 빼고 일곱으로 나눈다(4px 여유).
+   360px 화면에서 37.7px, 390px에서 42px, 404px부터 44px. 예전 11vw는 390px 이하에서 오른쪽 기호가 판을 6~22px 넘었다. */
+.ss-board .glyph { width: min(44px, calc((100vw - 96px) / 7)); max-width: 44px; height: auto; aspect-ratio: 1; flex: 0 0 auto; }
+.ss-board[hidden], .ss .crt-btns[hidden], .ss-pause[hidden] { display: none; }
+.ss-pause { background: var(--accent-soft); border-radius: var(--radius); padding: 22px 18px; display: flex; flex-direction: column; gap: 12px; text-align: center; color: var(--ink-2); }
+.ss .glyph.hit, .ss-ex .glyph.hit { color: var(--ok); }
+.ss .glyph.lure, .ss-ex .glyph.lure { color: var(--warn); }
+.ss-exs { display: flex; flex-direction: column; gap: 8px; }
+.ss-ex { background: var(--surface); border-radius: var(--radius-s); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.ss-ex-board { display: flex; align-items: center; gap: 8px; }
+.ss-ex-g { display: flex; gap: 2px; }
+.ss-ex .glyph { width: 30px; height: 30px; }
+.ss-ex p { font-size: 13px; color: var(--ink-2); }
 .lns-picked { min-height: 28px; font-size: 22px; font-weight: 700; letter-spacing: .2em; color: var(--accent); }
 .lns-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 320px; }
 .lns-pad { display: flex; flex-direction: column; gap: 12px; align-items: center; }
@@ -385,12 +400,14 @@ svg.scale { display: block; width: 100%; max-width: 360px; margin: 0 auto; color
 .crt-stim { width: 100%; height: 220px; display: flex; align-items: center; justify-content: center; font-size: 96px; font-weight: 800; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); }
 .crt-stim.ok { color: var(--ok); font-size: 64px; }
 .crt-stim.bad { color: var(--bad); font-size: 64px; }
-.crt-stim.early { color: var(--warn); font-size: 32px; }
+.crt-stim.early { color: var(--warn); font-size: 26px; padding: 0 12px; text-align: center; }
 .crt-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
 .crt-btn { padding: 22px 0; font-size: 17px; }
 .stroop-word { width: 100%; height: 200px; display: flex; align-items: center; justify-content: center; font-size: 72px; font-weight: 800; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
-.stroop-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
-.stroop-btn { height: 72px; border-radius: 12px; border: 0; color: rgba(255,255,255,.85); font-size: 13px; }
+.stroop-word.note { font-size: 24px; padding: 0 12px; text-align: center; }
+/* 2×2 배치(2026-10-18): 두 손으로 잡으면 왼쪽 엄지가 1·3번, 오른쪽 엄지가 2·4번을 맡아 한 줄 네 칸보다 엄지가 덜 움직인다. 숫자키 1~4 대응은 그대로 */
+.stroop-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.stroop-btn { height: 64px; border-radius: 12px; border: 0; color: rgba(255,255,255,.85); font-size: 13px; }
 .stroop-btn:active { transform: scale(.97); }
 /* 터치 기기: 두 번 탭 확대·길게 눌러 선택·탭 하이라이트를 막아 반응·기억 과제의 탭이 바로, 한 번만 들어가게 한다 */
 .rt-pad, .crt-btn, .stroop-btn, .gcell, .lns-btn, .opt, .span-input { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }

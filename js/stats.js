@@ -2,6 +2,8 @@
    집계를 받아 결과 화면에 "실제 응시자 n명 기준 상위 %"를 보여 준다.
    - 보내는 것: 검사 id, 모드, 시간 설정, 터치/마우스, 기준값 버전, 종합 z, 과제별 { z, 정답 수·문항 수, 단계별 정답 수, 적응형 여부,
      문항마다 [풀 번호(생성 문항은 -1), 단계, 정답 여부, 응답 시간], 기억 폭, 반응 시간 중앙값, 정확도, 터치 여부 } (cognitive.js taskStats 의 obs).
+     2026-10-18부터 반응 과제 obs 에 일찍 누름·너무 빨리 누름·다시 시작 횟수와 입력 방식(터치·마우스·키보드)도 붙는다. 서버가 아직 모르는 필드는 버린다.
+     측정 안 됨(정확도가 찍기 수준 등)인 과제는 obs 가 없어 보내지 않는다.
      이름·연락처·IP·기기 식별자·정확한 시각·문항 내용은 보내지 않는다(날짜는 서버가 일 단위로만 붙인다).
      sid 는 결과마다 새로 만드는 무작위 값으로, 같은 결과를 두 번 보내는 것만 막는다.
    - 참여가 기본값이고, 첫 결과 화면과 안내 페이지의 스위치로 끌 수 있다(localStorage bl.stats.share = false).
@@ -43,7 +45,8 @@
     const dev = device();
     if (dev) p.device = dev;
     if (typeof result.norms === 'string') p.norms = result.norms;
-    if (typeof result.z === 'number') p.overall = r3(result.z);
+    // 측정 안 된 과제를 빼고 낸 종합 z는 같은 모드의 다른 결과와 과제 구성이 달라 보내지 않는다
+    if (typeof result.z === 'number' && !(result.invalidTasks && result.invalidTasks.length)) p.overall = r3(result.z);
     return p;
   }
   /* 입력 방식(터치/마우스)만. 반응 시간 기준값을 나눠 보는 데 쓴다. 기기 종류·모델은 보지 않는다. */

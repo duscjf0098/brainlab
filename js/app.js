@@ -72,7 +72,7 @@
     const recentHtml = recent.length ? '<section class="block"><div class="block-head"><h3>최근 기록</h3><a href="#/history" class="link">전체 보기</a></div>' +
       recent.map(function (x) { return rowHtml(x.r, x.i); }).join('') + '</section>' : '';
     const cog = BL.tests.cognitive && BL.tests.cognitive.merge ? BL.tests.cognitive.merge(all) : null;
-    const profileHtml = cog ? '<a class="profile-card tinted tint-cognitive" href="#/profile/cognitive"><span class="eyebrow">인지 종합 프로필</span><span class="profile-main">' + U.esc(cog.headline) + '</span><span class="muted small">' + U.esc(cog.label) + ' · ' + cog.coverage.done + '/' + cog.coverage.total + ' 과제 반영</span></a>' : '';
+    const profileHtml = cog ? '<a class="profile-card tinted tint-cognitive" href="#/profile/cognitive"><span class="eyebrow">인지 종합 프로필</span><span class="profile-main">' + U.esc(cog.headline) + '</span><span class="muted small">' + U.esc(cog.label) + ' · ' + (cog.coverage.scored != null ? cog.coverage.scored : cog.coverage.done) + '/' + cog.coverage.total + ' 과제 반영</span></a>' : '';
     setScreen(
       '<div class="wrap">' +
       '<section class="hero">' +
@@ -111,6 +111,8 @@
     const scales = (result && result.scales) || [];
     const labels = [];
     scales.forEach(function (s) { labels.push(s.label); (s.children || []).forEach(function (c) { labels.push(c.label); }); });
+    // 측정 안 된 결과(점수 막대가 없음)는 그 과제의 설명만 보여 준다
+    if (!labels.length && result && Array.isArray(result.invalidLabels)) result.invalidLabels.forEach(function (l) { labels.push(l); });
     const rows = t.explain.filter(function (x) {
       const parts = x.tasks ? x.tasks.split(', ') : [];
       return !labels.length || labels.some(function (l) { return l === x.label || l.indexOf(x.label + ' ') === 0 || parts.indexOf(l) >= 0; });
@@ -220,7 +222,7 @@
         session.index += 1;
         saveSession();
         renderRun(id);
-      }, { timeFactor: session.timeFactor, prev: session.answers[session.index] });
+      }, { timeFactor: session.timeFactor, prev: session.answers[session.index], save: saveSession });
     });
     document.body.classList.add('running');   // 검사 화면에서는 상단 바를 고정하지 않는다(style.css .running .topbar)
   }
@@ -252,11 +254,26 @@
   }
 
   /* ---------- 문항 렌더러 ---------- */
-  function introCard(el, it, onStart, extra) {
-    el.innerHTML = '<div class="section-card"><p class="eyebrow">과제</p><h2>' + U.esc(it.title) + '</h2><p>' + U.esc(it.desc) + '</p>' +
+  /* 과제 시작 카드. html = 그림 예시처럼 렌더러가 만든 마크업(사용자 입력이 아니다) */
+  function introCard(el, it, onStart, extra, html) {
+    el.innerHTML = '<div class="section-card"><p class="eyebrow">과제</p><h2>' + U.esc(it.title) + '</h2><p>' + U.esc(it.desc) + '</p>' + (html || '') +
       (extra ? '<p class="muted small">' + U.esc(extra) + '</p>' : '') +
       '<button class="btn btn-primary btn-block" id="go">시작</button></div>';
     el.querySelector('#go').addEventListener('click', onStart);
+  }
+  /* ---------- 반응 과제 공용 (2026-10-18) ---------- */
+  // 자극을 넣은 뒤 두 번째 화면 갱신 때 부른다. 그때가 자극이 실제로 화면에 그려진 시각에 가깝다. 화면 갱신이 멈춘 상태(숨은 탭)면 늦게 불리거나 안 불린다.
+  function afterPaint(fn) { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { requestAnimationFrame(fn); }); }
+  // 입력이 실제로 일어난 시각(e.timeStamp). 메인 스레드가 바빠 처리기가 늦게 돌아도 그만큼이 반응 시간에 섞이지 않는다.
+  // 오래된 WebView는 다른 기준(1970년부터 ms)을 주기도 해서, 지금 시각과 1초 넘게 차이 나면 지금 시각을 쓴다.
+  function evTime(e) { const now = performance.now(), ts = e && typeof e.timeStamp === 'number' ? e.timeStamp : NaN; return ts > 0 && Math.abs(now - ts) < 1000 ? Math.min(ts, now) : now; }
+  // 입력 방식: t 터치·펜, m 마우스, k 키보드 (결과에 "마우스로 눌러 느리게 나왔을 수 있어요"를 붙이고 익명 통계로 입력 방식별 기준을 따로 만들려고 센다)
+  function inputOf(e) { return !e || e.type === 'keydown' ? 'k' : e.pointerType === 'touch' || e.pointerType === 'pen' ? 't' : 'm'; }
+  // 점수에 드는 본 시행을 시작한 횟수를 문항에 적어 세션에 저장한다(연습은 세지 않음). 새로고침으로 처음부터 다시 하면 그 횟수가 결과에 남는다. 반환값 = 다시 시작한 횟수
+  function markStart(it, ctx) { it.starts = (it.starts || 0) + 1; if (ctx && typeof ctx.save === 'function') ctx.save(); return it.starts - 1; }
+  function practiceEnd(el, text, onGo) {
+    el.innerHTML = '<div class="section-card"><p class="eyebrow">연습 끝</p><h2>이제 진짜예요</h2><p>' + U.esc(text) + '</p><button class="btn btn-primary btn-block" id="go">시작</button></div>';
+    el.querySelector('#go').addEventListener('click', onGo);
   }
 
   const RENDER = {
@@ -525,65 +542,168 @@
       return function () { timers.forEach(clearTimeout); };
     },
 
-    symsearch: function (it, el, done) {
+    symsearch: function (it, el, done, ctx) {
       const G = BL.tests.cognitive.glyphSVG;
-      let timers = [], correct = 0, wrong = 0, finished = false, cur = null, tick = null, endAt = 0, keyOn = false;
+      // 새 문제가 뜬 뒤 GAP ms 안에 들어온 입력은 받지 않고 따로 센다(보지 않고 연타하기·두 번 탭·키 누르고 있기 막기).
+      // 정직하게 풀면 문제마다 1~3초가 걸려서 걸리지 않고, 연타는 1초에 최대 4번만 답이 된다.
+      const GAP = 250, ALL = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+      const practiceN = it.practiceTrials || 0;
+      let timers = [], correct = 0, wrong = 0, fast = 0, pauses = 0, starts = 0, finished = false, cur = null, tick = null, endAt = 0, left = 0, shownAt = 0, pdone = 0;
+      let mode = 'intro';   // intro · practice · run · paused · done
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      const rnd = function (n) { return Math.floor(Math.random() * n); };
       const sampleN = function (arr, n) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a.slice(0, n); };
-      function next() {
-        if (finished) return;
-        const ids = sampleN([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 7);
-        const targets = ids.slice(0, 2), row = ids.slice(2, 7);
-        const present = Math.random() < 0.5;
-        if (present) row[Math.floor(Math.random() * 5)] = targets[Math.floor(Math.random() * 2)];
-        cur = { present: present };
-        el.querySelector('#ss-t').innerHTML = targets.map(G).join('');
-        el.querySelector('#ss-r').innerHTML = row.map(G).join('');
+      function makeItem() {
+        const ids = sampleN(ALL, 7);
+        const c = { targets: ids.slice(0, 2), row: ids.slice(2, 7), present: Math.random() < 0.5, hit: -1, lure: -1 };
+        if (c.present) { c.hit = rnd(5); c.row[c.hit] = c.targets[rnd(2)]; }
+        return c;
+      }
+      // 연습 문제: 있음과 없음을 번갈아 내고, 없음 문제에는 왼쪽 기호와 모양은 같고 방향만 다른 기호를 꼭 넣는다
+      function makePractice(i) {
+        const c = makeItem();
+        c.present = i % 2 === 0; c.hit = -1; c.lure = -1;
+        c.row = sampleN(ALL.filter(function (g) { return c.targets.indexOf(g) < 0; }), 5);
+        if (c.present) { c.hit = rnd(5); c.row[c.hit] = c.targets[rnd(2)]; return c; }
+        const shape = Math.floor(c.targets[rnd(2)] / 4) * 4;
+        const lures = [0, 1, 2, 3].map(function (r) { return shape + r; }).filter(function (g) { return c.targets.indexOf(g) < 0; });
+        const lure = lures[rnd(lures.length)];
+        c.lure = c.row.indexOf(lure);
+        if (c.lure < 0) { c.lure = rnd(5); c.row[c.lure] = lure; }
+        return c;
+      }
+      function mountBoard(head) {
+        el.innerHTML = '<div class="ss"><div class="ss-head mono">' + head + '</div>' +
+          '<div class="ss-board" id="ss-board"><div class="ss-targets" id="ss-t"></div><div class="ss-div"></div><div class="ss-row" id="ss-r"></div></div>' +
+          '<div class="ss-pause" id="ss-pause" hidden></div>' +
+          '<div class="crt-btns" id="ss-btns"><button class="btn crt-btn" data-y="1">있음</button><button class="btn crt-btn" data-y="0">없음</button></div>' +
+          '<div id="ss-fb"></div>' +
+          '<p class="muted small">왼쪽 두 기호 중 하나라도 오른쪽에 똑같은 게 있으면 "있음". 방향이 다르면 다른 기호예요. PC: ← 있음 · → 없음</p></div>';
+        el.querySelectorAll('.crt-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-y') === '1'); }); });
+      }
+      function show(c) {
+        cur = c;
+        el.querySelector('#ss-t').innerHTML = c.targets.map(G).join('');
+        el.querySelector('#ss-r').innerHTML = c.row.map(G).join('');
+        shownAt = performance.now();
       }
       function answer(yes) {
-        if (finished || !cur) return;
+        if (!cur || (mode !== 'run' && mode !== 'practice')) return;
+        if (performance.now() - shownAt < GAP) { if (mode === 'run') fast++; return; }
+        if (mode === 'practice') { practiceFeedback(yes); return; }
         if (yes === cur.present) correct++; else wrong++;
-        el.querySelector('#ss-cnt').textContent = (correct + wrong) + '문항 · 정답 ' + correct;
-        next();
+        el.querySelector('#ss-cnt').textContent = (correct + wrong) + '문항';   // 맞힌 수는 끝난 뒤에 보여 준다(앞서 있을 때 멈추는 요령 막기)
+        show(makeItem());
       }
+      function practiceStep() {
+        mode = 'practice';
+        mountBoard('<span>연습 ' + (pdone + 1) + ' / ' + practiceN + ' · 점수에 안 들어가요</span><span>시간 제한 없음</span>');
+        show(makePractice(pdone));
+      }
+      function practiceFeedback(yes) {
+        const c = cur; cur = null;
+        const ok = yes === c.present;
+        const glyphs = el.querySelectorAll('#ss-r .glyph');
+        const mark = function (i, cls) { if (glyphs[i]) glyphs[i].classList.add(cls); };
+        let why;
+        if (c.present) { mark(c.hit, 'hit'); why = '오른쪽 ' + (c.hit + 1) + '번째 기호가 왼쪽 기호와 모양도 방향도 똑같아요.'; }
+        else if (c.lure >= 0) { mark(c.lure, 'lure'); why = '오른쪽 ' + (c.lure + 1) + '번째 기호는 왼쪽 기호와 모양은 같지만 방향이 달라요. 방향이 다르면 다른 기호예요.'; }
+        else why = '오른쪽에 똑같은 기호가 없어요.';
+        pdone++;
+        const btns = el.querySelector('#ss-btns'); if (btns) btns.hidden = true;
+        const fb = el.querySelector('#ss-fb');
+        fb.className = 'practice-fb ' + (ok ? 'ok' : 'bad');
+        fb.innerHTML = '<p class="practice-title">' + (ok ? '정답이에요.' : '아쉽네요. 정답은 "' + (c.present ? '있음' : '없음') + '"이에요.') + '</p><p class="practice-explain">' + U.esc(why) + '</p>' +
+          '<button class="btn btn-primary btn-block" id="ss-next">' + (pdone >= practiceN ? '연습 끝내기' : '다음 연습') + '</button>';
+        fb.querySelector('#ss-next').addEventListener('click', function () {
+          if (pdone < practiceN) { practiceStep(); return; }
+          mode = 'intro';
+          practiceEnd(el, it.seconds + '초 동안 최대한 많이, 정확하게 풀어요. 틀린 답은 맞힌 수에서 빼고, 맞힌 수는 끝난 뒤에 알려 드려요.', startRun);
+        });
+      }
+      function startTick() {
+        tick = setInterval(function () {
+          const l = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+          const tEl = el.querySelector('#ss-time'); if (tEl) { tEl.textContent = l; if (l <= 10) tEl.classList.add('urgent'); }
+          if (l <= 0) { clearInterval(tick); tick = null; finish(); }
+        }, 200);
+      }
+      function startRun() {
+        starts = markStart(it, ctx);
+        mode = 'run';
+        mountBoard('<span id="ss-cnt">0문항</span><span id="ss-time">' + it.seconds + '</span>');
+        endAt = Date.now() + it.seconds * 1000;
+        startTick();
+        show(makeItem());
+      }
+      // 화면을 벗어나면(카톡 알림, 화면 꺼짐) 시간을 멈추고 판을 가린다. 돌아와서 "이어서 하기"를 누르면 남은 시간으로 새 문제부터 이어 간다.
+      function setBoard(on) { ['#ss-board', '#ss-btns'].forEach(function (s) { const x = el.querySelector(s); if (x) x.hidden = !on; }); }
+      function pause() {
+        if (mode !== 'run') return;
+        mode = 'paused'; pauses++; cur = null;
+        left = Math.max(0, endAt - Date.now());
+        if (tick) { clearInterval(tick); tick = null; }
+        setBoard(false);
+        const p = el.querySelector('#ss-pause');
+        if (!p) return;
+        p.hidden = false;
+        p.innerHTML = '<p>화면을 벗어나서 멈췄어요. 남은 시간 ' + Math.ceil(left / 1000) + '초는 그대로예요.</p><button class="btn btn-primary btn-block" id="ss-resume">이어서 하기</button>';
+        p.querySelector('#ss-resume').addEventListener('click', resume);
+      }
+      function resume() {
+        if (mode !== 'paused') return;
+        const p = el.querySelector('#ss-pause'); if (p) { p.hidden = true; p.innerHTML = ''; }
+        setBoard(true);
+        mode = 'run';
+        endAt = Date.now() + left;
+        startTick();
+        show(makeItem());
+      }
+      function onVis() { if (document.hidden) pause(); }
       function finish() {
         if (finished) return;
-        finished = true; keyOn = false;
+        finished = true; mode = 'done'; cur = null;
         el.innerHTML = '<div class="span-stage"><p class="span-fb ok">끝</p><p class="mono muted">정답 ' + correct + ' · 오답 ' + wrong + '</p></div>';
-        T(function () { done({ correct: correct, wrong: wrong }); }, 900);
+        T(function () { done({ correct: correct, wrong: wrong, fast: fast, pauses: pauses, restarts: starts }); }, 900);
       }
-      function start() {
-        el.innerHTML = '<div class="ss"><div class="ss-head mono"><span id="ss-cnt">0문항 · 정답 0</span><span id="ss-time">' + it.seconds + '</span></div>' +
-          '<div class="ss-board"><div class="ss-targets" id="ss-t"></div><div class="ss-div"></div><div class="ss-row" id="ss-r"></div></div>' +
-          '<div class="crt-btns"><button class="btn crt-btn" data-y="1">있음</button><button class="btn crt-btn" data-y="0">없음</button></div>' +
-          '<p class="muted small">왼쪽 두 기호 중 하나라도 오른쪽에 있으면 "있음". PC: ← 있음 · → 없음</p></div>';
-        el.querySelectorAll('.crt-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-y') === '1'); }); });
-        endAt = Date.now() + it.seconds * 1000; keyOn = true;
-        tick = setInterval(function () {
-          const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
-          const tEl = el.querySelector('#ss-time'); if (tEl) { tEl.textContent = left; if (left <= 10) tEl.classList.add('urgent'); }
-          if (left <= 0) { clearInterval(tick); finish(); }
-        }, 200);
-        next();
+      function onKey(e) {
+        if (e.repeat) return;   // 키를 누르고 있을 때 생기는 자동 반복은 답으로 치지 않는다
+        if (e.key === 'ArrowLeft' || e.key === '1') answer(true); else if (e.key === 'ArrowRight' || e.key === '2') answer(false);
       }
-      function onKey(e) { if (!keyOn) return; if (e.key === 'ArrowLeft' || e.key === '1') answer(true); else if (e.key === 'ArrowRight' || e.key === '2') answer(false); }
       document.addEventListener('keydown', onKey);
-      introCard(el, it, start, it.seconds + '초 동안 해요. 빠르기와 정확도를 같이 봐요.');
-      return function () { timers.forEach(clearTimeout); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); };
+      document.addEventListener('visibilitychange', onVis);
+      // 시작 화면의 그림 예시: 있음 하나, 방향만 다른 기호가 섞인 없음 하나
+      const example = function (t, r, at, cls, cap) {
+        return '<div class="ss-ex"><div class="ss-ex-board"><span class="ss-ex-g">' + t.map(G).join('') + '</span><span class="ss-div"></span><span class="ss-ex-g">' +
+          r.map(function (g, i) { const s = G(g); return i === at ? s.replace('class="glyph"', 'class="glyph ' + cls + '"') : s; }).join('') + '</span></div><p>' + cap + '</p></div>';
+      };
+      const examples = '<div class="ss-exs">' +
+        example([1, 6], [8, 3, 6, 11, 0], 2, 'hit', '<b>있음</b> · 오른쪽 셋째 기호가 왼쪽 둘째 기호와 모양도 방향도 똑같아요.') +
+        example([4, 10], [5, 1, 11, 2, 9], 0, 'lure', '<b>없음</b> · 오른쪽 첫째 기호는 왼쪽 첫째와 모양은 같지만 방향이 달라요. 방향이 다르면 다른 기호예요.') + '</div>';
+      introCard(el, it, function () { if (practiceN) { pdone = 0; practiceStep(); } else startRun(); },
+        it.seconds + '초 동안 해요. 빠르기와 정확도를 같이 봐요. 틀린 답은 맞힌 수에서 빼고, 문제가 바뀌자마자 누른 건 세지 않아요. 정확도가 너무 낮으면 점수 대신 다시 해 달라고 알려 드려요.' +
+        (practiceN ? ' 먼저 시간 제한 없이 연습 ' + practiceN + '문제를 풀어요. 연습은 점수에 안 들어가요.' : ''), examples);
+      return function () { timers.forEach(clearTimeout); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); };
     },
 
-    reaction: function (it, el, done) {
-      let timers = [], times = [], state = 'idle', t0 = 0, finished = false, touches = 0;
+    reaction: function (it, el, done, ctx) {
+      const practiceN = it.practiceTrials || 0;
+      // 대기 시간: 1초 + 지수분포(평균 1.2초), 5초가 넘으면 다시 뽑는다. 기다린 시간과 상관없이 곧 바뀔 확률이 비슷해서, 박자를 세어 미리 누르는 요령이 통하지 않는다.
+      const foreperiod = function () { let x; do { x = 1000 - 1200 * Math.log(1 - Math.random()); } while (x > 5000); return x; };
+      const MIN = { t: 150, m: 130, k: 130 }, MAX = 1500;   // 이보다 빠르면 일찍 누름(짐작해서 누른 것), 이보다 느리면 딴 데를 본 것이라 다시 잰다
+      let timers = [], times = [], state = 'idle', t0 = 0, finished = false, touches = 0, mouse = 0, early = 0, slow = 0, starts = 0, pdone = 0, goId = 0;
+      let practice = practiceN > 0;
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
       function pad() { return el.querySelector('#pad'); }
+      function count() { return practice ? '연습 ' + Math.min(pdone + 1, practiceN) + ' / ' + practiceN + ' · 점수에 안 들어가요' : times.length + ' / ' + it.trials; }
       function draw(cls, big, small) {
-        el.innerHTML = '<div class="rt-wrap"><p class="mono muted">' + times.length + ' / ' + it.trials + '</p>' +
+        el.innerHTML = '<div class="rt-wrap"><p class="mono muted">' + count() + '</p>' +
           '<button class="rt-pad ' + cls + '" id="pad"><span class="rt-big">' + big + '</span><span class="rt-small">' + (small || '') + '</span></button></div>';
         pad().addEventListener('pointerdown', onTap);
       }
       function arm() {
         state = 'wait';
-        draw('wait', '기다리세요', '초록색이 되면 탭');
+        draw('wait', '기다리세요', '화면이 밝아지고 "지금!"이 뜨면 탭');
         T(function () {
           if (state !== 'wait') return;
           const p = pad();
@@ -591,57 +711,75 @@
           p.querySelector('.rt-big').textContent = '지금!';
           p.querySelector('.rt-small').textContent = '';
           state = 'go';
+          const id = ++goId;
           t0 = performance.now();
-          // 초록색이 실제로 화면에 그려진 프레임의 시각으로 기준점을 당겨 잡는다 (그리기 지연이 반응 시간에 섞이지 않게).
-          // 탭이 먼저 들어왔거나 화면 갱신이 멈춘 상태(백그라운드 탭)면 위의 시각을 그대로 쓴다.
-          requestAnimationFrame(function () { requestAnimationFrame(function () { if (state === 'go') t0 = performance.now(); }); });
-        }, 1500 + Math.random() * 2500);
+          // 신호가 실제로 화면에 그려진 프레임 시각으로 기준점을 당겨 잡는다(그리기 지연이 반응 시간에 섞이지 않게)
+          afterPaint(function () { if (state === 'go' && id === goId) t0 = performance.now(); });
+        }, foreperiod());
+      }
+      function retry(cls, big, small, isEarly) {
+        if (!practice) { if (isEarly) early++; else slow++; }
+        state = 'again'; timers.forEach(clearTimeout); timers = [];
+        draw(cls, big, small);
       }
       function onTap(e) {
         e.preventDefault();
         if (finished) return;
-        if (state === 'idle' || state === 'shown' || state === 'early') { arm(); return; }
-        if (state === 'wait') {
-          state = 'early'; timers.forEach(clearTimeout); timers = [];
-          draw('early', '너무 빨라요', '탭해서 다시');
+        if (state === 'idle' || state === 'shown' || state === 'again') { arm(); return; }
+        if (state === 'wait') { retry('early', '너무 빨라요', '"지금!"을 보고 누르세요 · 탭해서 다시', true); return; }
+        if (state !== 'go') return;
+        const inp = inputOf(e);
+        const ms = Math.round(evTime(e) - t0);
+        if (ms < MIN[inp]) { retry('early', '너무 빨라요', '신호를 보고 누르세요 · 탭해서 다시', true); return; }
+        if (ms > MAX) { retry('early', '조금 늦었어요', '화면을 보고 있다가 바로 누르세요 · 탭해서 다시', false); return; }
+        state = 'shown';
+        if (practice) {
+          pdone++;
+          if (pdone >= practiceN) { practice = false; starts = markStart(it, ctx); draw('shown', ms + ' ms', '연습 끝 · 이제 진짜예요 · 탭해서 시작'); }
+          else draw('shown', ms + ' ms', '연습이에요 · 탭해서 다음');
           return;
         }
-        if (state === 'go') {
-          const ms = Math.round(performance.now() - t0);
-          if (ms < 100) {
-            // 사람의 반응으로는 불가능한 속도: 예측해서 누른 것이므로 다시 잰다
-            state = 'early'; timers.forEach(clearTimeout); timers = [];
-            draw('early', '너무 빨라요', '초록색을 보고 누르세요 · 탭해서 다시');
-            return;
-          }
-          times.push(ms);
-          if (e.pointerType === 'touch' || e.pointerType === 'pen') touches++;
-          state = 'shown';
-          if (times.length >= it.trials) {
-            finished = true;
-            draw('done', ms + ' ms', '측정 완료');
-            T(function () { done({ times: times, touch: touches }); }, 800);
-          } else {
-            draw('shown', ms + ' ms', '탭해서 다음');
-          }
+        times.push(ms);
+        if (inp === 't') touches++; else mouse++;
+        if (times.length >= it.trials) {
+          finished = true;
+          draw('done', ms + ' ms', '측정 완료');
+          T(function () { done({ times: times, touch: touches, mouse: mouse, early: early, slow: slow, restarts: starts }); }, 800);
+        } else {
+          draw('shown', ms + ' ms', '탭해서 다음');
         }
       }
-      introCard(el, it, function () { draw('idle', '탭하여 시작', '초록색이 되면 최대한 빨리 탭'); }, it.trials + '번 재요. 초록색이 되기 전에 누르면 그 번은 다시 해요.');
-      return function () { timers.forEach(clearTimeout); };
+      // 화면을 벗어나면 진행 중이던 한 번은 취소하고 다시 잰다(일찍 누름으로 세지 않음)
+      function onVis() {
+        if (!document.hidden || finished || (state !== 'wait' && state !== 'go')) return;
+        state = 'again'; timers.forEach(clearTimeout); timers = [];
+        draw('idle', '탭해서 다시', '화면을 벗어나서 이번 번은 다시 해요');
+      }
+      document.addEventListener('visibilitychange', onVis);
+      introCard(el, it, function () { if (!practice) starts = markStart(it, ctx); draw('idle', '탭하여 시작', '화면이 밝아지고 "지금!"이 뜨면 최대한 빨리 탭'); },
+        it.trials + '번 재요.' + (practiceN ? ' 먼저 연습으로 ' + practiceN + '번 해 봐요. 연습은 점수에 안 들어가요.' : '') +
+        ' "지금!"이 뜨기 전이나 뜨자마자 누르면 그 번은 다시 하고 일찍 누름으로 세요. 일찍 누름이 3번 이상이면 평균(100)까지만 인정해요.');
+      return function () { timers.forEach(clearTimeout); document.removeEventListener('visibilitychange', onVis); };
     },
 
-    choicert: function (it, el, done) {
-      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false;
+    choicert: function (it, el, done, ctx) {
+      const practiceN = it.practiceTrials || 0;
+      const MIN = { t: 180, m: 150, k: 150 }, MAX = 2000;   // 이보다 빠르면 화살표를 보기 전에 누른 것, 이보다 느리면 딴 데를 본 것이라 그 번은 다시 잰다
+      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false, fast = 0, slow = 0, starts = 0, pdone = 0, goId = 0;
+      let practice = practiceN > 0;
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      function count() { return practice ? '연습 ' + Math.min(pdone + 1, practiceN) + ' / ' + practiceN + ' · 점수에 안 들어가요' : trials.length + ' / ' + it.trials; }
       function stage() {
-        el.innerHTML = '<div class="crt"><p class="mono muted">' + trials.length + ' / ' + it.trials + '</p>' +
+        el.innerHTML = '<div class="crt"><p class="mono muted">' + count() + '</p>' +
           '<div class="crt-stim" id="stim"></div>' +
           '<div class="crt-btns"><button class="btn crt-btn" data-d="L">← 왼쪽</button><button class="btn crt-btn" data-d="R">오른쪽 →</button></div></div>';
-        el.querySelectorAll('.crt-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-d'), e.pointerType); }); });
+        el.querySelectorAll('.crt-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-d'), e); }); });
       }
+      function msg(text, cls, after) { const s = el.querySelector('#stim'); if (s) { s.textContent = text; s.className = 'crt-stim ' + cls; } T(next, after); }
       function next() {
         if (finished) return;
-        if (trials.length >= it.trials) { finished = true; done(trials); return; }
+        if (practice && pdone >= practiceN) { practice = false; practiceEnd(el, '화살표와 같은 쪽 버튼을 최대한 빨리 눌러요. ' + it.trials + '번 해요.', function () { starts = markStart(it, ctx); next(); }); return; }
+        if (!practice && trials.length >= it.trials) { finished = true; done({ trials: trials, fast: fast, slow: slow, restarts: starts }); return; }
         state = 'wait';
         stage();
         T(function () {
@@ -651,56 +789,68 @@
           s.textContent = cur === 'L' ? '←' : '→';
           s.className = 'crt-stim';
           state = 'go';
+          const id = ++goId;
           t0 = performance.now();
+          afterPaint(function () { if (state === 'go' && id === goId) t0 = performance.now(); });
+          T(function () { if (state === 'go' && id === goId) late(); }, MAX);
         }, 500 + Math.random() * 900);
       }
-      function answer(d, pt) {
+      function late() { state = 'fb'; if (!practice) slow++; msg('조금 늦었어요 · 다시 해요', 'early', 900); }
+      function answer(d, e) {
         if (state !== 'go') return;
-        const rt = Math.round(performance.now() - t0);
-        const s = el.querySelector('#stim');
+        const inp = inputOf(e), rt = Math.round(evTime(e) - t0);
         state = 'fb';
-        if (rt < 120) {
-          s.textContent = '너무 빨라요'; s.className = 'crt-stim early';
-          T(next, 600); return;   // 기록하지 않고 같은 번호를 다시 잰다
-        }
+        if (rt < MIN[inp]) { if (!practice) fast++; msg('너무 빨라요', 'early', 600); return; }   // 기록하지 않고 같은 번호를 다시 잰다
+        if (rt > MAX) { late(); return; }
         const ok = d === cur;
-        trials.push({ rt: rt, ok: ok, touch: pt === 'touch' || pt === 'pen' });
-        s.textContent = ok ? '✓' : '✗';
-        s.className = 'crt-stim ' + (ok ? 'ok' : 'bad');
-        T(next, 350);
+        if (practice) { pdone++; msg(ok ? '✓' : '화살표와 같은 쪽을 눌러요', ok ? 'ok' : 'early', ok ? 450 : 1200); return; }
+        trials.push({ rt: rt, ok: ok, touch: inp === 't', inp: inp });
+        msg(ok ? '✓' : '✗', ok ? 'ok' : 'bad', 350);
       }
-      function onKey(e) { if (e.key === 'ArrowLeft') answer('L'); else if (e.key === 'ArrowRight') answer('R'); }
+      function onKey(e) { if (e.repeat) return; if (e.key === 'ArrowLeft') answer('L', e); else if (e.key === 'ArrowRight') answer('R', e); }
       document.addEventListener('keydown', onKey);
-      introCard(el, it, next, it.trials + '번 해요. 화살표가 나오기 전에 누른 건 세지 않아요.');
+      introCard(el, it, function () { if (!practice) starts = markStart(it, ctx); next(); },
+        it.trials + '번 해요.' + (practiceN ? ' 먼저 연습으로 ' + practiceN + '번 해 봐요. 연습은 점수에 안 들어가요.' : '') +
+        ' 화살표가 나오기 전이나 나오자마자 누른 건 세지 않고 다시 해요. 실수 한 번은 봐주고, 그다음부터는 실수마다 속도 점수를 조금씩 깎아요.');
       return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); };
     },
 
-    stroop: function (it, el, done) {
-      // 색각 이상이 있어도 구분되는 조합(Okabe-Ito 팔레트). 흰 바탕에서 잘 안 보이는 노랑은 쓰지 않는다.
+    stroop: function (it, el, done, ctx) {
+      // 색각 이상이 있어도 구분되는 조합(Okabe-Ito 팔레트 바탕). 흰 바탕에서 잘 안 보이는 노랑은 쓰지 않는다.
+      // 보라는 2026-10-18에 #cc79a7(색상각 327°, 분홍에 가까워 '보라'로 안 읽힘)을 #be6efa(274°)로 바꿨다. 적록·청황 색각 이상 흉내(Machado 2009)에서
+      // 네 색 중 가장 헷갈리는 쌍의 색차(CIEDE2000)는 12.2에서 12.4로 그대로이고, 흰 바탕과의 대비는 3.1:1이다. 더 진한 보라는 적록 색각 이상에서 파랑과 겹친다.
       const COLORS = [
         { k: 'blue', ko: '파랑', hex: '#0072b2' }, { k: 'orange', ko: '주황', hex: '#d55e00' },
-        { k: 'purple', ko: '보라', hex: '#cc79a7' }, { k: 'green', ko: '초록', hex: '#009e73' }
+        { k: 'purple', ko: '보라', hex: '#be6efa' }, { k: 'green', ko: '초록', hex: '#009e73' }
       ];
-      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false;
+      const practiceN = it.practiceTrials || 0;
+      const MIN = { t: 200, m: 170, k: 170 }, MAX = 3000;
+      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false, fast = 0, slow = 0, starts = 0, pdone = 0, goId = 0;
+      let practice = practiceN > 0;
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
-      const plan = [];
+      const shuffle = function (a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
+      const plan = [], pplan = [];
       for (let i = 0; i < it.trials; i++) plan.push(i % 2 === 0);
-      for (let i = plan.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = plan[i]; plan[i] = plan[j]; plan[j] = t; }
+      for (let i = 0; i < practiceN; i++) pplan.push(i % 4 === 2);   // 연습은 글자와 색이 다른 문제 위주
+      shuffle(plan); shuffle(pplan);
+      function count() { return practice ? '연습 ' + Math.min(pdone + 1, practiceN) + ' / ' + practiceN + ' · 점수에 안 들어가요' : trials.length + ' / ' + it.trials; }
       function stage() {
-        el.innerHTML = '<div class="crt"><p class="mono muted">' + trials.length + ' / ' + it.trials + '</p>' +
+        el.innerHTML = '<div class="crt"><p class="mono muted">' + count() + '</p>' +
           '<p class="muted small">글자의 색을 고르세요</p><div class="stroop-word" id="stim"></div>' +
           '<div class="stroop-btns">' + COLORS.map(function (c, i) { return '<button class="stroop-btn" data-k="' + c.k + '" style="background:' + c.hex + '" aria-label="' + c.ko + '"><span class="mono">' + (i + 1) + '</span></button>'; }).join('') + '</div></div>';
-        el.querySelectorAll('.stroop-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-k'), e.pointerType); }); });
+        el.querySelectorAll('.stroop-btn').forEach(function (b) { b.addEventListener('pointerdown', function (e) { e.preventDefault(); answer(b.getAttribute('data-k'), e); }); });
       }
+      function msg(text, color, note, after) { const s = el.querySelector('#stim'); if (s) { s.textContent = text; s.style.color = color; s.classList.toggle('note', !!note); } T(next, after); }
       function next() {
         if (finished) return;
-        if (trials.length >= it.trials) { finished = true; done(trials); return; }
+        if (practice && pdone >= practiceN) { practice = false; practiceEnd(el, '글자의 색을 최대한 빨리 골라요. ' + it.trials + '번 해요.', function () { starts = markStart(it, ctx); next(); }); return; }
+        if (!practice && trials.length >= it.trials) { finished = true; done({ trials: trials, fast: fast, slow: slow, restarts: starts }); return; }
         state = 'wait';
         stage();
         T(function () {
           if (state !== 'wait') return;
           const ink = COLORS[Math.floor(Math.random() * 4)];
-          const cong = plan[trials.length];
+          const cong = practice ? pplan[pdone] : plan[trials.length];
           let word = ink;
           if (!cong) { const others = COLORS.filter(function (c) { return c.k !== ink.k; }); word = others[Math.floor(Math.random() * others.length)]; }
           cur = { ink: ink.k, cong: cong };
@@ -708,31 +858,32 @@
           s.textContent = word.ko;
           s.style.color = ink.hex;
           state = 'go';
+          const id = ++goId;
           t0 = performance.now();
+          afterPaint(function () { if (state === 'go' && id === goId) t0 = performance.now(); });
+          T(function () { if (state === 'go' && id === goId) late(); }, MAX);
         }, 400 + Math.random() * 600);
       }
-      function answer(k, pt) {
+      function late() { state = 'fb'; if (!practice) slow++; msg('조금 늦었어요 · 다시 해요', 'var(--warn)', true, 900); }
+      function answer(k, e) {
         if (state !== 'go') return;
-        const rt = Math.round(performance.now() - t0);
-        const s = el.querySelector('#stim');
+        const inp = inputOf(e), rt = Math.round(evTime(e) - t0);
         state = 'fb';
-        if (rt < 120) {
-          s.textContent = '너무 빨라요'; s.style.color = 'var(--warn)';
-          T(next, 600); return;
-        }
+        if (rt < MIN[inp]) { if (!practice) fast++; msg('너무 빨라요', 'var(--warn)', true, 600); return; }
+        if (rt > MAX) { late(); return; }
         const ok = k === cur.ink;
-        trials.push({ rt: rt, ok: ok, cong: cur.cong, touch: pt === 'touch' || pt === 'pen' });
-        s.textContent = ok ? '✓' : '✗';
-        s.style.color = ok ? 'var(--ok)' : 'var(--bad)';
-        T(next, 350);
+        if (practice) { pdone++; msg(ok ? '✓' : '글자 뜻이 아니라 색을 골라요', ok ? 'var(--ok)' : 'var(--warn)', !ok, ok ? 450 : 1400); return; }
+        trials.push({ rt: rt, ok: ok, cong: cur.cong, touch: inp === 't', inp: inp });
+        msg(ok ? '✓' : '✗', ok ? 'var(--ok)' : 'var(--bad)', false, 350);
       }
-      function onKey(e) { const i = ['1', '2', '3', '4'].indexOf(e.key); if (i >= 0) answer(COLORS[i].k); }
+      function onKey(e) { if (e.repeat) return; const i = ['1', '2', '3', '4'].indexOf(e.key); if (i >= 0) answer(COLORS[i].k, e); }
       document.addEventListener('keydown', onKey);
-      introCard(el, it, next, it.trials + '번 해요. 절반은 글자와 색이 같고 절반은 달라요. PC에서는 숫자키 1~4도 돼요.');
+      introCard(el, it, function () { if (!practice) starts = markStart(it, ctx); next(); },
+        it.trials + '번 해요. 절반은 글자와 색이 같고 절반은 달라요.' + (practiceN ? ' 먼저 연습으로 ' + practiceN + '번 해 봐요. 연습은 점수에 안 들어가요.' : '') +
+        ' 너무 빨리 누른 건 세지 않고 다시 해요. 글자와 색이 다른 문제에서 실수 한 번은 봐주고, 그다음부터는 실수마다 속도 점수를 조금씩 깎아요.');
       return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); };
     }
   };
-
   /* ---------- 결과 ---------- */
   function scaleHtml(s, child) {
     const lo = s.range ? s.range[0] : 0, hi = s.range ? s.range[1] : 100;
@@ -915,7 +1066,8 @@
         (result.scales || []).forEach(function (s) { if (s.key === k) l = s.label; (s.children || []).forEach(function (c) { if (c.key === k) l = c.label; }); });
         return l;
       };
-      Object.keys(result.tasks).forEach(function (k) { if (prev.tasks[k]) lines.push(labelOf(k) + ' ' + delta(iq(prev.tasks[k].z), iq(result.tasks[k].z))); });
+      const scored = function (x) { return x && !x.invalid && typeof x.z === 'number'; };   // 측정 안 된 과제는 비교하지 않는다
+      Object.keys(result.tasks).forEach(function (k) { if (scored(prev.tasks[k]) && scored(result.tasks[k])) lines.push(labelOf(k) + ' ' + delta(iq(prev.tasks[k].z), iq(result.tasks[k].z))); });
     } else {
       (result.scales || []).forEach(function (s) {
         const p = (prev.scales || []).filter(function (x) { return x.key === s.key; })[0];
@@ -944,9 +1096,9 @@
     if (it.type === 'likert') return r.int(1, 5);
     if (it.type === 'digitspan' || it.type === 'gridspan' || it.type === 'seqspan') return r.int(it.start, it.max);
     if (it.type === 'symsearch') return { correct: r.int(14, 34), wrong: r.int(0, 4) };
-    if (it.type === 'reaction') return [0, 1, 2, 3, 4].map(function () { return r.int(190, 380); });
-    if (it.type === 'choicert') { const a = []; for (let i = 0; i < it.trials; i++) a.push({ rt: r.int(320, 650), ok: r.next() < 0.92 }); return a; }
-    if (it.type === 'stroop') { const a = []; for (let i = 0; i < it.trials; i++) { const cong = i % 2 === 0; a.push({ rt: r.int(cong ? 500 : 650, cong ? 850 : 1050), ok: r.next() < 0.9, cong: cong }); } return a; }
+    if (it.type === 'reaction') { const n = it.trials || 5; const times = []; for (let i = 0; i < n; i++) times.push(r.int(190, 380)); return { times: times, touch: 0, mouse: n, early: r.int(0, 2) }; }
+    if (it.type === 'choicert') { const a = []; for (let i = 0; i < it.trials; i++) a.push({ rt: r.int(320, 650), ok: r.next() < 0.95, inp: 'k' }); return { trials: a, fast: 0 }; }
+    if (it.type === 'stroop') { const a = []; for (let i = 0; i < it.trials; i++) { const cong = i % 2 === 0; a.push({ rt: r.int(cong ? 500 : 650, cong ? 850 : 1050), ok: r.next() < 0.92, cong: cong, inp: 'k' }); } return { trials: a, fast: 0 }; }
     return null;
   }
   /* ---------- 문항 갤러리 (검수용, 저장 안 됨): #/gallery/<과제 키>/<단계 또는 all>[/<단계당 개수>] ---------- */
