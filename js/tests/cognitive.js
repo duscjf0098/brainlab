@@ -884,7 +884,11 @@
     return out.map(function (i) { return pool[i]; });
   }
 
-  /* ===== 5. 도형 회전 (1~5단계) ===== */
+  /* ===== 5. 도형 회전 (1~5단계) =====
+     단계마다 칸 수가 하나씩 늘어난다(5·6·7·8·9칸, 5×5 격자 안). 오답 셋은 모두 원래 도형을 거울에 비춘 모양을 서로 다른 방향으로
+     돌린 것이라 칸 수·줄마다 칸 수·바깥 크기가 정답과 같다. 칸만 세어서는 거를 수 없고, 돌려 보고 왼쪽·오른쪽 방향까지 가려야 풀린다.
+     (2026-10-18 전에는 오답 둘이 칸 하나를 옮긴 모양이라 칸 수만 비교해도 둘이 지워졌고, 1·2단계와 4·5단계가 같은 조건으로 만들어졌다.) */
+  const ROT_SIZE = { 1: 5, 2: 6, 3: 7, 4: 8, 5: 9 }, ROT_TIME = { 1: 40, 2: 40, 3: 45, 4: 50, 5: 55 };
   function makePolyomino(r, n) {
     const cells = {}; cells['1,1'] = true;
     let count = 1, guard = 0;
@@ -892,7 +896,7 @@
       const arr = Object.keys(cells).map(function (s) { return s.split(',').map(Number); });
       const c = r.pick(arr), d = r.pick([[1, 0], [-1, 0], [0, 1], [0, -1]]);
       const nx = c[0] + d[0], ny = c[1] + d[1];
-      if (nx < 0 || ny < 0 || nx > 3 || ny > 3) continue;
+      if (nx < 0 || ny < 0 || nx > 4 || ny > 4) continue;
       const k = nx + ',' + ny;
       if (!cells[k]) { cells[k] = true; count++; }
     }
@@ -907,37 +911,6 @@
   function rotate(cells) { return cells.map(function (c) { return [-c[1], c[0]]; }); }
   function mirror(cells) { return cells.map(function (c) { return [-c[0], c[1]]; }); }
   function rotations(cells) { const out = []; let cur = cells; for (let i = 0; i < 4; i++) { out.push(cur); cur = rotate(cur); } return out; }
-  function has(cells, p) { return cells.some(function (c) { return c[0] === p[0] && c[1] === p[1]; }); }
-  function connected(cells) {
-    if (!cells.length) return false;
-    const seen = {}; const stack = [cells[0]]; seen[cells[0].join(',')] = true;
-    let n = 0;
-    while (stack.length) {
-      const c = stack.pop(); n++;
-      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) {
-        const p = [c[0] + d[0], c[1] + d[1]];
-        if (has(cells, p) && !seen[p.join(',')]) { seen[p.join(',')] = true; stack.push(p); }
-      });
-    }
-    return n === cells.length;
-  }
-  function mutate(r, shape) {
-    for (let t = 0; t < 60; t++) {
-      const idx = r.int(0, shape.length - 1);
-      const rest = shape.filter(function (_, i) { return i !== idx; });
-      if (!connected(rest)) continue;
-      const cand = [];
-      rest.forEach(function (c) {
-        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) {
-          const p = [c[0] + d[0], c[1] + d[1]];
-          if (!has(rest, p) && !(p[0] === shape[idx][0] && p[1] === shape[idx][1]) && !has(cand, p)) cand.push(p);
-        });
-      });
-      if (!cand.length) continue;
-      return rest.concat([r.pick(cand)]);
-    }
-    return null;
-  }
   function polySVG(cells) {
     const n = normalize(cells);
     const w = Math.max.apply(null, n.map(function (c) { return c[0]; })) + 1;
@@ -949,7 +922,7 @@
     }).join('') + '</svg>';
   }
   function makeRotation(r, level) {
-    const size = level >= 4 ? 7 : level === 3 ? 6 : 5;
+    const size = ROT_SIZE[level] || 5;
     let shape, rots, mirs, guard = 0;
     while (guard++ < 300) {
       shape = makePolyomino(r, size);
@@ -964,49 +937,40 @@
       break;
     }
     const k = r.int(1, 3);
-    const used = {};
-    rots.map(polyKey).forEach(function (x) { used[x] = true; });
-    mirs.map(polyKey).forEach(function (x) { used[x] = true; });
-    const dis = [r.pick(mirs)];
-    let g2 = 0;
-    // 4단계부터는 오답 셋 다 거울상에 가까운 모양이라 더 어렵다
-    while (dis.length < 3 && g2++ < 100) {
-      const m = mutate(r, level >= 4 || r.next() < 0.5 ? mirror(shape) : shape);
-      if (!m || !connected(m)) continue;
-      const mk = rotations(m).map(polyKey);
-      if (mk.some(function (x) { return used[x]; })) continue;
-      mk.forEach(function (x) { used[x] = true; });
-      dis.push(r.pick(rotations(m)));
-    }
-    while (dis.length < 3) dis.push(mirs[dis.length]);
+    // 오답 셋: 거울에 비춘 모양을 네 방향 중 서로 다른 세 방향으로 돌린 것. 위에서 네 방향이 서로 다르고 정답의 어떤 회전과도 다름을 확인했다
+    const dis = r.sample(mirs, 3);
     const o = shuffleOptions(r, [rots[k]].concat(dis), 0);
     return {
-      type: 'choice', part: 'rotation', scored: true, level: level, timeLimit: level >= 4 ? 50 : 40,
+      type: 'choice', part: 'rotation', scored: true, level: level, timeLimit: ROT_TIME[level] || 40,
       prompt: '위 도형을 돌리기만 해서 만들 수 있는 것은? (뒤집으면 안 돼요)',
       promptHtml: '<div class="poly-prompt">' + polySVG(shape) + '</div>',
       optionsHtml: o.options.map(polySVG), answer: o.answer, optionCols: 4,
-      explain: '정답은 원래 도형을 ' + (k * 90) + '° 돌린 모양이에요. 나머지는 거울에 비친 모양이거나 칸 하나의 위치가 다른 도형이에요.'
+      explain: '정답은 원래 도형을 ' + (k * 90) + '° 돌린 모양이에요. 나머지 셋은 모두 원래 도형을 거울에 비춘 모양을 돌린 것이라, 칸 수와 크기는 같아도 돌리기만 해서는 만들 수 없어요.'
     };
   }
 
   /* ===== 6. 전개도 접기 (1~5단계) =====
-     정육면체 전개도 11가지 중 하나에 면마다 방향이 드러나는 무늬를 넣고, 접었을 때 위·왼쪽 앞·오른쪽 앞 세 면이 보이는
+     정육면체 전개도 11가지 중 하나에 면마다 다른 무늬를 넣고, 접었을 때 위·왼쪽 앞·오른쪽 앞 세 면이 보이는
      그림 4개 중 나올 수 있는 것을 고른다. 무늬는 상자 바깥면에 있다(바깥면이 위로 오게 펼친 전개도).
      접기: 칸마다 (바깥 법선 n, 종이 오른쪽 r, 종이 위쪽 u)를 정육면체 좌표로 옮긴다. 오른쪽 이웃 칸은 n' = r, r' = −n.
      보기끼리, 그리고 보기와 정육면체를 놓는 24가지 방법이 같은 그림인지는 실제로 그린 무늬 꼭짓점의 화면 좌표로 비교한다
-     (무늬 자체의 대칭까지 반영된다). 오답: 마주 보는 면이 함께 보임 · 무늬 하나가 돌아감 · 두 면 자리 바뀜 · 거울상. */
+     (무늬 자체의 대칭까지 반영된다). 오답: 마주 보는 면이 함께 보임 · 무늬 하나가 돌아감 · 두 면 자리 바뀜 · 거울상.
+     오답은 정답이 아니라 나올 수 있는 모습 24가지 중 무작위로 고른 것에서 한 군데를 바꿔 만든다(2026-10-18). 정답에서 바꾸면 정답이
+     모든 오답과 면을 가장 많이 공유해서, 전개도를 보지 않고 보기끼리만 비교해도 정답이 드러났다. */
   const FOLD_NETS = [
     ['X...', 'XXXX', 'X...'], ['X...', 'XXXX', '.X..'], ['X...', 'XXXX', '..X.'], ['X...', 'XXXX', '...X'], ['.X..', 'XXXX', '.X..'], ['.X..', 'XXXX', '..X.'],
     ['XX..', '.XXX', '.X..'], ['XX..', '.XXX', '..X.'], ['XX..', '.XXX', '...X'], ['XX..', '.XX.', '..XX'], ['XXX..', '..XXX']
   ];
   const SEMI = [];
   for (let i = 0; i <= 12; i++) SEMI.push([Math.round(50 + 34 * Math.cos(Math.PI * i / 12)), Math.round(18 + 34 * Math.sin(Math.PI * i / 12))]);
-  /* 무늬 (칸 좌표 0~100, y는 아래로). 모두 돌리면 달라 보이고, ㄴ자·깃발은 뒤집어도 달라 보인다. */
+  /* 무늬 (칸 좌표 0~100, y는 아래로). 점은 칸 가운데에 있어 돌려도 같고, 막대는 칸 가운데 가로 띠라 반 바퀴 돌려도 같다.
+     눈으로 방향이 안 보이는 무늬는 그림도 대칭으로 그려서, 보이지 않는 "방향"으로 정답·오답이 갈리지 않게 한다(sameView가 그린 꼭짓점으로
+     비교하므로 점·막대만 돌린 오답은 정답과 같은 그림으로 판정돼 다시 뽑힌다). 나머지는 돌리면 달라 보이고, ㄴ자·깃발은 뒤집어도 달라 보인다. */
   const FOLD_PAT = {
     arrow: { ko: '화살표', poly: [[50, 12], [82, 46], [61, 46], [61, 88], [39, 88], [39, 46], [18, 46]] },
     corner: { ko: '삼각형', poly: [[14, 14], [70, 14], [14, 70]] },
-    dot: { ko: '점', circle: [50, 29, 15] },
-    bar: { ko: '막대', poly: [[14, 14], [86, 14], [86, 36], [14, 36]] },
+    dot: { ko: '점', circle: [50, 50, 15] },
+    bar: { ko: '막대', poly: [[14, 39], [86, 39], [86, 61], [14, 61]] },
     tee: { ko: 'T자', poly: [[14, 14], [86, 14], [86, 34], [60, 34], [60, 88], [40, 88], [40, 34], [14, 34]] },
     semi: { ko: '반원', poly: SEMI },
     ell: { ko: 'ㄴ자', poly: [[18, 12], [38, 12], [38, 66], [82, 66], [82, 88], [18, 88]] },
@@ -1105,7 +1069,8 @@
     });
   }
   function cubeSVG(spec, pats) {
-    return '<svg class="cell cube" viewBox="0 0 100 100" aria-hidden="true">' +
+    // 보기 높이를 줄이려고 정육면체 둘레(가로 13.6~86.4, 세로 8~92)에 맞게 잘라 그린다. 무늬 좌표는 그대로다
+    return '<svg class="cell cube" viewBox="12.5 7 75 86" aria-hidden="true">' +
       CUBE_VIEW.map(function (v) { return '<polygon class="cf" points="' + v.pts + '"/>'; }).join('') +
       '<polygon class="cs cs-l" points="' + CUBE_VIEW[1].pts + '"/><polygon class="cs cs-r" points="' + CUBE_VIEW[2].pts + '"/>' +
       viewFaces(spec, pats).map(function (f) { return '<g data-p="' + f.p + '" transform="' + mStr(f.M) + '">' + patEl(f.p) + '</g>'; }).join('') + '</svg>';
@@ -1123,11 +1088,13 @@
   const FOLD_NET_POOL = { 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5], 3: [0, 1, 2, 3, 4, 5, 6, 7, 8], 4: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5: [6, 7, 8, 9, 10] };
   function makeFold(r, level) {
     for (let guard = 0; guard < 200; guard++) {
-      // 전개도 모양은 돌리거나 뒤집어 8가지 놓임 중 하나로
+      // 전개도 모양은 돌리거나 뒤집어 놓임 하나를 고르되, 폰 한 화면에 문항이 다 들어가게 늘 가로로 눕힌다(8가지 놓임 중 가로로 긴 4가지)
       let cells = netCells(FOLD_NETS[r.pick(FOLD_NET_POOL[level])]);
       if (r.next() < 0.5) cells = cells.map(function (c) { return [-c[0], c[1]]; });
       for (let t = r.int(0, 3); t > 0; t--) cells = cells.map(function (c) { return [-c[1], c[0]]; });
       cells = normalize(cells);
+      const span = function (ax) { return Math.max.apply(null, cells.map(function (c) { return c[ax]; })); };
+      if (span(1) > span(0)) cells = normalize(cells.map(function (c) { return [-c[1], c[0]]; }));
       const fr = foldNet(cells);
       const pats = r.sample(level <= 3 ? FOLD_BASIC : Object.keys(FOLD_PAT), 6);
       const rots = cells.map(function () { return level <= 2 ? 0 : r.int(0, 3); });
@@ -1143,7 +1110,9 @@
       let rotAt = -1;
       const wrong = function (kind) {
         for (let t = 0; t < 40; t++) {
-          const s = { f: ans.f.map(function (x) { return { i: x.i, k: x.k }; }), mirror: kind === 'mirror' };
+          // 정답이 아니라 무작위로 고른 '나올 수 있는 모습'에서 한 군데를 바꾼다(정답에서 바꾸면 보기끼리만 비교해도 정답이 드러난다)
+          const base = r.pick(valid);
+          const s = { f: base.f.map(function (x) { return { i: x.i, k: x.k }; }), mirror: kind === 'mirror' };
           let p = -1;
           if (kind === 'opp') {
             p = r.int(0, 2);
@@ -1172,7 +1141,7 @@
       const o = shuffleOptions(r, opts, 0);
       return {
         type: 'choice', part: 'fold', scored: true, level: level, timeLimit: level >= 4 ? 60 : 45,
-        prompt: '이 전개도를 접었을 때 나올 수 있는 정육면체는?',
+        prompt: '전개도를 접으면 나올 수 있는 모양은?',
         promptHtml: '<div class="fold-prompt">' + netSVG(cells, pats, rots) + '</div>',
         optionsHtml: o.options.map(function (s) { return cubeSVG(s, pats); }), answer: o.answer, optionCols: 2,
         explain: '접었을 때 마주 보는 면은 ' + pairs.map(function (p, i) { return U.josa(p[0], '과', '와') + ' ' + (i === pairs.length - 1 ? U.josa(p[1], '이에요', '예요') : p[1]); }).join(', ') +
@@ -1185,9 +1154,14 @@
 
   /* ===== 7. 블록 세기 (1~5단계) =====
      뒤쪽 구석이 가장 높고 앞(왼쪽 앞·오른쪽 앞)으로 올수록 낮거나 같은 모양으로만 쌓는다. 그러면 모든 기둥의 윗면이 다 보이고
-     보이는 면이 끊김 없이 이어져, 그림 하나로 기둥 높이가 하나로 정해진다. 문항에 적는 규칙: 위에 블록이 있으면 그 아래에도
-     블록이 있고, 그 밖에 숨은 블록은 없다. h[a][b]: a는 오른쪽 앞(+x), b는 왼쪽 앞(−y)으로 갈수록 커진다.
-     오답은 정답 ±1~3. 작은 수부터 늘어놓되 정답 자리는 고르게 하고, 가려진 블록이 1~3개면 보이는 블록만 센 수를 오답에 넣는다. */
+     보이는 면이 끊김 없이 이어진다. 다만 등각 그림에서는 맨 아래가 가려진 뒤쪽 기둥을 대각선 뒤로 한 칸 옮기고 한 층 낮춰도 그림이
+     똑같다(투영에서 (x, y, z)와 (x−1, y+1, z−1)이 같은 점). 그렇게 옮긴 기둥은 다른 블록과 면으로 닿지 않으므로, 문항에 적는 규칙으로
+     그 읽기를 막는다: 블록은 모두 바닥이나 다른 블록 위에 놓여 있고(위에 블록이 있으면 그 아래에도 블록이 있다) 옆 블록과 면이 맞닿아
+     한 덩어리로 붙어 있으며, 그 밖에 숨은 블록은 없다. 그림이 같은 다른 쌓기는 기둥 한두 개를 옮겨 보는 검사(단계마다 200문항)와
+     가려진 기둥을 모두 옮기는 검사(단계마다 1000문항)에서 모두 한 덩어리가 아니었다(2026-10-18).
+     h[a][b]: a는 오른쪽 앞(+x), b는 왼쪽 앞(−y)으로 갈수록 커진다.
+     보기는 정답이 들어간 연속한 네 수이고 정답 자리는 고르게 정한다(2026-10-18 전에는 정답 ±1~3을 따로 뽑아, 보기 간격 모양만 보고도
+     정답 자리를 짐작할 수 있었다). 가려진 블록 수가 정답보다 작은 보기 수 이하이면 보이는 블록만 센 수가 저절로 오답에 들어간다. */
   const BLK_SPEC = {
     1: { a: [2, 3], b: [2, 2], h: 2, n: [4, 8], hid: 0, t: 30 },
     2: { a: [2, 3], b: [3, 3], h: 3, n: [7, 13], hid: 1, t: 40 },
@@ -1234,10 +1208,8 @@
       }
       if (h[0][0] >= 2 && total >= sp.n[0] && total <= sp.n[1] && hidden >= sp.hid) break;   // 뒤 구석(가장 높은 기둥)은 두 층 이상
     }
-    const below = r.int(0, 3);   // 정답보다 작은 보기 수 (정답 자리가 고르게 바뀐다)
-    const lows = r.sample([1, 2, 3], below);
-    if (below && hidden >= 1 && hidden <= 3 && lows.indexOf(hidden) < 0) lows[0] = hidden;   // 보이는 블록만 센 수
-    const vals = lows.map(function (d) { return total - d; }).concat([total], r.sample([1, 2, 3], 3 - below).map(function (d) { return total + d; })).sort(function (p, q) { return p - q; });
+    const below = r.int(0, 3);   // 정답보다 작은 보기 수 = 정답 자리(0~3, 고르게)
+    const vals = [0, 1, 2, 3].map(function (d) { return total - below + d; });   // 정답이 들어간 연속한 네 수. total ≥ 4라 가장 작은 수도 1 이상
     const layers = [];
     for (let z = 0; ; z++) {
       let c = 0;
@@ -1248,7 +1220,7 @@
     return {
       type: 'choice', part: 'blocks', scored: true, level: level, timeLimit: sp.t,
       prompt: '블록은 모두 몇 개일까요?',
-      promptHtml: '<div class="blk-prompt">' + blocksSVG(h, A, B) + '<p class="blk-rule">위에 블록이 있으면 그 아래에도 블록이 있어요. 그 밖에 숨은 블록은 없어요.</p></div>',
+      promptHtml: '<div class="blk-prompt">' + blocksSVG(h, A, B) + '<p class="blk-rule">블록은 모두 바닥이나 다른 블록 위에 놓여 있고, 옆 블록과 면이 맞닿아 한 덩어리로 붙어 있어요. 위에 블록이 있으면 그 아래에도 블록이 있고, 그 밖에 숨은 블록은 없어요.</p></div>',
       options: vals.map(function (v) { return v + '개'; }), answer: vals.indexOf(total), optionCols: 2,
       explain: '층별로 세면 ' + layers.join(', ') + '로 모두 ' + total + '개예요. ' + (hidden ? '겉에서 보이는 블록은 ' + (total - hidden) + '개이고, 나머지 ' + hidden + '개는 위에 블록이 있어서 아래도 차 있다고 세야 하는 가려진 블록이에요.' : '이 그림에서는 모든 블록이 겉에서 보여요.')
     };
@@ -1281,9 +1253,9 @@
     vocab: { label: '어휘', domain: 'verbal', minutes: 4, desc: '주어진 낱말과 뜻이 가장 가까운 말, 또는 반대말을 골라요. 뒤로 갈수록 보기 드문 낱말이 나와요.', where: '아는 단어가 얼마나 많고 정확한지 봐요. 글을 빨리 읽고 정확하게 쓰는 힘의 바탕이에요.' },
     logic: { label: '논리 추론', domain: 'verbal', minutes: 6, desc: '문장이 참이라고 칠 때 반드시 참인 결론을 골라요. 그럴듯한 게 아니라 "반드시" 맞는 걸 찾는 게 포인트예요.', where: '말이 되는지 아닌지 따지는 힘이에요. 계약서나 규정 읽기, 토론, 가짜 뉴스 걸러내기에 쓰여요.' },
     similar: { label: '공통점 찾기', domain: 'verbal', minutes: 4, desc: '두 낱말이 공통으로 속하는 묶음이나 하는 일을 골라요. 겉모습이 아니라 본질적인 공통점을 찾아야 해요.', where: '서로 다른 것에서 공통점을 찾는 힘이에요. 개념을 정리하고 분류하고 요약하는 데 쓰여요.' },
-    rotation: { label: '도형 회전', domain: 'spatial', minutes: 3, desc: '위 도형을 돌리기만 해서 만들 수 있는 걸 골라요. 거울처럼 뒤집은 건 정답이 아니에요.', where: '머릿속에서 모양을 돌리는 힘이에요. 주차, 지도 읽기, 조립, 그림 그리기에 쓰여요.' },
-    fold: { label: '전개도 접기', domain: 'spatial', minutes: 4, desc: '펼쳐 놓은 전개도를 접어 정육면체를 만들었을 때 나올 수 있는 모양을 골라요. 무늬는 상자 바깥쪽에 그려져 있고, 무늬가 놓인 방향까지 맞아야 해요.', where: '평면을 머릿속에서 입체로 접어 보는 힘이에요. 상자 포장, 종이접기, 옷 개기, 설명서 보고 조립하기에 쓰여요.' },
-    blocks: { label: '블록 세기', domain: 'spatial', minutes: 4, desc: '쌓아 놓은 블록이 모두 몇 개인지 세요. 블록은 바닥부터 쌓여 있어서, 위에 블록이 있으면 그 아래에도 블록이 있어요. 그 밖에 안 보이는 곳에 숨은 블록은 없어요.', where: '보이는 모습만으로 안 보이는 부분까지 그려 보는 힘이에요. 짐 싣기, 창고 정리, 도면 읽기, 물건이 몇 개 들었는지 어림하기에 쓰여요.' },
+    rotation: { label: '도형 회전', domain: 'spatial', minutes: 4, desc: '위 도형을 돌리기만 해서 만들 수 있는 걸 골라요. 거울처럼 뒤집은 건 정답이 아니에요.', where: '머릿속에서 모양을 돌리는 힘이에요. 주차, 지도 읽기, 조립, 그림 그리기에 쓰여요.' },
+    fold: { label: '전개도 접기', domain: 'spatial', minutes: 5, desc: '펼쳐 놓은 전개도를 접어 정육면체를 만들었을 때 나올 수 있는 모양을 골라요. 무늬는 상자 바깥쪽에 그려져 있어요. 화살표처럼 방향이 있는 무늬는 놓인 방향까지 맞아야 하고, 점처럼 돌려도 똑같은 무늬는 방향을 따지지 않아요.', where: '평면을 머릿속에서 입체로 접어 보는 힘이에요. 상자 포장, 종이접기, 옷 개기, 설명서 보고 조립하기에 쓰여요.' },
+    blocks: { label: '블록 세기', domain: 'spatial', minutes: 5, desc: '쌓아 놓은 블록이 모두 몇 개인지 세요. 블록은 모두 바닥이나 다른 블록 위에 놓여 있어서, 위에 블록이 있으면 그 아래에도 블록이 있어요. 예를 들어 2층 블록 아래 1층 자리가 가려져 안 보여도 거기에 블록이 있다고 세요. 또 블록은 옆 블록과 면이 맞닿아 한 덩어리로 붙어 있어서, 따로 떨어져 선 블록이나 그 밖에 숨은 블록은 없어요.', where: '보이는 모습만으로 안 보이는 부분까지 그려 보는 힘이에요. 짐 싣기, 창고 정리, 도면 읽기, 물건이 몇 개 들었는지 어림하기에 쓰여요.' },
     digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 보이는 순서 그대로 입력해요.', where: '들은 걸 그대로 잠깐 기억하는 힘이에요. 전화번호나 주문을 외우는 데 쓰여요.' },
     digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '보이는 순서를 거꾸로 뒤집어 입력해요. 예: 3 7 1 → 1 7 3', where: '기억한 걸 머릿속에서 뒤집는 힘이에요. 암산이나 순서를 거꾸로 따져 보는 일에 쓰여요.' },
     grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 차례로 켜져요. 켜진 순서 그대로 눌러요.', where: '위치를 순서대로 기억하는 힘이에요. 길을 기억하거나 물건 둔 자리를 떠올릴 때 쓰여요.' },
@@ -1301,7 +1273,9 @@
   const QUICK = ['matrix', 'sequence', 'vocab', 'rotation', 'fold', 'digitB', 'symbol'];
   const LEVEL_KO = { 1: '쉬움', 2: '보통', 3: '어려움', 4: '매우 어려움', 5: '최상', 6: '극상' };
 
-  /* 난이도 단계별 예상 정답률(찍기 몫을 뺀 값: 정답 확률 = c + (1−c)·σ(θ−b), b = ln((1−p)/p)의 p). 2026-10-18 AI 평가자(과제마다 따로 3번 실행)가 문항마다 보통 성인의 정답률을 추정한 평균에서 찍기 몫을 빼서 매겼다. 언어 4풀은 문항마다 그 추정값으로 단계를 다시 매기고(경계는 default 단계표와 같은 눈금) 빈 상위 단계는 새로 쓴 문항으로 채웠다(공통점은 어렵게 쓰기가 힘들어 5단계가 아직 2개뿐이라, 모자란 자리는 4단계 문항이 대신 나온다). 그림 과제는 평가자가 그림을 직접 보지 못하고 규칙 설명만 읽었으므로 설계값과 반반 섞었다. 실제 응시 자료가 쌓이면 그 값으로 바꾼다. */
+  /* 난이도 단계별 예상 정답률(찍기 몫을 뺀 값: 정답 확률 = c + (1−c)·σ(θ−b), b = ln((1−p)/p)의 p). 2026-10-18 AI 평가자(과제마다 따로 3번 실행)가 문항마다 보통 성인의 정답률을 추정한 평균에서 찍기 몫을 빼서 매겼다. 언어 4풀은 문항마다 그 추정값으로 단계를 다시 매기고(경계는 default 단계표와 같은 눈금) 빈 상위 단계는 새로 쓴 문항으로 채웠다(공통점은 어렵게 쓰기가 힘들어 5단계가 아직 2개뿐이라, 모자란 자리는 4단계 문항이 대신 나온다). 그림 과제는 평가자가 그림을 직접 보지 못하고 규칙 설명만 읽었으므로 설계값과 반반 섞었다. 실제 응시 자료가 쌓이면 그 값으로 바꾼다.
+     2026-10-18 공간 수정: 도형 회전은 오답을 모두 거울상으로 바꾸고 단계마다 칸 수를 늘려(5·6·7·8·9칸) 단계가 실제로 달라졌으므로, 다시 매기기 전까지
+     단조로 내려가는 임시값(.85/.75/.62/.48/.36)을 둔다. 전개도(오답 출발점·대칭 무늬)와 블록(연속한 네 수 보기)도 문항 만드는 방식이 바뀌어 다시 매겨야 한다. */
   const LEVEL_P = {
     default: { 1: 0.92, 2: 0.80, 3: 0.62, 4: 0.42, 5: 0.25, 6: 0.12 },
     analogy: { 1: 0.94, 2: 0.77, 3: 0.60, 4: 0.38, 5: 0.25 },
@@ -1313,7 +1287,7 @@
     series: { 1: 0.89, 2: 0.73, 3: 0.53 },
     sequence: { 1: 0.90, 2: 0.69, 3: 0.58, 4: 0.43, 5: 0.24 },
     weights: { 1: 0.90, 2: 0.84, 3: 0.57, 4: 0.44, 5: 0.31 },
-    rotation: { 1: 0.82, 2: 0.77, 3: 0.62, 4: 0.45, 5: 0.40 },
+    rotation: { 1: 0.85, 2: 0.75, 3: 0.62, 4: 0.48, 5: 0.36 },
     fold: { 1: 0.85, 2: 0.68, 3: 0.47, 4: 0.32, 5: 0.20 },
     blocks: { 1: 0.90, 2: 0.76, 3: 0.60, 4: 0.38, 5: 0.21 }
   };
@@ -1329,7 +1303,7 @@
     symbol: { kind: 'count', mean: 24, sd: 6 }
   };
   /* 기준값 버전. 익명 통계로 보내는 결과에 붙어서 어느 기준값으로 낸 z인지 구분한다. NORMS·LEVEL_P를 바꾸면 함께 바꾼다(tools/norms-from-stats.cjs --write 가 자동으로 바꿈). */
-  const NORMS_VERSION = 'ai-est-2026-10-18';
+  const NORMS_VERSION = 'ai-est-2026-10-18b';
   /* 터치 화면은 마우스·키보드보다 입력 지연이 길어(대략 30ms) 반응 과제 기준값에 그만큼 더한다. 응답의 절반 이상이 터치면 적용. */
   const TOUCH_MS = 30;
   const IQ_RANGE = [55, 145];
@@ -1379,6 +1353,15 @@
     });
     return U.clamp(sum / Math.sqrt(v), -3, 3);
   }
+  /* 영역 점수의 측정 오차(SEM): 과제 하나의 신뢰도 ρ(영역별)를 그 영역에서 푼 과제 수 n만큼 스피어먼-브라운으로 합쳐 15·√(1−신뢰도).
+     ρ는 2026-10-18 가상 응시자 1000명에게 적응형 검사를 두 번씩 풀게 한 영역 점수 재검사 상관(규칙 .71·언어 .70·공간 .64·기억 .84·
+     속도 .92)을 그 영역 과제 수로 거꾸로 나눈 값이다(규칙 5·언어 4·공간 3·기억 4·속도 4과제). 실제 응시 자료가 쌓이면 다시 구한다.
+     요약에서 "가장 약한 영역" 문구는 가장 높은 영역과 가장 낮은 영역의 차이가 두 영역 SEM을 합친 √(SEM_a² + SEM_b²) 이상일 때만 쓴다.
+     예전 기준(차이 8점 이상)은 영역 점수의 오차보다 작아서, 모든 과제 실력이 같은 사람도 거의 다 약점 문구를 받았다(가상 응시자 적응형 94%·빠른 98%
+     → 이 기준으로 83%·78%). 다섯 영역 중 가장 높은 것과 낮은 것을 견주는 것이라 차이가 커지기 쉽다. 1.96배(95% 기준)로 하면 30%·19%까지 줄지만
+     한 영역만 1.5 SD 낮은 사람을 잡는 비율도 적응형 84~97% → 65~90%, 빠른 53~79% → 28~55%로 떨어진다. 화면의 "오차 범위"(±SEM, 약 70%)와 맞춰 1배로 둔다. */
+  const TASK_REL = { fluid: 0.33, verbal: 0.37, spatial: 0.37, memory: 0.57, speed: 0.74 };
+  function domainSem(d, n) { const q = TASK_REL[d] || 0.35, rel = n * q / (1 + (n - 1) * q); return 15 * Math.sqrt(1 - rel); }
   function band(iq) {
     return iq >= 130 ? '매우 우수' : iq >= 120 ? '우수' : iq >= 110 ? '평균 상' : iq >= 90 ? '평균' : iq >= 80 ? '평균 하' : iq >= 70 ? '경계선' : '낮음';
   }
@@ -1426,7 +1409,7 @@
     matrix: function (f) { return (f ? 12 : 6) + '문항 · 60~120초 · 1~6단계 · 보기 8개'; }, series: function () { return '6문항 · 40~50초 · 1~3단계'; },
     figAnalogy: function () { return '10문항 · 45~60초 · 1~5단계'; }, weights: function () { return '8문항 · 60~90초 · 1~5단계'; }, similar: function () { return '12문항 · 35초 · 1~5단계'; },
     sequence: function (f) { return (f ? 8 : 5) + '문항 · 50~60초 · 1~5단계'; }, analogy: function (f) { return (f ? 12 : 6) + '문항 · 40~45초 · 1~5단계'; },
-    vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '12문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~50초 · 1~5단계'; },
+    vocab: function () { return '12문항 · 35초 · 1~5단계'; }, logic: function () { return '12문항 · 60~75초 · 1~5단계'; }, rotation: function (f) { return (f ? 6 : 4) + '문항 · 40~55초 · 1~5단계'; },
     fold: function () { return '6문항 · 45~60초 · 1~5단계'; }, blocks: function () { return '6문항 · 30~60초 · 1~5단계'; }
   };
 
@@ -1459,11 +1442,13 @@
 
   /* ===== 적응형 진행: 맞히면 한 단계 위, 틀리면 한 단계 아래. 문항은 그때그때 생성한다. =====
      스텁(type 'adaptive')이 과제 자리에 놓이고, 엔진이 adaptNext()로 다음 문항을 받아 스텁 앞에 끼운 뒤
-     답이 오면 adaptRecord()로 상태를 갱신한다. 스텁 상태는 세션에 함께 저장된다. */
+     답이 오면 adaptRecord()로 상태를 갱신한다. 스텁 상태는 세션에 함께 저장된다.
+     공간 세 과제(회전·전개도·블록)는 보기가 4개라 문항 하나가 주는 정보가 적어 2026-10-18에 5 → 7문항으로 늘렸다
+     (같은 날 생성기 수정까지 합쳐 가상 응시자 1000명 재검사 신뢰도: 적응형 공간 영역 .59 → .64, 빠른 검사 .47 → .54). */
   const ADAPT = {
     matrix: { n: 8, start: 3, max: 6 }, figAnalogy: { n: 7, start: 3, max: 5 }, series: { n: 5, start: 2, max: 3 },
-    sequence: { n: 6, start: 3, max: 5 }, weights: { n: 6, start: 2, max: 5 }, rotation: { n: 5, start: 3, max: 5 },
-    fold: { n: 5, start: 3, max: 5 }, blocks: { n: 5, start: 3, max: 5 },
+    sequence: { n: 6, start: 3, max: 5 }, weights: { n: 6, start: 2, max: 5 }, rotation: { n: 7, start: 3, max: 5 },
+    fold: { n: 7, start: 3, max: 5 }, blocks: { n: 7, start: 3, max: 5 },
     analogy: { n: 7, start: 3, max: 5 }, vocab: { n: 7, start: 3, max: 5 }, logic: { n: 7, start: 3, max: 5 }, similar: { n: 7, start: 3, max: 5 }
   };
   const GEN = { matrix: makeMatrix, figAnalogy: makeFigAnalogy, series: makeSeries, sequence: makeSequence, weights: makeWeights, rotation: makeRotation, fold: makeFold, blocks: makeBlocks };
@@ -1623,12 +1608,13 @@
   /* 과제별 z 모음 → 영역·종합 결과 객체 */
   function assemble(tasks, opts) {
     const scales = [], sections = [];
-    const groups = [];
+    const groups = [], domSem = {};
     DOMAINS.forEach(function (d) {
       const keys = TASK_KEYS.filter(function (k) { return TASKS[k].domain === d.key && tasks[k]; });
       if (!keys.length) return;
       const z = domainZ(keys, tasks);
       groups.push({ keys: keys, z: z });
+      domSem[d.key] = domainSem(d.key, keys.length);
       const iq = iqOf(z);
       scales.push({ key: d.key, label: d.label, value: iq, range: IQ_RANGE, raw: '상위 ' + topPct(z) + '%',
         children: keys.map(function (k) { return { key: k, label: TASKS[k].label, value: iqOf(tasks[k].z), range: IQ_RANGE, raw: tasks[k].raw }; }) });
@@ -1664,8 +1650,12 @@
       headline = (opts.merged ? '종합 ' : '') + '추정 IQ ' + iq;
       const weak = sorted[sorted.length - 1];
       const spread = sorted[0].value - weak.value;
+      // 차이가 두 영역 오차를 합친 값보다 작으면 어느 영역이 약하다고 하지 않는다(위 TASK_REL 설명)
+      const noise = sorted.length < 2 ? 0 : Math.sqrt(Math.pow(domSem[sorted[0].key], 2) + Math.pow(domSem[weak.key], 2));
       summary = bandText + (sorted.length < 2 ? '' : spread < 8
           ? ' 영역별 점수가 ' + weak.value + '~' + sorted[0].value + ' 사이로 고르게 나왔어요.'
+          : spread < noise
+          ? ' 영역별 점수는 ' + weak.value + '~' + sorted[0].value + ' 사이예요. 이 정도 차이는 오차 범위 안이라 어느 영역이 특별히 약하다고 보기는 어려워요.'
           : ' 가장 강한 쪽은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + weak.label + ' ' + U.josa(weak.value, '은', '는') + ' 연습하면 더 오를 여지가 있어요.') +
         (keys.length < TASK_KEYS.length ? (opts.quick ? ' 빠른 검사라 대표 과제 ' + keys.length + '개로 낸 점수예요. 나머지 과제도 풀면 종합 프로필이 더 정확해져요.' : ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했어요.') : '');
     }
@@ -1724,8 +1714,8 @@
     length: '20과제',
     timed: true,
     modes: [
-      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 다음 문제가 어려워지고 틀리면 쉬워져요. 내 실력 근처에서 집중해서 재니까 짧아도 정확해요. 처음이면 이걸 추천해요.', duration: '약 40분', length: '20과제' },
-      { id: 'quick', label: '빠른 검사', desc: '다섯 영역에서 대표 과제 7개만 골라, 적응형처럼 내 실력에 맞춰 문제를 내요. 시간이 없을 때 좋아요. 과제가 적은 만큼 오차 범위는 더 넓어요.', duration: '약 16분', length: '7과제' },
+      { id: 'adaptive', label: '적응형 검사', desc: '맞히면 다음 문제가 어려워지고 틀리면 쉬워져요. 내 실력 근처에서 집중해서 재니까 짧아도 정확해요. 처음이면 이걸 추천해요.', duration: '약 43분', length: '20과제' },
+      { id: 'quick', label: '빠른 검사', desc: '다섯 영역에서 대표 과제 7개만 골라, 적응형처럼 내 실력에 맞춰 문제를 내요. 시간이 없을 때 좋아요. 과제가 적은 만큼 오차 범위는 더 넓어요.', duration: '약 18분', length: '7과제' },
       { id: 'full', label: '정밀 검사', desc: '20개 과제의 모든 단계를 처음부터 끝까지 다 풀어요. 가장 길지만, 단계별 정답률과 틀린 문제 다시 보기까지 볼 수 있어요.', duration: '약 1시간', length: '20과제' }
     ],
     glyphSVG: glyphSVG,

@@ -26,6 +26,7 @@
 
   function setScreen(html, mount) {
     if (cleanup) { try { cleanup(); } catch (e) { } cleanup = null; }
+    document.body.classList.remove('running');
     app.innerHTML = html;
     window.scrollTo(0, 0);
     if (mount) { const c = mount(); if (typeof c === 'function') cleanup = c; }
@@ -221,6 +222,7 @@
         renderRun(id);
       }, { timeFactor: session.timeFactor, prev: session.answers[session.index] });
     });
+    document.body.classList.add('running');   // 검사 화면에서는 상단 바를 고정하지 않는다(style.css .running .topbar)
   }
 
   function finish() {
