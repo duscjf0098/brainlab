@@ -29,7 +29,15 @@
   const DOMAIN = { shape: SHAPES, fill: FILLS, count: COUNTS, size: SIZES, frame: FRAMES, pos: POSS };
   const ATTRS = ['shape', 'fill', 'count', 'size'];    // 도형 계열에서 쓰는 기본 속성
   const ALL_ATTRS = ['frame', 'shape', 'fill', 'count', 'size', 'pos', 'rot', 'flip', 'lines', 'marks'];
-  const RADIUS = { s: 8, m: 11, l: 14 };
+  /* 크기 단계는 약 1.4배씩 벌린다(넓이로는 약 2배). 예전 8·11·14는 "중간"과 "크게"가 1.27배 차이뿐이라, 모양이 다른 칸끼리는 크기를 가리기 어려웠다.
+     선 두께도 크기와 함께 조금 바뀐다(작은 도형의 안쪽 채움이 선에 묻히지 않게). */
+  const RADIUS = { s: 7.2, m: 10.2, l: 14.2 };
+  const STROKE = { s: 2.1, m: 2.4, l: 2.6 };
+  /* 모양별 [크기 보정, 반폭]. 크기 보정: 같은 단계면 모양이 달라도 비슷한 크기로 보이게(예전엔 큰 네모가 중간 원만 해 보였다).
+     반폭: 도형 여럿을 놓을 때 쓰는, 반지름 대비 가로·세로로 차지하는 반쪽 길이(어느 방향으로 돌려도). */
+  const SHAPE_FIT = { circle: [0.94, 0.94], square: [1.2, 0.85], triangle: [1.12, 0.97], diamond: [1.04, 1.04], pentagon: [1.02, 0.97], hexagon: [1, 1], star: [1.08, 1.03], cross: [0.95, 0.95], arrow: [0.98, 0.98], lshape: [0.9, 0.95] };
+  /* 점 채움 자리 [x, y, 점 반지름](반지름 대비). ㄱ자는 가운데가 도형 밖이라 꺾인 모서리에, 화살표는 몸통에 찍는다. */
+  const DOT_AT = { lshape: [-0.47, 0.67, 0.2], arrow: [0, 0.3, 0.22] };
   const ATTR_KO = { frame: '틀', shape: '모양', fill: '채움', count: '개수', size: '크기', pos: '위치', rot: '방향', flip: '좌우', marks: '모서리 점', lines: '선' };
   const VAL_KO = {
     frame: { none: '없음', square: '네모 틀', circle: '둥근 틀', diamond: '마름모 틀', hexagon: '육각 틀' },
@@ -55,18 +63,18 @@
   function shapeEl(shape, cx, cy, r, attrs, rot, flip) {
     let el;
     const poly = function (u, k) { return '<polygon points="' + u.map(function (p) { return (cx + p[0] * r * k).toFixed(1) + ',' + (cy + p[1] * r * k).toFixed(1); }).join(' ') + '" ' + attrs + '/>'; };
-    if (shape === 'circle') el = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" ' + attrs + '/>';
-    else if (shape === 'arrow') el = poly([[0, -1], [0.62, -0.3], [0.3, -0.3], [0.3, 1], [-0.3, 1], [-0.3, -0.3], [-0.62, -0.3]], 0.95);
-    else if (shape === 'lshape') el = poly([[-0.8, -1], [-0.2, -1], [-0.2, 0.4], [0.8, 0.4], [0.8, 1], [-0.8, 1]], 0.9);
-    else if (shape === 'cross') el = poly([[-0.3, -1], [0.3, -1], [0.3, -0.3], [1, -0.3], [1, 0.3], [0.3, 0.3], [0.3, 1], [-0.3, 1], [-0.3, 0.3], [-1, 0.3], [-1, -0.3], [-0.3, -0.3]], 0.9);
+    if (shape === 'circle') el = '<circle cx="' + cx + '" cy="' + cy + '" r="' + +(r * SHAPE_FIT.circle[0]).toFixed(2) + '" ' + attrs + '/>';
+    else if (shape === 'arrow') el = poly([[0, -1], [0.66, -0.3], [0.34, -0.3], [0.34, 1], [-0.34, 1], [-0.34, -0.3], [-0.66, -0.3]], SHAPE_FIT.arrow[0]);
+    else if (shape === 'lshape') el = poly([[-0.8, -1], [-0.14, -1], [-0.14, 0.34], [0.8, 0.34], [0.8, 1], [-0.8, 1]], SHAPE_FIT.lshape[0]);
+    else if (shape === 'cross') el = poly([[-0.33, -1], [0.33, -1], [0.33, -0.33], [1, -0.33], [1, 0.33], [0.33, 0.33], [0.33, 1], [-0.33, 1], [-0.33, 0.33], [-1, 0.33], [-1, -0.33], [-0.33, -0.33]], SHAPE_FIT.cross[0]);
     else if (shape === 'star') {
       const pts = [];
-      for (let i = 0; i < 10; i++) { const a = (-90 + i * 36) * Math.PI / 180, rr = i % 2 === 0 ? r * 1.1 : r * 0.48; pts.push((cx + rr * Math.cos(a)).toFixed(1) + ',' + (cy + rr * Math.sin(a)).toFixed(1)); }
+      for (let i = 0; i < 10; i++) { const a = (-90 + i * 36) * Math.PI / 180, rr = (i % 2 === 0 ? 1 : 0.5) * r * SHAPE_FIT.star[0]; pts.push((cx + rr * Math.cos(a)).toFixed(1) + ',' + (cy + rr * Math.sin(a)).toFixed(1)); }
       el = '<polygon points="' + pts.join(' ') + '" ' + attrs + '/>';
     } else {
       const n = { triangle: 3, square: 4, diamond: 4, pentagon: 5, hexagon: 6 }[shape];
       const off = { triangle: -90, square: 45, diamond: -90, pentagon: -90, hexagon: 0 }[shape];
-      const rr = shape === 'square' ? r * 1.15 : shape === 'triangle' ? r * 1.1 : r;
+      const rr = r * SHAPE_FIT[shape][0];
       el = '<polygon points="' + polygonPoints(cx, cy, rr, n, off) + '" ' + attrs + '/>';
     }
     const tf = (flip ? 'translate(' + (2 * cx) + ' 0) scale(-1 1) ' : '') + (rot ? 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' : '');
@@ -79,19 +87,23 @@
     if (frame === 'square') return '<rect x="7" y="7" width="86" height="86" rx="3" ' + a + '/>';
     if (frame === 'circle') return '<circle cx="50" cy="50" r="44" ' + a + '/>';
     if (frame === 'diamond') return '<polygon points="' + polygonPoints(50, 50, 46, 4, -90) + '" ' + a + '/>';
-    return '<polygon points="' + polygonPoints(50, 50, 46, 6, 0) + '" ' + a + '/>';
+    // 육각 틀은 대각선 쪽이 안으로 들어와 있어, 큰 도형 3~4개와 닿지 않게 조금 크게 그린다
+    return '<polygon points="' + polygonPoints(50, 50, 48, 6, 0) + '" ' + a + '/>';
   }
   function cellSVG(cell) {
     const r = RADIUS[cell.size];
+    // 여럿일 때는 크기가 클수록 간격을 벌려 서로 닿지 않게 한다(도형 크기는 그대로라 칸끼리 크기 비교에는 영향이 없다)
+    const k = Math.max(1, (2 * SHAPE_FIT[cell.shape][1] * r + STROKE[cell.size] + 2.2) / 30);
+    const at = function (cx, cy, list) { return list.map(function (p) { return [+(cx + p[0] * k).toFixed(1), +(cy + p[1] * k).toFixed(1)]; }); };
     let pos;
     if (cell.count === 1) pos = [POS_XY[cell.pos || 'c']];
-    else if (cell.count === 2) pos = [[34, 50], [66, 50]];
-    else if (cell.count === 3) pos = [[50, 33], [34, 64], [66, 64]];
-    else pos = [[35, 35], [65, 35], [35, 65], [65, 65]];
+    else if (cell.count === 2) pos = at(50, 50, [[-16, 0], [16, 0]]);
+    else if (cell.count === 3) pos = at(50, 52.5, [[0, -19], [-16.5, 9.5], [16.5, 9.5]]);
+    else pos = at(50, 50, [[-15, -15], [15, -15], [-15, 15], [15, 15]]);
     const rot = ASYM.indexOf(cell.shape) >= 0 ? (cell.rot || 0) : 0;
     const flip = cell.shape === 'lshape' ? !!cell.flip : false;
     let body = frameEl(cell.frame), defs = '';
-    const base = 'stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"';
+    const base = 'stroke="currentColor" stroke-width="' + STROKE[cell.size] + '" stroke-linejoin="round"';
     (cell.lines || '').split('').forEach(function (k) {
       const l = LINE_DEF[k]; if (!l) return;
       body += '<line x1="' + l[0] + '" y1="' + l[1] + '" x2="' + l[2] + '" y2="' + l[3] + '" stroke="currentColor" stroke-width="1.6" opacity=".7"/>';
@@ -101,28 +113,48 @@
       else if (cell.fill === 'solid') body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="currentColor"', rot, flip);
       else if (cell.fill === 'half') {
         const id = 'clip' + (++uid);
-        defs += '<clipPath id="' + id + '"><rect x="' + (p[0] - r - 4) + '" y="' + (p[1] - r - 4) + '" width="' + (r + 4) + '" height="' + (2 * r + 8) + '"/></clipPath>';
+        defs += '<clipPath id="' + id + '"><rect x="' + +(p[0] - 1.4 * r - 4).toFixed(1) + '" y="' + +(p[1] - 1.4 * r - 4).toFixed(1) + '" width="' + +(1.4 * r + 4).toFixed(1) + '" height="' + +(2.8 * r + 8).toFixed(1) + '"/></clipPath>';
         body += shapeEl(cell.shape, p[0], p[1], r, 'fill="currentColor" stroke="none" clip-path="url(#' + id + ')"', rot, flip);
         body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot, flip);
       } else if (cell.fill === 'hatch') {
         const id = 'clip' + (++uid);
         defs += '<clipPath id="' + id + '">' + shapeEl(cell.shape, p[0], p[1], r, '', rot, flip) + '</clipPath>';
         let h = '';
-        for (let i = -2; i <= 2; i++) { const o = i * r * 0.5; h += '<line x1="' + (p[0] - r - 2 + o) + '" y1="' + (p[1] + r + 2) + '" x2="' + (p[0] + r + 2 + o) + '" y2="' + (p[1] - r - 2) + '" stroke="currentColor" stroke-width="1.5"/>'; }
+        for (let i = -3; i <= 3; i++) { const o = i * r * 0.5, e = 1.3 * r + 2; h += '<line x1="' + +(p[0] - e + o).toFixed(1) + '" y1="' + +(p[1] + e).toFixed(1) + '" x2="' + +(p[0] + e + o).toFixed(1) + '" y2="' + +(p[1] - e).toFixed(1) + '" stroke="currentColor" stroke-width="1.5"/>'; }
         body += '<g clip-path="url(#' + id + ')">' + h + '</g>';
         body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot, flip);
       } else {
         body += shapeEl(cell.shape, p[0], p[1], r, base + ' fill="none"', rot, flip);
-        body += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + (r * 0.3).toFixed(1) + '" fill="currentColor"/>';
+        // 점도 도형과 함께 돌리고 뒤집는다(도형의 변환은 돌린 다음 뒤집는 순서)
+        const d = DOT_AT[cell.shape] || [0, 0, 0.32], s = SHAPE_FIT[cell.shape][0] * r, t = rot * Math.PI / 180;
+        const dx = (d[0] * Math.cos(t) - d[1] * Math.sin(t)) * s * (flip ? -1 : 1), dy = (d[0] * Math.sin(t) + d[1] * Math.cos(t)) * s;
+        body += '<circle cx="' + +(p[0] + dx).toFixed(1) + '" cy="' + +(p[1] + dy).toFixed(1) + '" r="' + (r * d[2]).toFixed(1) + '" fill="currentColor"/>';
       }
     });
     (cell.marks || '').split('').forEach(function (k) {
       const m = MARK_POS[k]; if (!m) return;
       body += '<circle cx="' + m[0] + '" cy="' + m[1] + '" r="4" fill="currentColor"/>';
     });
-    return '<svg class="cell" viewBox="0 0 100 100" aria-hidden="true">' + (defs ? '<defs>' + defs + '</defs>' : '') + body + '</svg>';
+    // zoom: 틀·선·모서리 점·위치가 없는 칸(도형 계열)은 가장자리 빈 곳을 잘라 도형을 크게 보여 준다. 폰에서 계열 칸은 다섯 개가 한 줄이라 작다.
+    return '<svg class="cell" viewBox="' + (cell.zoom ? '10 10 80 80' : '0 0 100 100') + '" aria-hidden="true">' + (defs ? '<defs>' + defs + '</defs>' : '') + body + '</svg>';
   }
   const cellKey = function (c) { return ALL_ATTRS.map(function (a) { return c[a] == null ? '' : c[a]; }).join('|'); };
+  /* 보기 크기(행렬 칸의 약 2/3)에서 눈으로 가리기 어려운 칸이 있는지. 그림을 픽셀로 그려 서로 비교해 정했다.
+     작은(s) 별·십자·화살표·ㄱ자는 안쪽이 좁아 반 채움·점·빗금이 서로 비슷해 보이고(작은 삼각형은 점·빗금이),
+     작은 원과 육각형은 거의 같아 보인다. 이런 칸이 나오는 문항은 다시 만든다. 규칙으로는 정답이 하나여도 그림으로 안 보이면 답이 없어 보인다. */
+  const FAINT_FILL = { star: ['half', 'dot', 'hatch'], cross: ['half', 'dot', 'hatch'], arrow: ['half', 'dot', 'hatch'], lshape: ['half', 'dot', 'hatch'], triangle: ['dot', 'hatch'] };
+  function legible(cells) {
+    let circle = false, hexagon = false, smallRound = false;
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i];
+      if (c.size === 's' && (FAINT_FILL[c.shape] || []).indexOf(c.fill) >= 0) return false;
+      if (c.shape === 'circle') circle = true;
+      if (c.shape === 'hexagon') hexagon = true;
+      if (c.size === 's' && (c.shape === 'circle' || c.shape === 'hexagon')) smallRound = true;
+    }
+    return !(circle && hexagon && smallRound);
+  }
+  const RETRY = 40;
   function shuffleOptions(r, options, answer) {
     const idx = r.shuffle(options.map(function (_, i) { return i; }));
     return { options: idx.map(function (i) { return options[i]; }), answer: idx.indexOf(answer) };
@@ -256,7 +288,7 @@
   const CYCLIC = { rot: true, pos: true };
   function nextVal(a, v, step) { const s = PROG_SEQ[a]; const i = s.indexOf(v); return CYCLIC[a] ? s[((i + step) % s.length + s.length) % s.length] : s[Math.min(s.length - 1, Math.max(0, i + step))]; }
 
-  function makeMatrix(r, level) {
+  function makeMatrix(r, level, tries) {
     const grid = level >= 4 && r.next() < 0.4 ? 2 : 3;
     const recipe = {
       1: { cat: 1, prog: 0, logic: 0, pool: ['shape', 'fill', 'count', 'size'] },
@@ -338,6 +370,7 @@
     if (!dis) { const f = pickFoil(r, answer, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, answer, varying, 8); }
     if (!dis) dis = balancedDistractors(r, answer, varying, 6) || [];
     const o = shuffleOptions(r, [answer].concat(dis), 0);
+    if ((tries || 0) < RETRY && !legible(cells.concat(o.options))) return makeMatrix(r, level, (tries || 0) + 1);
 
     const explain = catAttrs.map(function (a) { return ATTR_KO[a] + ': ' + (grid === 2 && spec[a].rule === 'col' ? '왼쪽과 오른쪽이 각각 정해진 값' : RULE_KO[spec[a].rule]); })
       .concat(progAttrs.map(function (a) { return ATTR_KO[a] + ': ' + (a === 'rot' ? '오른쪽으로 갈수록 ' + (spec[a].step > 0 ? '시계 방향' : '반시계 방향') + '으로 90°씩 돎' : a === 'pos' ? '오른쪽으로 갈수록 시계 방향으로 한 칸씩 이동' : '오른쪽으로 갈수록 한 단계씩 커짐'); }))
@@ -362,7 +395,7 @@
     return out.length >= 3 ? out : out.slice(0, 2);
   }
   const TRANS_KO = { fill: '채움', shape: '모양', frame: '틀', size: '크기', count: '개수', rot: '방향', flip: '좌우', marks: '모서리 점', lines: '선' };
-  function makeFigAnalogy(r, level) {
+  function makeFigAnalogy(r, level, tries) {
     const nT = [1, 1, 2, 2, 3][level - 1], nN = [0, 1, 1, 2, 2][level - 1];
     const pool = level <= 2 ? ['fill', 'shape', 'size', 'count', 'frame'] : ['fill', 'shape', 'frame', 'size', 'count', 'rot', 'flip', 'marks', 'lines'];
     let trans = r.sample(pool, nT);
@@ -415,6 +448,7 @@
     let dis = balancedDistractors(r, D, varying, 6);
     if (!dis) { const f = pickFoil(r, D, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, D, varying, 6) || []; }
     const o = shuffleOptions(r, [D].concat(dis), 0);
+    if ((tries || 0) < RETRY && !legible([A, B, C].concat(o.options))) return makeFigAnalogy(r, level, (tries || 0) + 1);
     const explain = 'A에서 B로: ' + trans.map(function (t) {
       const p = T[t];
       if (p.to) return t === 'frame' && p.to === 'none' ? '틀이 없어짐' : U.josa(TRANS_KO[t], '이', '가') + ' ' + U.josa(VAL_KO[t][p.to], '으로', '로') + ' 바뀜';
@@ -518,10 +552,10 @@
   }
 
   /* ===== 2. 도형 계열 완성 (1~3단계) ===== */
-  function makeSeries(r, level) {
+  function makeSeries(r, level, tries) {
     const active = r.sample(ATTRS, level);
     const base = {}; ATTRS.forEach(function (a) { base[a] = r.pick(DOMAIN[a]); });
-    base.frame = 'none'; base.pos = 'c'; base.rot = 0; base.flip = 0; base.marks = ''; base.lines = '';
+    base.frame = 'none'; base.pos = 'c'; base.rot = 0; base.flip = 0; base.marks = ''; base.lines = ''; base.zoom = 1;
     if (base.count === 4) base.count = 3;
     const rules = {};
     active.forEach(function (a, idx) {
@@ -540,6 +574,7 @@
     if (active.length === 1) { const f = pickFoil(r, answer, active); varying[f.attr] = f.vals; }
     const dis = balancedDistractors(r, answer, varying, 4);
     const o = shuffleOptions(r, [answer].concat(dis), 0);
+    if ((tries || 0) < RETRY && !legible(cells.concat(o.options))) return makeSeries(r, level, (tries || 0) + 1);
     return {
       type: 'choice', part: 'series', scored: true, level: level, timeLimit: level >= 3 ? 50 : 40,
       prompt: '왼쪽에서 오른쪽으로 이어지는 변화를 찾아 다음 도형을 고르세요.',
@@ -1696,7 +1731,7 @@
     glyphSVG: glyphSVG,
     adaptNext: adaptNext,
     adaptRecord: adaptRecord,
-    _internals: { OPS: OPS, logicRows: logicRows, logicK: logicK, kUnique: kUnique, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },
+    _internals: { cellSVG: cellSVG, legible: legible, OPS: OPS, logicRows: logicRows, logicK: logicK, kUnique: kUnique, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },
     tasks: TASK_KEYS.map(function (k) { return { key: k, label: TASKS[k].label, domain: TASKS[k].domain, domainLabel: DOMAINS.filter(function (d) { return d.key === TASKS[k].domain; })[0].label, minutes: TASKS[k].minutes }; }),
     domains: DOMAINS.map(function (d) { return { key: d.key, label: d.label }; }),
     explain: DOMAINS.map(function (d) { return { label: d.label, what: d.what, where: d.where, tasks: TASK_KEYS.filter(function (k) { return TASKS[k].domain === d.key; }).map(function (k) { return TASKS[k].label; }).join(', ') }; }),
