@@ -155,6 +155,8 @@ p { margin: 0; }
 .progress { height: 8px; background: var(--accent-soft); border-radius: 999px; margin: 10px 0 24px; overflow: hidden; }
 .progress-bar { height: 100%; background: var(--accent); border-radius: 999px; transition: width .3s; }
 .item { animation: rise .22s ease-out; }
+/* 화면을 벗어나 멈춘 객관식 문항(2026-10-18): 문제와 보기를 가리고 멈춤 카드만 보인다 */
+.item.paused > :not(.pause-card) { display: none; }
 .run-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 18px; }
 .run-nav .btn { padding: 10px 14px; font-size: 14px; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

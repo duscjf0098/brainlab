@@ -23,6 +23,30 @@
   const TIME_KEY = 'bl.timeFactor';   // 1 표준 · 1.5 여유 · 0 무제한
   function getTimeFactor() { const v = U.store.get(TIME_KEY, 1); return v === 0 || v === 1.5 ? v : 1; }
   function setTimeFactor(v) { U.store.set(TIME_KEY, v); }
+  /* 화면 꺼짐 막기(2026-10-18): 인지 검사 중에는 Wake Lock을 요청해서, 40~60초짜리 문항을 들여다보는 동안 휴대폰 화면이 어두워지거나 꺼지지 않게 한다.
+     지원하지 않는 브라우저(카카오톡 안드로이드 인앱 등)에서는 조용히 넘어가는 보조 수단이다. 화면을 벗어나면 브라우저가 풀어 버리므로 돌아올 때 다시 요청한다.
+     화면을 벗어난 동안의 제한 시간·제시는 렌더러가 따로 멈추거나 다시 한다(choice·spanTask·choicert·stroop·reaction·symsearch). */
+  let wake = null, wakeWanted = false, wakeAsking = false;
+  function wakeOn() {
+    wakeWanted = true;
+    if (wake || wakeAsking || document.hidden || !navigator.wakeLock || typeof navigator.wakeLock.request !== 'function') return;
+    wakeAsking = true;
+    try {
+      navigator.wakeLock.request('screen').then(function (s) {
+        wakeAsking = false;
+        if (!wakeWanted) { s.release().catch(function () { }); return; }
+        wake = s;
+        s.addEventListener('release', function () { if (wake === s) wake = null; });
+      }, function () { wakeAsking = false; });
+    } catch (e) { wakeAsking = false; }
+  }
+  function wakeOff() {
+    wakeWanted = false;
+    if (!wake) return;
+    const s = wake; wake = null;
+    try { s.release().catch(function () { }); } catch (e) { }
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && wakeWanted) wakeOn(); });
 
   function setScreen(html, mount) {
     if (cleanup) { try { cleanup(); } catch (e) { } cleanup = null; }
@@ -38,6 +62,7 @@
   function route() {
     const p = (location.hash || '#/').replace(/^#\/?/, '').split('/').filter(Boolean);
     const a = p[0], b = p[1], c = p[2];
+    if (a !== 'run') wakeOff();   // 검사 화면을 떠나면 화면 꺼짐 막기를 푼다
     if (!a) return renderHome();
     if (a === 'test' && BL.tests[b]) return renderIntro(b);
     if (a === 'run' && BL.tests[b]) return renderRun(b);
@@ -72,7 +97,7 @@
     const recentHtml = recent.length ? '<section class="block"><div class="block-head"><h3>최근 기록</h3><a href="#/history" class="link">전체 보기</a></div>' +
       recent.map(function (x) { return rowHtml(x.r, x.i); }).join('') + '</section>' : '';
     const cog = BL.tests.cognitive && BL.tests.cognitive.merge ? BL.tests.cognitive.merge(all) : null;
-    const profileHtml = cog ? '<a class="profile-card tinted tint-cognitive" href="#/profile/cognitive"><span class="eyebrow">인지 종합 프로필</span><span class="profile-main">' + U.esc(cog.headline) + '</span><span class="muted small">' + U.esc(cog.label) + ' · ' + (cog.coverage.scored != null ? cog.coverage.scored : cog.coverage.done) + '/' + cog.coverage.total + ' 과제 반영</span></a>' : '';
+    const profileHtml = cog ? '<a class="profile-card tinted tint-cognitive" href="#/profile/cognitive"><span class="eyebrow">인지 종합 프로필</span><span class="profile-main">' + U.esc(cog.headline) + '</span><span class="muted small">' + U.esc(cog.label) + (cog.timeExtended ? ' · 일부 시간 늘림' : '') + ' · ' + (cog.coverage.scored != null ? cog.coverage.scored : cog.coverage.done) + '/' + cog.coverage.total + ' 과제 반영</span></a>' : '';
     setScreen(
       '<div class="wrap">' +
       '<section class="hero">' +
@@ -101,7 +126,7 @@
         return '<div class="task-group"><span class="task-group-label mono">' + U.esc(g) + '</span><div class="task-chips">' +
           groups[g].map(function (k) {
             const d = done[k.key];
-            return '<button class="task-chip' + (d ? ' done' : '') + '" data-mode="task:' + k.key + '"><span>' + U.esc(k.label) + '</span><span class="mono">' + (d ? 'IQ ' + Math.round(U.clamp(100 + 15 * d.z, 55, 145)) : '약 ' + k.minutes + '분') + '</span></button>';
+            return '<button class="task-chip' + (d ? ' done' : '') + '" data-mode="task:' + k.key + '"><span>' + U.esc(k.label) + '</span><span class="mono">' + (d ? 'IQ ' + Math.round(U.clamp(100 + 15 * d.z, 55, 145)) + (typeof d.timeFactor === 'number' ? (d.timeFactor === 0 ? ' · 무제한' : ' · 여유') : '') : '약 ' + k.minutes + '분') + '</span></button>';
           }).join('') + '</div></div>';
       }).join('');
   }
@@ -134,7 +159,7 @@
       : '';
     const tf = getTimeFactor();
     const timeHtml = t.timed
-      ? '<div class="time-set"><span class="modes-label">제한 시간</span><div class="seg">' + [[1, '표준'], [1.5, '여유 ×1.5'], [0, '무제한']].map(function (o) { return '<button class="seg-btn' + (tf === o[0] ? ' on' : '') + '" data-tf="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div><span class="muted small">여유나 무제한으로 풀면 점수가 조금 높게 나올 수 있어서, 결과에 그렇게 풀었다고 표시돼요.</span></div>'
+      ? '<div class="time-set"><span class="modes-label">제한 시간</span><div class="seg">' + [[1, '표준'], [1.5, '여유 ×1.5'], [0, '무제한']].map(function (o) { return '<button class="seg-btn' + (tf === o[0] ? ' on' : '') + '" data-tf="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div><span class="muted small">제한 시간이 있는 규칙 찾기·언어·공간 문제에만 적용돼요. 여유나 무제한으로 풀면 점수가 조금 높게 나올 수 있어서, 결과와 종합 프로필에 그렇게 풀었다고 표시돼요.</span></div>'
       : '';
     const startHtml = modes
       ? '<p class="modes-label">' + (t.tasks ? '한 번에 풀기' : '검사 길이 고르기') + '</p><div class="modes">' + modes.map(function (m) {
@@ -222,20 +247,38 @@
         session.index += 1;
         saveSession();
         renderRun(id);
-      }, { timeFactor: session.timeFactor, prev: session.answers[session.index], save: saveSession });
+      }, {
+        timeFactor: session.timeFactor, prev: session.answers[session.index], save: saveSession,
+        // 렌더러가 화면을 벗어나 멈추거나 다시 한 횟수를 센다(결과에 남김)
+        paused: function () { session.pauses = (session.pauses || 0) + 1; saveSession(); },
+        // 화면을 벗어나 멈춘 적응형 문항: 답을 기록하지 않고(단계 그대로) 빼서, 스텁이 같은 단계의 새 문항을 내게 한다
+        redo: it.adaptive ? function () {
+          if (session.items[session.index] !== it) return;
+          session.items.splice(session.index, 1);
+          saveSession();
+          renderRun(id);
+        } : null
+      });
     });
     document.body.classList.add('running');   // 검사 화면에서는 상단 바를 고정하지 않는다(style.css .running .topbar)
+    if (t.timed) wakeOn();   // 인지 검사 중에는 화면 꺼짐 막기를 요청한다(지원하는 브라우저만)
   }
 
   function finish() {
     const t = BL.tests[session.id];
     const result = t.score(session.answers, session.items, { times: session.times, mode: session.mode });
-    if (t.timed && typeof session.timeFactor === 'number' && session.timeFactor !== 1) {
+    // 시간 설정 배수는 제한 시간이 있는 객관식 문항(규칙 찾기·언어·공간)에만 쓰인다. 그런 문항이 없는 결과(기억·속도 과제만)에는 붙이지 않는다(2026-10-18).
+    const timedItems = session.items.some(function (x) { return x && x.scored && x.type === 'choice' && x.timeLimit > 0; });
+    if (t.timed && timedItems && typeof session.timeFactor === 'number' && session.timeFactor !== 1) {
       result.timeFactor = session.timeFactor;
       result.modeLabel = (result.modeLabel || '') + (session.timeFactor === 0 ? ' · 시간 무제한' : ' · 시간 여유 ×' + session.timeFactor);
       (result.sections = result.sections || []).push({ title: '시간 설정', body: session.timeFactor === 0
         ? '제한 시간 없이 풀었어요. 기준값은 표준 시간 기준이라 추정 IQ가 실제보다 높게 나올 수 있어요.'
         : '제한 시간을 표준의 ' + session.timeFactor + '배로 두고 풀었어요. 기준값은 표준 시간 기준이라 추정 IQ가 조금 높게 나올 수 있어요.' });
+    }
+    if (session.pauses) {
+      result.pauses = session.pauses;
+      (result.sections = result.sections || []).push({ title: '중간에 멈춤', body: '검사 중에 화면을 벗어나 ' + session.pauses + '번 멈췄어요. 멈춘 동안은 제한 시간이 흐르지 않았어요. 그때 풀던 문제는 같은 단계의 새 문제로 바꾸거나 남은 시간으로 이어서 풀었고, 숫자나 칸이 나오던 중이었으면 그 시도는 세지 않고 다시 했어요.' });
     }
     result.testId = session.id;
     result.mode = session.mode;
@@ -271,6 +314,24 @@
   function inputOf(e) { return !e || e.type === 'keydown' ? 'k' : e.pointerType === 'touch' || e.pointerType === 'pen' ? 't' : 'm'; }
   // 점수에 드는 본 시행을 시작한 횟수를 문항에 적어 세션에 저장한다(연습은 세지 않음). 새로고침으로 처음부터 다시 하면 그 횟수가 결과에 남는다. 반환값 = 다시 시작한 횟수
   function markStart(it, ctx) { it.starts = (it.starts || 0) + 1; if (ctx && typeof ctx.save === 'function') ctx.save(); return it.starts - 1; }
+  /* 선택 반응·색-단어 간섭 공용(2026-10-18): 화면을 벗어나면(카톡 알림, 다른 앱) 진행 중이던 한 번(대기·자극)은 기록하지 않고 버리고, 돌아와서
+     "이어서 하기"를 누르면 같은 번호를 다시 잰다. 버린 횟수는 결과(obs.away)에 남는다. 예전에는 가려진 동안의 시간이 그 번의 반응 시간에 섞였다.
+     busy() = 진행 중인 번이 있는지, stop(discard) = 타이머를 멈추고 상태를 바꿈, resume() = 다음 번 시작. 반환값: on/off(리스너), hold(discard)(직접 멈추기) */
+  function rtAway(el, busy, stop, resume) {
+    function hold(discard) {
+      stop(discard);
+      el.innerHTML = '<div class="section-card"><p class="eyebrow">잠깐 멈췄어요</p><p>' + (discard ? '화면을 벗어나서 이번 번은 세지 않았어요. ' : '') + '준비되면 이어서 해요.</p>' +
+        '<button class="btn btn-primary btn-block" id="resume">이어서 하기</button></div>';
+      el.querySelector('#resume').addEventListener('click', resume);
+    }
+    const onVis = function () { if (document.hidden && busy()) hold(true); };
+    const onHide = function () { if (busy()) hold(true); };
+    return {
+      hold: hold,
+      on: function () { document.addEventListener('visibilitychange', onVis); window.addEventListener('pagehide', onHide); },
+      off: function () { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', onHide); }
+    };
+  }
   function practiceEnd(el, text, onGo) {
     el.innerHTML = '<div class="section-card"><p class="eyebrow">연습 끝</p><h2>이제 진짜예요</h2><p>' + U.esc(text) + '</p><button class="btn btn-primary btn-block" id="go">시작</button></div>';
     el.querySelector('#go').addEventListener('click', onGo);
@@ -291,17 +352,54 @@
     const timers = [], log = [];
     let gone = false, finished = false, askOff = null;
     let pdone = 0, len = it.start, fails = 0, best = it.start - 1, starts = 0;
+    let phase = 'idle', cur = null, pending = null;   // phase: show 순서를 보여 주는 중 · ask 답을 넣는 중 · fb 결과를 잠깐 보여 주는 중 · idle
     const practiceN = it.practiceTrials || 0;
     const T = function (fn, ms) { timers.push(setTimeout(function () { if (!gone) fn(); }, ms)); };
+    const stopTimers = function () { timers.forEach(clearTimeout); timers.length = 0; };
+    /* 본 시행 진행 상태(2026-10-18)를 문항(it.span)에 적어 세션에 저장한다. 새로고침이나 탭 복원 뒤에는 처음 길이부터가 아니라 하던 길이부터 이어 간다.
+       ask = 순서를 다 보고 답을 넣던 중. 그때 다시 열리면 그 시도는 틀린 것으로 센다(새로고침으로 같은 길이를 새 순서로 다시 받는 요령 막기). */
+    function persist(ask) { it.span = { len: len, fails: fails, best: best, log: log.slice(), ask: !!ask }; if (ctx && typeof ctx.save === 'function') ctx.save(); }
     function trial(n, practice, then) {
+      cur = { n: n, practice: practice, then: then };
+      if (document.hidden) { interrupted(); return; }   // 화면이 가려진 채로 다음 시도가 시작되려 하면(백그라운드 타이머) 보여 주지 않는다
       const stim = spec.gen(n);
+      phase = 'show';
       spec.show(stim, n, practice, T, function () {
+        phase = 'ask';
+        if (!practice) persist(true);
         askOff = spec.ask(stim, n, practice, function (ok) {
+          phase = 'idle';
           if (askOff) { askOff(); askOff = null; }
           then(ok, stim);
         });
       });
     }
+    /* 순서가 나오는 중에 화면을 벗어나면(카톡 알림, 다른 앱, 화면 꺼짐) 그 시도는 세지 않고(실패·기록에 넣지 않음) 같은 길이로 새 순서를 다시 보여 준다.
+       예전에는 백그라운드에서 타이머가 계속 돌거나(안드로이드) 돌아오는 순간 밀린 타이머가 한꺼번에 돌아(iOS) 못 본 순서가 실패로 셌다.
+       답을 넣는 중에는 제한 시간이 없어서 따로 멈추지 않는다. */
+    function interrupted() {
+      stopTimers();
+      phase = 'idle'; pending = null;
+      if (ctx && typeof ctx.paused === 'function') ctx.paused();
+      const c = cur;
+      el.innerHTML = '<div class="section-card"><p class="eyebrow">잠깐 멈췄어요</p><h2>방금 시도는 다시 할게요</h2>' +
+        '<p>순서가 나오는 중에 화면을 벗어나서 방금 시도는 세지 않았어요. 같은 길이로 새 순서를 보여 드려요.</p>' +
+        '<button class="btn btn-primary btn-block" id="again">다시 보기</button></div>';
+      el.querySelector('#again').addEventListener('click', function () { if (!gone) trial(c.n, c.practice, c.then); });
+    }
+    // 결과를 잠깐 보여 주는 사이에 화면을 벗어나면 다음 순서를 바로 시작하지 않고, 돌아와서 누르면 이어 간다
+    function held() {
+      const step = pending;
+      stopTimers();
+      phase = 'idle'; pending = null;
+      el.innerHTML = '<div class="section-card"><p class="eyebrow">잠깐 멈췄어요</p><p>화면을 벗어나서 다음 순서를 기다리고 있어요. 준비되면 이어서 해요.</p>' +
+        '<button class="btn btn-primary btn-block" id="again">이어서 하기</button></div>';
+      el.querySelector('#again').addEventListener('click', function () { if (!gone) step(); });
+    }
+    function away() { if (gone || finished) return; if (phase === 'show') interrupted(); else if (phase === 'fb' && pending) held(); }
+    const onVis = function () { if (document.hidden) away(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', away);
     function practiceStep() {
       trial(SPAN_PRACTICE_LEN, true, function (ok, stim) {
         pdone += 1;
@@ -315,19 +413,39 @@
         });
       });
     }
-    function startRun() { starts = markStart(it, ctx); next(); }
+    function startRun() { starts = markStart(it, ctx); persist(false); next(); }
     function next() {
       trial(len, false, function (ok, stim) {
         log.push([len, ok ? 1 : 0]);
         el.innerHTML = '<div class="span-stage"><p class="span-fb ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '정답' : '오답') + '</p>' + (ok ? '' : spec.answerHtml(stim)) + '</div>';
         if (ok) { best = len; fails = 0; len += 1; } else fails += 1;
-        T(len > it.max || fails >= 2 ? end : next, ok ? 900 : 1400);
+        persist(false);
+        const step = len > it.max || fails >= 2 ? end : next;
+        phase = 'fb'; pending = step;
+        T(function () { phase = 'idle'; pending = null; step(); }, ok ? 900 : 1400);
       });
     }
-    function end() { if (finished) return; finished = true; done({ best: best, log: log, restarts: starts }); }
-    introCard(el, it, function () { if (practiceN) practiceStep(); else startRun(); },
-      spec.intro + (practiceN ? ' 먼저 짧은 순서로 연습해요. 연습은 점수에 안 들어가요.' : ''));
-    return function () { gone = true; timers.forEach(clearTimeout); if (askOff) { askOff(); askOff = null; } };
+    function end() { if (finished) return; finished = true; it.span = null; done({ best: best, log: log, restarts: starts }); }
+    const saved = it.span && typeof it.span.len === 'number' && Array.isArray(it.span.log) ? it.span : null;
+    if (saved) {
+      // 새로고침·탭 복원 뒤: 저장한 길이·실패 수·기록에서 이어 간다
+      len = saved.len; fails = saved.fails || 0; best = typeof saved.best === 'number' ? saved.best : it.start - 1;
+      saved.log.forEach(function (e) { log.push(e); });
+      starts = Math.max(0, (it.starts || 1) - 1);
+      const lost = !!saved.ask;
+      if (lost) { log.push([len, 0]); fails += 1; }
+      persist(false);
+      const over = len > it.max || fails >= 2;
+      el.innerHTML = '<div class="section-card"><p class="eyebrow">이어서 하기</p><h2>' + U.esc(it.title) + '</h2><p>' +
+        (lost ? '답을 넣던 중에 페이지가 다시 열려서 그 시도는 틀린 것으로 셌어요. ' : '') +
+        (over ? '이 과제는 여기까지예요.' : '하던 곳(' + len + spec.unit + ')부터 이어서 해요.') + '</p>' +
+        '<button class="btn btn-primary btn-block" id="go">' + (over ? '다음' : '이어서 하기') + '</button></div>';
+      el.querySelector('#go').addEventListener('click', function () { if (gone) return; if (over) end(); else next(); });
+    } else {
+      introCard(el, it, function () { if (practiceN) practiceStep(); else startRun(); },
+        spec.intro + (practiceN ? ' 먼저 짧은 순서로 연습해요. 연습은 점수에 안 들어가요.' : ''));
+    }
+    return function () { gone = true; stopTimers(); if (askOff) { askOff(); askOff = null; } document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', away); };
   }
   function practiceTag(p) { return p ? '<div class="practice-tag">연습 · 점수에 안 들어가요</div>' : ''; }
   // 넣은 답 칸: 넣은 것은 글자(위치 기억은 점)로, 남은 자리는 빈 밑줄로 보여 줘서 몇 개를 더 넣어야 하는지 보이게 한다
@@ -385,7 +503,7 @@
     },
 
     choice: function (it, el, done, ctx) {
-      let answered = false, gone = false, timer = null, tick = null;
+      let answered = false, gone = false, timer = null, tick = null, paused = false, left = 0, clockAt = 0;
       const factor = ctx && typeof ctx.timeFactor === 'number' ? ctx.timeFactor : 1;
       const limit = it.practice || !it.timeLimit || factor === 0 ? 0 : Math.round(it.timeLimit * factor);
       const opts = it.optionsHtml ? it.optionsHtml : it.options.map(function (o) { return '<span class="opt-text">' + U.esc(o) + '</span>'; });
@@ -416,7 +534,7 @@
       };
       // 누르는 순간 타이머를 멈춘다. 마지막 순간에 누른 답이 시간 초과로 처리되지 않도록.
       const pick = function (i) {
-        if (answered || gone) return;
+        if (answered || gone || paused) return;
         answered = true;
         if (timer) clearTimeout(timer);
         if (tick) clearInterval(tick);
@@ -436,30 +554,67 @@
         if (n >= 1 && n <= opts.length && !e.ctrlKey && !e.metaKey && !e.altKey) pick(n - 1);
       };
       document.addEventListener('keydown', onKey);
-      if (limit) {
-        const bar = el.querySelector('#tbar'), num = el.querySelector('#tnum'), row = el.querySelector('.timer-row');
-        bar.style.width = '100%';
+      /* 제한 시간: 남은 시간(left, ms)만큼 막대·숫자·마감 타이머를 돌린다. 화면을 벗어나면(카톡 알림, 다른 앱, 화면 꺼짐) 멈춘다(2026-10-18).
+         예전에는 자리를 비운 사이에도 시간이 흘러 돌아오자마자 시간 초과(오답)가 되고, 적응형이면 단계도 한 칸 내려갔다. */
+      const bar = el.querySelector('#tbar'), num = el.querySelector('#tnum'), row = el.querySelector('.timer-row');
+      function runClock() {
+        clockAt = Date.now();
+        const endAt = clockAt + left;
+        bar.style.transition = 'none';
+        bar.style.width = (left / (limit * 1000) * 100) + '%';
         bar.getBoundingClientRect();
-        bar.style.transition = 'width ' + limit + 's linear';
+        bar.style.transition = 'width ' + (left / 1000) + 's linear';
         bar.style.width = '0%';
-        const t0 = Date.now();
-        tick = setInterval(function () {
-          const left = Math.max(0, limit - Math.round((Date.now() - t0) / 1000));
-          num.textContent = left;
-          if (left <= 10) row.classList.add('urgent');
-        }, 250);
+        const show = function () { const l = Math.max(0, Math.round((endAt - Date.now()) / 1000)); num.textContent = l; if (l <= 10) row.classList.add('urgent'); };
+        show();
+        tick = setInterval(show, 250);
         // 시간이 다 되면 말없이 넘어가지 않고 잠깐 알려 준 뒤 넘어간다
         timer = setTimeout(function () {
-          if (answered || gone) return;
+          if (answered || gone || paused) return;
           answered = true; if (tick) clearInterval(tick);
           el.querySelectorAll('.opt').forEach(function (b) { b.disabled = true; });
           const toast = document.createElement('div'); toast.className = 'toast'; toast.setAttribute('role', 'status');
           toast.textContent = '시간이 다 됐어요. 다음 문항으로 넘어가요.';
           el.appendChild(toast);
           setTimeout(function () { if (!gone) done(null); }, 1100);
-        }, limit * 1000);
+        }, left);
       }
-      return function () { gone = true; if (timer) clearTimeout(timer); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); };
+      /* 화면을 벗어나면 시간을 멈추고 문제와 보기를 가린다(.item.paused). 돌아와서 "이어서 풀기"를 누르면, 적응형 문항은 답을 기록하지 않고 같은 단계의
+         새 문항으로 바꾸고(ctx.redo, 멈춘 동안 보던 문제를 생각해 두는 요령 막기), 단계표대로 푸는 정밀 검사 문항은 남은 시간으로 이어 간다. 멈춘 횟수는 결과에 남는다. */
+      function pause() {
+        if (!limit || answered || gone || paused) return;
+        paused = true;
+        if (timer) clearTimeout(timer);
+        if (tick) clearInterval(tick);
+        timer = tick = null;
+        left = Math.max(1000, left - (Date.now() - clockAt));
+        if (ctx && typeof ctx.paused === 'function') ctx.paused();
+        const swap = !!(ctx && typeof ctx.redo === 'function');
+        el.classList.add('paused');
+        const card = document.createElement('div');
+        card.className = 'section-card pause-card'; card.setAttribute('role', 'status');
+        card.innerHTML = '<p class="eyebrow">잠깐 멈췄어요</p><h2>화면을 벗어나서 시간을 멈췄어요</h2><p>' +
+          (swap ? '보던 문제는 점수에 넣지 않고, 같은 단계의 새 문제로 바꿔서 이어 가요.' : '남은 시간 ' + Math.ceil(left / 1000) + '초로 이 문제를 이어서 풀어요.') + '</p>' +
+          '<button class="btn btn-primary btn-block" id="resume">이어서 풀기</button>';
+        el.appendChild(card);
+        card.querySelector('#resume').addEventListener('click', function () {
+          if (gone || !paused) return;
+          if (swap) { ctx.redo(); return; }
+          paused = false;
+          el.classList.remove('paused');
+          if (card.parentNode) card.parentNode.removeChild(card);
+          runClock();
+        });
+      }
+      const onVis = function () { if (document.hidden) pause(); };
+      if (limit) {
+        left = limit * 1000;
+        runClock();
+        document.addEventListener('visibilitychange', onVis);
+        window.addEventListener('pagehide', pause);
+        if (document.hidden) pause();
+      }
+      return function () { gone = true; if (timer) clearTimeout(timer); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', pause); };
     },
 
     likert: function (it, el, done, ctx) {
@@ -513,6 +668,7 @@
           return inp.off;
         },
         answerHtml: function (d) { return '<p class="mono muted">정답은 ' + expectOf(d).join(' ') + '</p>'; },
+        unit: '자리',
         intro: it.start + '자리부터 시작해서 맞힐 때마다 한 자리씩 늘어나요. 같은 길이에서 두 번 틀리면 끝나요. 최대 ' + it.max + '자리까지예요. 다 나온 뒤 화면의 숫자 버튼으로 누르고 확인을 눌러요.',
         rule: back ? '거꾸로 뒤집어 눌러요. 예를 들어 7 3이 보였으면 3 7, 2 8 5가 보였으면 5 8 2를 눌러요. 잘못 눌렀으면 확인 전에 하나 지우기로 고쳐요.'
           : '보인 순서 그대로 눌러요. 예를 들어 4 9가 보였으면 4 9를 눌러요. 잘못 눌렀으면 확인 전에 하나 지우기로 고쳐요.',
@@ -554,6 +710,7 @@
           return inp.off;
         },
         answerHtml: function (seq) { const lab = []; seq.forEach(function (c, i) { lab[c] = i + 1; }); return '<p class="muted small">정답 순서</p>' + gridHtml('answer', lab); },
+        unit: '칸',
         intro: '켜지는 칸이 ' + it.start + '개부터 시작해서 맞힐 때마다 하나씩 늘어나요. 같은 길이에서 두 번 틀리면 끝나요. 같은 칸이 두 번 켜지지는 않아서' +
           (it.max >= 9 ? ', 가장 길면 아홉 칸이 모두 한 번씩 켜져요.' : ' 최대 ' + it.max + '개까지예요.') + ' 다 누른 뒤 확인을 눌러요.',
         rule: '칸이 켜진 순서 그대로 눌러요. 다 누른 뒤 확인을 눌러야 채점돼요. 잘못 눌렀으면 확인 전에 하나 지우기로 고쳐요.',
@@ -590,6 +747,7 @@
           return inp.off;
         },
         answerHtml: function (g) { return '<p class="mono muted">정답 순서: ' + g.target.join(' ') + '</p>'; },
+        unit: '개',
         intro: it.start + '개부터 시작해서 맞힐 때마다 하나씩 늘어나요. 같은 길이에서 두 번 틀리면 끝나요. 최대 ' + it.max + '개까지예요. 다 누른 뒤 확인을 눌러요.',
         rule: '숫자를 작은 것부터 먼저 누르고, 그다음 자음을 ㄱㄴㄷ 순서로 눌러요. 예를 들어 7 ㄷ 2 ㄱ이 보였으면 2 7 ㄱ ㄷ을 눌러요. 잘못 눌렀으면 확인 전에 하나 지우기로 고쳐요.',
         real: '이제부터 점수에 들어가요. ' + it.start + '개부터 시작해서 맞히면 하나씩 늘어나고, 같은 길이에서 두 번 틀리면 끝나요.'
@@ -745,7 +903,7 @@
       // 대기 시간: 1초 + 지수분포(평균 1.2초), 5초가 넘으면 다시 뽑는다. 기다린 시간과 상관없이 곧 바뀔 확률이 비슷해서, 박자를 세어 미리 누르는 요령이 통하지 않는다.
       const foreperiod = function () { let x; do { x = 1000 - 1200 * Math.log(1 - Math.random()); } while (x > 5000); return x; };
       const MIN = { t: 150, m: 130, k: 130 }, MAX = 1500;   // 이보다 빠르면 일찍 누름(짐작해서 누른 것), 이보다 느리면 딴 데를 본 것이라 다시 잰다
-      let timers = [], times = [], state = 'idle', t0 = 0, finished = false, touches = 0, mouse = 0, early = 0, slow = 0, starts = 0, pdone = 0, goId = 0;
+      let timers = [], times = [], state = 'idle', t0 = 0, finished = false, touches = 0, mouse = 0, early = 0, slow = 0, away = 0, starts = 0, pdone = 0, goId = 0;
       let practice = practiceN > 0;
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
       function pad() { return el.querySelector('#pad'); }
@@ -798,7 +956,7 @@
         if (times.length >= it.trials) {
           finished = true;
           draw('done', ms + ' ms', '측정 완료');
-          T(function () { done({ times: times, touch: touches, mouse: mouse, early: early, slow: slow, restarts: starts }); }, 800);
+          T(function () { done({ times: times, touch: touches, mouse: mouse, early: early, slow: slow, away: away, restarts: starts }); }, 800);
         } else {
           draw('shown', ms + ' ms', '탭해서 다음');
         }
@@ -806,6 +964,7 @@
       // 화면을 벗어나면 진행 중이던 한 번은 취소하고 다시 잰다(일찍 누름으로 세지 않음)
       function onVis() {
         if (!document.hidden || finished || (state !== 'wait' && state !== 'go')) return;
+        if (!practice) away++;
         state = 'again'; timers.forEach(clearTimeout); timers = [];
         draw('idle', '탭해서 다시', '화면을 벗어나서 이번 번은 다시 해요');
       }
@@ -819,10 +978,11 @@
     choicert: function (it, el, done, ctx) {
       const practiceN = it.practiceTrials || 0;
       const MIN = { t: 180, m: 150, k: 150 }, MAX = 2000;   // 이보다 빠르면 화살표를 보기 전에 누른 것, 이보다 느리면 딴 데를 본 것이라 그 번은 다시 잰다
-      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false, fast = 0, slow = 0, starts = 0, pdone = 0, goId = 0;
+      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false, fast = 0, slow = 0, away = 0, starts = 0, pdone = 0, goId = 0;
       let practice = practiceN > 0;
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
       function count() { return practice ? '연습 ' + Math.min(pdone + 1, practiceN) + ' / ' + practiceN + ' · 점수에 안 들어가요' : trials.length + ' / ' + it.trials; }
+      const onVis = rtAway(el, function () { return !finished && (state === 'wait' || state === 'go'); }, function (discard) { timers.forEach(clearTimeout); timers = []; if (discard && !practice) away++; state = 'away'; }, function () { if (state === 'away' && !finished) next(); });
       function stage() {
         el.innerHTML = '<div class="crt"><p class="mono muted">' + count() + '</p>' +
           '<div class="crt-stim" id="stim"></div>' +
@@ -833,11 +993,13 @@
       function next() {
         if (finished) return;
         if (practice && pdone >= practiceN) { practice = false; practiceEnd(el, '화살표와 같은 쪽 버튼을 최대한 빨리 눌러요. ' + it.trials + '번 해요.', function () { starts = markStart(it, ctx); next(); }); return; }
-        if (!practice && trials.length >= it.trials) { finished = true; done({ trials: trials, fast: fast, slow: slow, restarts: starts }); return; }
+        if (!practice && trials.length >= it.trials) { finished = true; done({ trials: trials, fast: fast, slow: slow, away: away, restarts: starts }); return; }
+        if (document.hidden) { onVis.hold(false); return; }   // 화면이 가려진 채로 다음 번이 시작되려 하면(백그라운드 타이머) 기다린다
         state = 'wait';
         stage();
         T(function () {
           if (state !== 'wait') return;
+          if (document.hidden) { onVis.hold(true); return; }
           cur = Math.random() < 0.5 ? 'L' : 'R';
           const s = el.querySelector('#stim');
           s.textContent = cur === 'L' ? '←' : '→';
@@ -863,10 +1025,11 @@
       }
       function onKey(e) { if (e.repeat) return; if (e.key === 'ArrowLeft') answer('L', e); else if (e.key === 'ArrowRight') answer('R', e); }
       document.addEventListener('keydown', onKey);
+      onVis.on();
       introCard(el, it, function () { if (!practice) starts = markStart(it, ctx); next(); },
         it.trials + '번 해요.' + (practiceN ? ' 먼저 연습으로 ' + practiceN + '번 해 봐요. 연습은 점수에 안 들어가요.' : '') +
         ' 화살표가 나오기 전이나 나오자마자 누른 건 세지 않고 다시 해요. 실수 한 번은 봐주고, 그다음부터는 실수마다 속도 점수를 조금씩 깎아요.');
-      return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); };
+      return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); onVis.off(); };
     },
 
     stroop: function (it, el, done, ctx) {
@@ -879,9 +1042,10 @@
       ];
       const practiceN = it.practiceTrials || 0;
       const MIN = { t: 200, m: 170, k: 170 }, MAX = 3000;
-      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false, fast = 0, slow = 0, starts = 0, pdone = 0, goId = 0;
+      let timers = [], trials = [], state = 'idle', t0 = 0, cur = null, finished = false, fast = 0, slow = 0, away = 0, starts = 0, pdone = 0, goId = 0;
       let practice = practiceN > 0;
       const T = function (fn, ms) { const id = setTimeout(fn, ms); timers.push(id); return id; };
+      const onVis = rtAway(el, function () { return !finished && (state === 'wait' || state === 'go'); }, function (discard) { timers.forEach(clearTimeout); timers = []; if (discard && !practice) away++; state = 'away'; }, function () { if (state === 'away' && !finished) next(); });
       const shuffle = function (a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
       const plan = [], pplan = [];
       for (let i = 0; i < it.trials; i++) plan.push(i % 2 === 0);
@@ -898,11 +1062,13 @@
       function next() {
         if (finished) return;
         if (practice && pdone >= practiceN) { practice = false; practiceEnd(el, '글자의 색을 최대한 빨리 골라요. ' + it.trials + '번 해요.', function () { starts = markStart(it, ctx); next(); }); return; }
-        if (!practice && trials.length >= it.trials) { finished = true; done({ trials: trials, fast: fast, slow: slow, restarts: starts }); return; }
+        if (!practice && trials.length >= it.trials) { finished = true; done({ trials: trials, fast: fast, slow: slow, away: away, restarts: starts }); return; }
+        if (document.hidden) { onVis.hold(false); return; }
         state = 'wait';
         stage();
         T(function () {
           if (state !== 'wait') return;
+          if (document.hidden) { onVis.hold(true); return; }
           const ink = COLORS[Math.floor(Math.random() * 4)];
           const cong = practice ? pplan[pdone] : plan[trials.length];
           let word = ink;
@@ -932,10 +1098,11 @@
       }
       function onKey(e) { if (e.repeat) return; const i = ['1', '2', '3', '4'].indexOf(e.key); if (i >= 0) answer(COLORS[i].k, e); }
       document.addEventListener('keydown', onKey);
+      onVis.on();
       introCard(el, it, function () { if (!practice) starts = markStart(it, ctx); next(); },
         it.trials + '번 해요. 절반은 글자와 색이 같고 절반은 달라요.' + (practiceN ? ' 먼저 연습으로 ' + practiceN + '번 해 봐요. 연습은 점수에 안 들어가요.' : '') +
         ' 너무 빨리 누른 건 세지 않고 다시 해요. 글자와 색이 다른 문제에서 실수 한 번은 봐주고, 그다음부터는 실수마다 속도 점수를 조금씩 깎아요.');
-      return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); };
+      return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); onVis.off(); };
     }
   };
   /* ---------- 결과 ---------- */

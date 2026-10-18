@@ -42,7 +42,7 @@ function load(root) {
     LEVEL_P: LEVEL_P, NORMS: NORMS, LEVELS: LEVELS, NORMS_VERSION: vm1 ? vm1[1] : null, POOL: POOL, NOPT: NOPT,
     /* 언어 풀 문항의 지금 단계 (없는 번호면 null) */
     poolLevel: function (k, pid) { const p = POOL[k]; return p && p[pid] ? p[pid].level : null; },
-    /* 찍기 확률 c = 1/보기 수 (점수 계산 irtTheta 와 같은 값) */
+    /* 찍기 확률 c = 1/보기 수 (점수 계산 irtPost 와 같은 값) */
     guess: function (k) { return 1 / (NOPT[k] || 4); },
     /* LEVEL_P 는 찍기 몫을 뺀 능력 부분. 관측 정답률 ≈ c + (1 − c)·LEVEL_P */
     lp: function (k, level) { return (LEVEL_P[k] || LEVEL_P.default)[level]; },

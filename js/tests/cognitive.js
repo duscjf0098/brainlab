@@ -1248,7 +1248,7 @@
       what: '방금 본 것을 머릿속에 잠깐 붙들어 두고, 그대로 떠올리거나 순서를 바꾸는 힘이에요. "작업 기억"이라고 하는데, 오래 기억하는 것과는 달라요. 성인은 보통 숫자를 앞으로 5~9개, 거꾸로 4~7개쯤 외워요.',
       where: '암산, 전화번호나 주문 외우기, 여러 지시를 한 번에 듣고 처리하기, 긴 대화에서 요점을 놓치지 않기에 쓰여요. 이게 약하면 여러 일을 같이 할 때 자꾸 뭔가를 빠뜨려요.' },
     { key: 'speed', label: '속도·주의',
-      what: '빨리 반응하면서도 방해되는 것에 흔들리지 않는 힘이에요. 기기나 터치 반응 속도에 따라 조금씩 다르게 나올 수 있어요.',
+      what: '빨리 반응하면서도 방해되는 것에 흔들리지 않는 힘이에요. 기기나 터치 반응 속도에 따라 조금씩 다르게 나올 수 있어요. 반응 속도는 나이가 들수록 자연스럽게 느려지는데 기준값은 20~30대에 가깝게 잡혀 있어서, 40대 이상이면 이 점수가 같은 나이대 안에서의 실제 위치보다 낮게 나올 수 있어요.',
       where: '운전 중 급브레이크, 게임, 서류에서 오타 찾기, 시끄러운 곳에서 할 일에 집중하기에 쓰여요. 피곤하거나 잠이 부족하면 가장 먼저 떨어지는 능력이기도 해요.' }
   ];
   const TASKS = {
@@ -1264,7 +1264,7 @@
     rotation: { label: '도형 회전', domain: 'spatial', minutes: 4, desc: '위 도형을 돌리기만 해서 만들 수 있는 걸 골라요. 거울처럼 뒤집은 건 정답이 아니에요.', where: '머릿속에서 모양을 돌리는 힘이에요. 주차, 지도 읽기, 조립, 그림 그리기에 쓰여요.' },
     fold: { label: '전개도 접기', domain: 'spatial', minutes: 5, desc: '펼쳐 놓은 전개도를 접어 정육면체를 만들었을 때 나올 수 있는 모양을 골라요. 무늬는 상자 바깥쪽에 그려져 있어요. 화살표처럼 방향이 있는 무늬는 놓인 방향까지 맞아야 하고, 점처럼 돌려도 똑같은 무늬는 방향을 따지지 않아요.', where: '평면을 머릿속에서 입체로 접어 보는 힘이에요. 상자 포장, 종이접기, 옷 개기, 설명서 보고 조립하기에 쓰여요.' },
     blocks: { label: '블록 세기', domain: 'spatial', minutes: 5, desc: '쌓아 놓은 블록이 모두 몇 개인지 세요. 블록은 모두 바닥이나 다른 블록 위에 놓여 있어서, 위에 블록이 있으면 그 아래에도 블록이 있어요. 예를 들어 2층 블록 아래 1층 자리가 가려져 안 보여도 거기에 블록이 있다고 세요. 또 블록은 옆 블록과 면이 맞닿아 한 덩어리로 붙어 있어요. 따로 떨어져 선 블록은 없고, 그 밖에 숨은 블록도 없어요.', where: '보이는 모습만으로 안 보이는 부분까지 그려 보는 힘이에요. 짐 싣기, 창고 정리, 도면 읽기, 물건이 몇 개 들었는지 어림하기에 쓰여요.' },
-    digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 다 나온 뒤 화면의 숫자 버튼으로 보인 순서 그대로 눌러요.', where: '들은 걸 그대로 잠깐 기억하는 힘이에요. 전화번호나 주문을 외우는 데 쓰여요.' },
+    digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 다 나온 뒤 화면의 숫자 버튼으로 보인 순서 그대로 눌러요.', where: '본 것을 그대로 잠깐 기억하는 힘이에요. 전화번호나 주문을 외우는 데 쓰여요.' },
     digitB: { label: '숫자 거꾸로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 다 나온 뒤 거꾸로 뒤집어 눌러요. 예: 3 7 1 → 1 7 3', where: '기억한 걸 머릿속에서 뒤집는 힘이에요. 암산이나 순서를 거꾸로 따져 보는 일에 쓰여요.' },
     grid: { label: '위치 기억', domain: 'memory', minutes: 2, desc: '격자의 칸이 하나씩 차례로 켜져요. 다 켜진 뒤 켜진 순서 그대로 눌러요. 한 번 켜진 칸은 다시 켜지지 않아요.', where: '위치를 순서대로 기억하는 힘이에요. 길을 기억하거나 물건 둔 자리를 떠올릴 때 쓰여요.' },
     lns: { label: '숫자-문자 순서', domain: 'memory', minutes: 3, desc: '숫자와 한글 자음이 섞여 하나씩 나타나요. 다 본 뒤 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 눌러요. 예: 7 ㄷ 2 ㄱ → 2 7 ㄱ ㄷ', where: '기억하면서 동시에 정리하는 힘이에요. 여러 지시를 한 번에 받아 순서대로 처리하는 일에 쓰여요.' },
@@ -1340,15 +1340,21 @@
   /* 터치 화면은 마우스·키보드보다 입력 지연이 길어(대략 30ms) 반응 과제 기준값에 그만큼 더한다. 응답의 절반 이상이 터치면 적용. */
   const TOUCH_MS = 30;
   const IQ_RANGE = [55, 145];
-  /* 라쉬(1PL)+찍기 확률 모형의 사후 최빈값. obs = [{b: 난이도, c: 찍기 확률, ok}], 사전분포 N(0, 1.5²) */
-  function irtTheta(obs) {
+  /* 라쉬(1PL)+찍기 확률 모형의 사후 분포를 θ −4~4 격자(0.05 간격)에서 구한다. obs = [{b: 난이도, c: 찍기 확률, ok}], 사전분포 N(0, 1.5²).
+     mode = 사후 최빈값(과제 점수 z로 쓴다), sd = 같은 격자의 사후 표준편차(과제 하나만 푼 결과의 ±에 쓴다, 2026-10-18) */
+  function irtPost(obs) {
     let best = 0, bestLp = -Infinity;
+    const grid = [];
     for (let th = -4; th <= 4.0001; th += 0.05) {
       let lp = -0.5 * (th / 1.5) * (th / 1.5);
       obs.forEach(function (o) { const pr = o.c + (1 - o.c) / (1 + Math.exp(-(th - o.b))); lp += Math.log(Math.max(1e-6, o.ok ? pr : 1 - pr)); });
+      grid.push([th, lp]);
       if (lp > bestLp) { bestLp = lp; best = th; }
     }
-    return best;
+    let w = 0, m = 0, m2 = 0;
+    grid.forEach(function (g) { const e = Math.exp(g[1] - bestLp); w += e; m += e * g[0]; m2 += e * g[0] * g[0]; });
+    m /= w;
+    return { mode: best, sd: Math.sqrt(Math.max(0, m2 / w - m * m)) };
   }
   function iqOf(z) { return Math.round(U.clamp(100 + 15 * z, IQ_RANGE[0], IQ_RANGE[1])); }
   function topPct(z) { return Math.max(1, Math.round((1 - U.normCdf(z)) * 100)); }
@@ -1370,18 +1376,19 @@
     return r * OBS.spread[NORMS[a].kind] * OBS.spread[NORMS[b].kind];
   }
   function sumCov(A, B) { let v = 0; A.forEach(function (a) { B.forEach(function (b) { v += obsCov(a, b); }); }); return v; }
-  /* 영역 점수: 과제가 하나면 그 과제 점수 그대로, 둘 이상이면 평균 이동을 뺀 합을 그 합의 표준편차로 나눈다 */
+  /* 영역 점수: 과제 점수에서 평균 이동을 뺀 합을 그 합의 표준편차로 나눈다. 과제가 하나뿐인 영역(빠른 검사의 언어·기억·속도 등)도 같은 식이다(2026-10-18).
+     예전에는 과제가 하나면 과제 점수를 그대로 써서, 폭 과제 하나짜리 기억 영역은 표준편차가 15가 아니라 15×1.12, 기호 찾기 하나짜리 속도 영역은 15×1.09였다.
+     그래서 빠른 검사에서 기억·속도 영역에 극단값이 다른 영역보다 자주 나오고 "가장 강한 쪽/약한 쪽" 문구가 그쪽으로 기울었다. */
   function domainZ(keys, tasks) {
-    if (keys.length === 1) return tasks[keys[0]].z;
     const sum = keys.reduce(function (s, k) { return s + tasks[k].z - obsShift(k, tasks[k]); }, 0);
     return U.clamp(sum / Math.sqrt(sumCov(keys, keys)), -3, 3);
   }
-  /* 종합 점수: 영역 점수를 더하고(과제 하나짜리 영역은 평균 이동을 빼고) 그 합의 표준편차로 나눈다. groups = [{ keys, z }] */
-  function overallZ(groups, tasks) {
-    const S = groups.map(function (g) { return g.keys.length > 1 ? Math.sqrt(sumCov(g.keys, g.keys)) : 1; });
+  /* 종합 점수: 영역 점수(평균 이동은 domainZ에서 이미 뺐다)를 같은 무게로 더하고 그 합의 표준편차로 나눈다. groups = [{ keys, z }] */
+  function overallZ(groups) {
+    const S = groups.map(function (g) { return Math.sqrt(sumCov(g.keys, g.keys)); });
     let sum = 0, v = 0;
     groups.forEach(function (g, i) {
-      sum += g.z - (g.keys.length > 1 ? 0 : obsShift(g.keys[0], tasks[g.keys[0]]));
+      sum += g.z;
       groups.forEach(function (h, j) { v += sumCov(g.keys, h.keys) / (S[i] * S[j]); });
     });
     return U.clamp(sum / Math.sqrt(v), -3, 3);
@@ -1395,6 +1402,15 @@
      한 영역만 1.5 SD 낮은 사람을 잡는 비율도 적응형 84~97% → 65~90%, 빠른 53~79% → 28~55%로 떨어진다. 화면의 "오차 범위"(±SEM, 약 70%)와 맞춰 1배로 둔다. */
   const TASK_REL = { fluid: 0.33, verbal: 0.37, spatial: 0.37, memory: 0.57, speed: 0.74 };
   function domainSem(d, n) { const q = TASK_REL[d] || 0.35, rel = n * q / (1 + (n - 1) * q); return 15 * Math.sqrt(1 - rel); }
+  /* 과제 하나만 푼 결과의 ±(2026-10-18). 예전에는 어느 과제든 ±11(신뢰도 0.45)이라, 보기 4개짜리 공간 과제는 실제 오차가 더 커서 ± 안에 참값이 드는 비율이
+     60~66%였고(안내는 70% 정도) 폭 과제는 80%가 넘었다. 정답률 과제는 푼 문항과 응답에 따라 오차가 달라서 irtPost의 사후 표준편차 × SINGLE_SEM.post를 쓴다
+     (사전분포 N(0, 1.5²)로 구한 값은 실제 오차보다 조금 넓다). 폭·반응 과제는 그 영역 과제 하나의 신뢰도(TASK_REL)로 15·√(1−ρ)(기억 ±10, 속도 ±8).
+     예전에 저장한 결과처럼 사후 표준편차가 없으면 예전 값(±11)을 쓴다. */
+  const SINGLE_SEM = { post: 0.9, old: 0.45 };
+  function singleSem(k, st) {
+    if (NORMS[k].kind !== 'prop') return domainSem(TASKS[k].domain, 1);
+    return typeof st.sd === 'number' && isFinite(st.sd) && st.sd > 0 ? 15 * st.sd * SINGLE_SEM.post : 15 * Math.sqrt(1 - SINGLE_SEM.old);
+  }
   function band(iq) {
     return iq >= 130 ? '매우 우수' : iq >= 120 ? '우수' : iq >= 110 ? '평균 상' : iq >= 90 ? '평균' : iq >= 80 ? '평균 하' : iq >= 70 ? '경계선' : '낮음';
   }
@@ -1576,6 +1592,21 @@
     return m.kind === 'task' ? '과제별 검사 · ' + TASKS[m.key].label : m.kind === 'quick' ? '빠른 검사' : m.kind === 'full' ? '정밀 검사' : '적응형 검사';
   }
 
+  /* 파트 안내(2026-10-18): 빠른 검사는 영역마다 과제를 일부만 쓰므로 안내 문장을 실제로 푸는 과제(use)로 만든다.
+     예전에는 고정 문장이라 빠른 검사의 공간 파트가 "쌓인 블록을 세어 봐요"라고 했지만 블록 세기는 없었고, 기억 파트는 숫자 거꾸로 하나뿐인데
+     "숫자와 위치를 … 그대로, 거꾸로, 또는 정리해서"라고 했다. */
+  const PART_VERBAL = { analogy: '단어 사이의 관계', vocab: '낱말의 뜻', logic: '문장의 앞뒤', similar: '두 낱말의 공통점' };
+  const PART_SPATIAL = { rotation: ['도형을 돌리고', '도형을 돌려'], fold: ['전개도를 접고', '전개도를 접어'], blocks: ['쌓인 블록을 세고', '쌓인 블록을 세어'] };
+  const PART_MEMORY = { digitF: '그대로', grid: '그대로', digitB: '거꾸로', lns: '정리해서' };
+  function partVerbal(use) { return U.josa(use.map(function (k) { return PART_VERBAL[k]; }).join(', '), '을', '를') + ' 따져요.'; }
+  function partSpatial(use) { return '머릿속에서 ' + use.map(function (k, i) { return PART_SPATIAL[k][i === use.length - 1 ? 1 : 0]; }).join(', ') + ' 봐요.'; }
+  function partMemory(use) {
+    const grid = use.indexOf('grid') >= 0, nums = use.some(function (k) { return k !== 'grid'; });
+    const how = [];
+    use.forEach(function (k) { if (how.indexOf(PART_MEMORY[k]) < 0) how.push(PART_MEMORY[k]); });
+    const howKo = how.length < 2 ? how.join('') : how.slice(0, -1).join(', ') + ', 또는 ' + how[how.length - 1];
+    return (grid && nums ? '숫자와 위치를' : grid ? '위치를' : '숫자를') + ' 잠깐 기억했다가 ' + howKo + ' 떠올려요.';
+  }
   /* opts.practiced: 이미 해 본 과제 키 배열 → 그 과제는 연습 문제를 건너뛴다 */
   function build(mode, opts) {
     opts = opts || {};
@@ -1591,13 +1622,13 @@
     const part = function (num, d, desc, keys) {
       const use = keys.filter(function (k) { return full || QUICK.indexOf(k) >= 0; });
       if (!use.length) return;
-      items.push({ type: 'section', num: num, title: d.label, desc: desc, where: d.where, count: use.length + '과제 · ' + use.map(function (k) { return TASKS[k].label; }).join(', ') });
+      items.push({ type: 'section', num: num, title: d.label, desc: typeof desc === 'function' ? desc(use) : desc, where: d.where, count: use.length + '과제 · ' + use.map(function (k) { return TASKS[k].label; }).join(', ') });
       use.forEach(function (k) { items.push.apply(items, make(k, full)); });
     };
     part(1, DOMAINS[0], '도형과 숫자에 숨은 규칙을 찾아요. 문제마다 제한 시간이 있고, 시간이 다 되면 자동으로 넘어가요.', ['matrix', 'figAnalogy', 'series', 'sequence', 'weights']);
-    part(2, DOMAINS[1], '단어의 뜻과 관계, 문장의 앞뒤를 따져요.', ['analogy', 'vocab', 'logic', 'similar']);
-    part(3, DOMAINS[2], '머릿속에서 도형을 돌리고, 접고, 쌓인 블록을 세어 봐요.', ['rotation', 'fold', 'blocks']);
-    part(4, DOMAINS[3], '숫자와 위치를 잠깐 기억했다가 그대로, 거꾸로, 또는 정리해서 떠올려요. 틀려도 같은 길이로 한 번 더 기회가 있어요. 답은 화면 버튼으로 누르고, 처음 하는 과제는 점수에 안 들어가는 짧은 연습부터 해요.', ['digitF', 'digitB', 'grid', 'lns']);
+    part(2, DOMAINS[1], partVerbal, ['analogy', 'vocab', 'logic', 'similar']);
+    part(3, DOMAINS[2], partSpatial, ['rotation', 'fold', 'blocks']);
+    part(4, DOMAINS[3], function (use) { return partMemory(use) + ' 틀려도 같은 길이로 한 번 더 기회가 있어요. 답은 화면 버튼으로 누르고, 처음 하는 과제는 점수에 안 들어가는 짧은 연습부터 해요.'; }, ['digitF', 'digitB', 'grid', 'lns']);
     part(5, DOMAINS[4], '최대한 빠르고 정확하게 반응해요. 조용한 곳에서 화면을 똑바로 보고, 휴대폰은 두 손으로 잡고 해 주세요. 처음 하는 과제는 점수에 안 들어가는 연습부터 해요.', ['reaction', 'choicert', 'stroop', 'symbol']);
     return items;
   }
@@ -1649,11 +1680,12 @@
         const pl = LP[x.it.level];
         return { b: Math.log((1 - pl) / pl), c: 1 / (((x.it.options || x.it.optionsHtml || []).length) || 4), ok: x.a === x.it.answer };
       });
-      const theta = obs.length ? irtTheta(obs) : (p - meanP) / norm.sd;
+      const post = obs.length ? irtPost(obs) : null;
+      const theta = post ? post.mode : (p - meanP) / norm.sd;
       const adaptive = rows.some(function (x) { return x.it.adaptive; });
       const top = rows.filter(function (x) { return x.a === x.it.answer && x.it.level; }).map(function (x) { return x.it.level; });
       const maxReached = top.length ? Math.max.apply(null, top) : 0;
-      return { z: U.clamp(theta, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (adaptive ? (lvText ? ' · ' : '') + '맞힌 최고 단계 ' + maxReached : '') + (avg != null ? ' · 평균 ' + avg + '초' : ''), meanP: adaptive ? undefined : Math.round(meanP * 100), obs: propObs(rows, n, c, lv, adaptive, avg) };
+      return { z: U.clamp(theta, -3, 3), raw: c + '/' + n + ' 정답', detail: lvText + (adaptive ? (lvText ? ' · ' : '') + '맞힌 최고 단계 ' + maxReached : '') + (avg != null ? ' · 평균 ' + avg + '초' : ''), meanP: adaptive ? undefined : Math.round(meanP * 100), sd: post ? Math.round(post.sd * 1000) / 1000 : undefined, obs: propObs(rows, n, c, lv, adaptive, avg) };
     }
     if (norm.kind === 'span') {
       const it = rows[0].it, a0 = rows[0].a, unit = key === 'grid' ? '칸' : key === 'lns' ? '개' : '자리';
@@ -1690,7 +1722,7 @@
     const touch = a.length > 0 && touchN / a.length >= 0.5;
     const mean = norm.mean + (touch ? TOUCH_MS : 0), tnote = touch ? ' · 터치 기준' : '';
     const inp = inputMode(a, perTrial, touch, ex);
-    const again = cnt(ex.restarts, '처음부터 다시 시작 #번');
+    const again = cnt(ex.restarts, '처음부터 다시 시작 #번') + cnt(ex.away, '화면을 벗어나 다시 잰 #번');
     if (key === 'reaction') {
       const early = ex.early || 0;
       const med = a.length ? U.median(a) : null;
@@ -1701,7 +1733,7 @@
       const capped = early >= RT_EARLY.cap && z > 0;
       if (early >= RT_EARLY.cap) z = Math.min(z, 0);
       return { z: z, raw: Math.round(med) + 'ms', detail: '최고 ' + Math.min.apply(null, a) + 'ms' + cnt(early, '일찍 누름 #번' + (capped ? '이라 평균(100)까지만 인정' : '')) + again + tnote,
-        obs: { value: med, touch: touch, early: early, slow: ex.slow || 0, inp: inp, restarts: ex.restarts || 0 } };
+        obs: { value: med, touch: touch, early: early, slow: ex.slow || 0, away: ex.away || 0, inp: inp, restarts: ex.restarts || 0 } };
     }
     const rtOf = function (x) { return x.rt; }, isOk = function (x) { return x && x.ok; };
     const fastN = ex.fast || 0;
@@ -1724,7 +1756,7 @@
       const d = congOk.length ? Math.round(medS - U.median(congOk.map(rtOf))) : null;
       return { z: U.clamp((mean - medS - penS) / norm.sd, -3, 3), raw: Math.round(medS) + 'ms',
         detail: '색이 다른 문제 ' + incOk.length + '/' + inc.length + ' 정답' + (d != null ? ' · 간섭 ' + (d >= 0 ? '+' : '') + d + 'ms' : '') + (penS ? ' · 실수가 많아 속도 점수를 깎았어요(+' + penS + 'ms)' : '') + tail,
-        obs: { value: medS + penS, med: medS, acc: a.filter(isOk).length / a.length, incAcc: incAcc, interf: d, touch: touch, fast: fastN, slow: ex.slow || 0, inp: inp, restarts: ex.restarts || 0 } };
+        obs: { value: medS + penS, med: medS, acc: a.filter(isOk).length / a.length, incAcc: incAcc, interf: d, touch: touch, fast: fastN, slow: ex.slow || 0, away: ex.away || 0, inp: inp, restarts: ex.restarts || 0 } };
     }
     // 선택 반응
     const ok = a.filter(isOk);
@@ -1737,7 +1769,7 @@
     const pen = errPenalty(PEN.choicert, a.length - ok.length, a.length);
     return { z: U.clamp((mean - med - pen) / norm.sd, -3, 3), raw: Math.round(med) + 'ms',
       detail: '정확도 ' + Math.round(acc * 100) + '%' + (pen ? ' · 실수가 많아 속도 점수를 깎았어요(+' + pen + 'ms)' : '') + tail,
-      obs: { value: med + pen, med: med, acc: acc, touch: touch, fast: fastN, slow: ex.slow || 0, inp: inp, restarts: ex.restarts || 0 } };
+      obs: { value: med + pen, med: med, acc: acc, touch: touch, fast: fastN, slow: ex.slow || 0, away: ex.away || 0, inp: inp, restarts: ex.restarts || 0 } };
   }
   /* 반응·기호 찾기 채점 규칙 (2026-10-18)
      - 유효성: 정확도가 찍기와 가려지지 않으면 점수 대신 "측정 안 됨 · 다시 해 주세요"를 낸다(영역·종합 점수에서도 뺀다).
@@ -1817,16 +1849,16 @@
     });
     const keys = Object.keys(tasks);
     const single = keys.length === 1 ? keys[0] : null;
-    const z = single ? tasks[single].z : overallZ(groups, tasks);
+    const z = single ? tasks[single].z : overallZ(groups);
     const iq = iqOf(z), pct = topPct(z), bd = band(iq);
     /* ±(SEM) = √(측정 오차² + 덜 푼 몫²). 측정 오차는 과제 하나의 몫을 0.3으로 보고 과제 수 n만큼 합친 신뢰도 n·0.3/(1+(n−1)·0.3)로
        15·√(1−신뢰도)(스피어먼-브라운). 덜 푼 몫은 전체 K과제 중 n개, 다섯 영역 중 m개만 풀어 종합 IQ를 덜 대표하는 만큼으로
        6²·(1−n/K) + 4²·(1−m/5)를 더한다. 규준화 뒤 참값을 아는 가상 응시자로 돌려 보면 ± 안에 실제 값이 빠른 검사(±9) 74%,
        20과제(±5) 74~75%, 따로 푼 과제를 합친 프로필 69~77%로 들어온다(측정 오차만 쓰면 빠른 검사가 ±7, 63%).
-       과제 하나만 푼 결과는 그 과제 점수의 오차라 0.45만 둔다(±11, 75%). */
-    const q = single ? 0.45 : 0.3, n = keys.length;
+       과제 하나만 푼 결과는 그 과제 점수의 오차라 singleSem(위 SINGLE_SEM 설명)으로 따로 정한다. */
+    const q = 0.3, n = keys.length;
     const meas = 15 * Math.sqrt(1 - n * q / (1 + (n - 1) * q));
-    const sem = Math.round(single ? meas : Math.sqrt(meas * meas + 36 * (1 - n / TASK_KEYS.length) + 16 * (1 - groups.length / DOMAINS.length)));
+    const sem = Math.round(single ? singleSem(single, tasks[single]) : Math.sqrt(meas * meas + 36 * (1 - n / TASK_KEYS.length) + 16 * (1 - groups.length / DOMAINS.length)));
     const bandText = {
       '매우 우수': '같은 기준으로 100명 중 두세 명 안에 드는 결과예요.',
       '우수': '대부분의 사람보다 빠르고 정확했어요.',
@@ -1851,7 +1883,8 @@
           ? ' 영역별 점수가 ' + weak.value + '~' + sorted[0].value + ' 사이로 고르게 나왔어요.'
           : spread < noise
           ? ' 영역별 점수는 ' + weak.value + '~' + sorted[0].value + ' 사이예요. 이 정도 차이는 오차 범위 안이라 어느 영역이 특별히 약하다고 보기는 어려워요.'
-          : ' 가장 강한 쪽은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + weak.label + ' ' + U.josa(weak.value, '은', '는') + ' 연습하면 더 오를 여지가 있어요.') +
+          : ' 가장 강한 쪽은 ' + sorted[0].label + ' ' + sorted[0].value + '이고, ' + weak.label + ' ' + U.josa(weak.value, '은', '는') +
+            (weak.key === 'speed' ? ' 다른 영역보다 낮게 나왔어요. 반응 속도는 나이, 피로, 기기에 따라 달라지기 쉬워요.' : ' 연습하면 더 오를 여지가 있어요.')) +
         (keys.length < TASK_KEYS.length ? (opts.quick ? ' 빠른 검사라 대표 과제 ' + keys.length + '개로 낸 점수예요. 나머지 과제도 풀면 종합 프로필이 더 정확해져요.' : ' ' + TASK_KEYS.length + '개 과제 중 ' + keys.length + '개를 반영했어요.') : '');
     }
     if (bad.length) {
@@ -1889,23 +1922,36 @@
         if (!TASKS[k]) return;
         // 측정 안 된 결과는 그 과제의 예전 결과를 덮지 않는다(정확도가 찍기 수준인 판으로 점수가 바뀌지 않게)
         const slot = isValidStat(r.tasks[k]) ? latest : failed;
-        if (!slot[k] || (r.at || 0) >= slot[k].at) slot[k] = { at: r.at || 0, stat: r.tasks[k] };
+        if (!slot[k] || (r.at || 0) >= slot[k].at) slot[k] = { at: r.at || 0, stat: r.tasks[k], tf: timeOf(r, k) };
       });
     });
     const keys = Object.keys(latest);
     if (!keys.length) return null;
-    const tasks = {};
-    keys.forEach(function (k) { tasks[k] = latest[k].stat; });
+    // 시간을 늘려(여유 ×1.5·무제한) 푼 과제는 과제 결과에 그 설정을 붙여 영역 설명에도 보이게 한다(저장된 결과는 바꾸지 않고 사본에)
+    const tasks = {}, extended = [];
+    keys.forEach(function (k) {
+      const L = latest[k];
+      if (L.tf == null) { tasks[k] = L.stat; return; }
+      const tl = L.tf === 0 ? '시간 무제한' : '시간 여유 ×' + L.tf;
+      tasks[k] = Object.assign({}, L.stat, { timeFactor: L.tf, detail: (L.stat.detail ? L.stat.detail + ' · ' : '') + tl });
+      extended.push(TASKS[k].label + '(' + (L.tf === 0 ? '무제한' : '여유 ×' + L.tf) + ')');
+    });
     const res = assemble(tasks, { merged: true });
     const missing = TASK_KEYS.filter(function (k) { return !tasks[k] && !failed[k]; });
     const redo = TASK_KEYS.filter(function (k) { return !tasks[k] && failed[k]; });
     const labelOf = function (k) { return TASKS[k].label; };
-    res.modeLabel = '종합 프로필';
+    res.modeLabel = '종합 프로필' + (extended.length ? ' · 일부 시간 늘림' : '');
     // done = 푼 과제 수(측정 안 됨 포함), scored = 그중 점수에 들어간 과제 수, redo = 측정 안 됨만 있어 다시 해야 하는 과제
     res.coverage = { done: keys.length + redo.length, scored: keys.length, total: TASK_KEYS.length, missing: missing.map(labelOf), redo: redo.map(labelOf) };
     res.sections.unshift({ title: '합친 범위', body: TASK_KEYS.length + '개 과제 중 ' + keys.length + '개의 가장 최근 결과를 합쳤어요.' + (missing.length ? ' 아직 안 한 과제: ' + res.coverage.missing.join(', ') + '.' : '') + (redo.length ? ' 측정이 안 돼서 다시 해야 하는 과제: ' + res.coverage.redo.join(', ') + '.' : '') + (missing.length || redo.length ? '' : ' 모든 과제가 들어갔어요.') + ' 과제를 다시 풀면 그 과제의 최신 결과로 바뀌어요.' });
+    if (extended.length) {
+      res.timeExtended = extended.length;
+      res.sections.unshift({ title: '시간을 늘려 푼 과제', body: '시간을 늘려 푼 과제: ' + extended.join(', ') + '. 기준값은 표준 시간 기준이라 이 과제들은 실제보다 높게 나올 수 있어요. 표준 시간으로 다시 풀면 그 결과로 바뀌어요.' });
+    }
     return res;
   }
+  /* 결과의 시간 설정이 그 과제 점수에 쓰였는지: 제한 시간은 정답률 과제(객관식)에만 있어서 기억·속도 과제는 시간 설정과 상관없다 */
+  function timeOf(r, k) { return NORMS[k] && NORMS[k].kind === 'prop' && typeof r.timeFactor === 'number' && r.timeFactor !== 1 ? r.timeFactor : null; }
 
   BL.tests.cognitive = {
     id: 'cognitive',
