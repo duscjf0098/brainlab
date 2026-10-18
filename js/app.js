@@ -7,7 +7,7 @@
   const LOOK = {
     cognitive: { q: '내 아이큐는 몇 점일까?', line: '규칙 찾기, 언어, 공간, 기억, 속도. 다섯 가지 힘으로 추정 IQ를 재요.' },
     eq: { q: '남의 마음, 얼마나 잘 읽을까?', line: '짧은 상황을 읽고, 기분을 알아채고 다루는 힘을 봐요.' },
-    personality: { q: '나는 어떤 사람일까?', line: '다섯 갈래, 열다섯 가지 특성으로 내 성격을 그려요.' },
+    personality: { q: '나는 어떤 사람일까?', line: '다섯 갈래, 서른 가지 특성으로 내 성격을 그려요.' },
     attachment: { q: '연애할 때 나는 어떤 모습일까?', line: '불안해지는 편인지, 거리를 두는 편인지 네 가지 유형으로 봐요.' },
     interest: { q: '나한테 맞는 일은 뭘까?', line: '어떤 일을 할 때 즐거운지 여섯 가지 흥미 유형으로 알아봐요.' },
     love: { q: '나는 어떻게 사랑할까?', line: '첫눈에 반하는 편인지, 천천히 스며드는 편인지. 여섯 가지 스타일로 봐요.' }
@@ -1150,7 +1150,8 @@
   function resultHtml(t, result, opts) {
     opts = opts || {};
     const sections = (result.sections || []).map(function (sec) {
-      return '<section class="rs"><h3>' + U.esc(sec.title) + '</h3><p>' + U.esc(sec.body) + '</p></section>';
+      return '<section class="rs"><h3>' + U.esc(sec.title) + '</h3><p>' + U.esc(sec.body) + '</p>' +
+        (sec.items && sec.items.length ? '<ul class="rs-list">' + sec.items.map(function (x) { return '<li>' + U.esc(x) + '</li>'; }).join('') + '</ul>' : '') + '</section>';
     }).join('');
     return '<div class="wrap result tinted tint-' + t.id + '">' +
       (opts.banner ? '<div class="banner">' + opts.banner + '</div>' : '') +

@@ -296,6 +296,8 @@ p { margin: 0; }
 .rs h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
 .rs p { font-size: 14px; color: var(--ink-2); line-height: 1.6; }
 .rs p + p { margin-top: 8px; }
+.rs-list { margin: 8px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); line-height: 1.6; }
+.rs-list li + li { margin-top: 4px; }
 .plot { display: block; width: 100%; max-width: 320px; margin: 20px auto 4px; }
 .plot-q { font-size: 11px; fill: var(--muted); font-family: var(--font); }
 .plot-axis { font-size: 11px; fill: var(--accent); font-family: var(--mono); letter-spacing: 0.08em; }
