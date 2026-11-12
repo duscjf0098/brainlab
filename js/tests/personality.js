@@ -277,6 +277,10 @@
   }
 
   const LV_WORD = { high: '높은 편', mid: '보통', low: '낮은 편' };
+  /* 낮은 쪽이 두드러질 때의 별명 (높은 쪽은 F[k].nick) */
+  const LOW_NICK = { E: '관찰자형', A: '직설가형', C: '즉흥가형', N: '평온형', O: '현실가형' };
+  /* 요인 수준은 60 이상 높은 편·40 이하 낮은 편(별명·조합 해석과 같은 기준). 세부 특성은 문항이 적어 흔들리니 65·35로 더 넓게 본다. */
+  function fLevel(v) { return U.level(v, 60, 40); }
   function score(answers, items, meta) {
     const sums = {}, counts = {};
     items.forEach(function (it, i) {
@@ -298,20 +302,32 @@
     });
     const val = {}; scales.forEach(function (s) { val[s.key] = s.value; });
     const sorted = scales.slice().sort(function (a, b) { return b.value - a.value; });
-    const top = sorted[0];
-    // 균형형: 60 넘는 요인이 없거나 다섯 요인이 고르게 붙어 있을 때. 위의 둘이 함께 높으면(5점 안쪽) 둘을 합친 별명을 쓴다.
-    const balanced = top.value < 60 || top.value - sorted[sorted.length - 1].value < 12;
-    const pair = !balanced && sorted[1].value >= 60 && top.value - sorted[1].value < 5 ? sorted[1] : null;
+    const top = sorted[0], bottom = sorted[sorted.length - 1];
+    // 두드러진 성격 = 보통(50)에서 가장 멀리 떨어진 요인. 높은 쪽뿐 아니라 낮은 쪽도 두드러진 성격으로 본다
+    // (외향성만 아주 낮고 나머지가 보통인 사람이 "균형형"으로 나오던 문제, 2026-11-12).
+    // 균형형: 50에서 10점 넘게 떨어진 요인이 없거나, 다섯 요인이 12점 안쪽으로 붙어 있을 때.
+    // 둘째 요인도 10점 넘게 떨어져 있고 첫째와 5점 안쪽이면 둘을 합친 별명을 쓴다.
+    const dev = function (s) { return Math.abs(s.value - 50); };
+    const byDev = scales.slice().sort(function (a, b) { return dev(b) - dev(a); });
+    const lead = byDev[0];
+    const balanced = dev(lead) < 10 || top.value - bottom.value < 12;
+    const pair = !balanced && dev(byDev[1]) >= 10 && dev(lead) - dev(byDev[1]) < 5 ? byDev[1] : null;
+    const isHigh = function (s) { return s.value >= 50; };
+    const nickOf = function (s) { return isHigh(s) ? F[s.key].nick : LOW_NICK[s.key]; };
+    const sideOf = function (s) { return s.label + (isHigh(s) ? ' 높음' : ' 낮음'); };
     const facetLine = function (fc) {
       const v = facetVal[fc.key], lv = U.level(v);
       return fc.label + ' ' + v + '(' + LV_WORD[lv] + '): ' + (lv === 'high' ? fc.hi : lv === 'low' ? fc.lo : '상황에 따라 달라지는 보통 수준이에요.');
     };
-    // 요인마다: 읽는 법 + 잘하는 점 + 해 보면 좋은 점 + 세부 특성
+    // 요인마다: 읽는 법 + 잘하는 점 + 해 보면 좋은 점 + 눈에 띄는 세부 특성(높은 편·낮은 편만. 보통인 것은 개수만 알려 준다)
     const sections = scales.map(function (s) {
-      const lv = U.level(s.value), t = F[s.key].lv[lv];
+      const lv = fLevel(s.value), t = F[s.key].lv[lv];
       const fs = shown.filter(function (fc) { return fc.f === s.key; });
-      return { title: s.label + ' ' + s.value + ' · ' + LV_WORD[lv], body: t.read,
-        items: ['잘하는 점: ' + t.strength, '해 보면 좋은 점: ' + t.tip].concat(fs.map(facetLine)) };
+      const notable = fs.filter(function (fc) { return U.level(facetVal[fc.key]) !== 'mid'; }).sort(function (a, b) { return facetVal[b.key] - facetVal[a.key]; });
+      const rest = fs.length - notable.length;
+      const items = ['잘하는 점: ' + t.strength, '해 보면 좋은 점: ' + t.tip].concat(notable.map(facetLine));
+      if (rest) items.push(notable.length ? '나머지 세부 특성 ' + rest + '개는 보통 수준이에요.' : '세부 특성 ' + rest + '개가 모두 보통 수준이에요.');
+      return { title: s.label + ' ' + s.value + ' · ' + LV_WORD[lv], body: t.read, items: items };
     });
     // 두 요인 조합
     const combos = COMBOS.map(function (c) {
@@ -328,17 +344,20 @@
     sections.push({ title: '가장 높은 세부 특성', body: '세부 특성 중 점수가 가장 높은 셋이에요.', items: hi.map(facetLine) });
     sections.push({ title: '가장 낮은 세부 특성', body: '점수가 가장 낮은 셋이에요. 낮다고 나쁜 게 아니라 그쪽 성향이 덜 드러난다는 뜻이에요.', items: lo.map(facetLine) });
     sections.push({ title: '결과를 읽을 때', body: '점수는 0~100이고 50 근처가 보통이에요. 높고 낮음에 좋고 나쁨은 없고, 상황마다 쓸모가 달라요. 성격은 나이와 환경에 따라 조금씩 바뀌고, 그날의 기분에 따라 답이 달라질 수도 있어요. ' +
-      (meta && meta.mode === 'full' ? '' : '기본 검사는 세부 특성마다 2문항이라 세부 점수는 대략적으로 봐 주세요. 정밀 검사(120문항)를 하면 더 안정적이에요. ') +
+      (meta && meta.mode === 'full'
+        ? '다섯 갈래 점수는 꽤 안정적이지만, 세부 특성은 4문항씩이라 경계에 걸친 것은 다시 하면 "높은 편·보통·낮은 편" 표시가 바뀔 수 있어요. '
+        : '기본 검사는 세부 특성마다 2문항이라 세부 점수는 대략적으로 봐 주세요. 다시 하면 "높은 편·보통·낮은 편" 표시가 바뀔 수 있고, 정밀 검사(120문항)를 하면 더 안정적이에요. ') +
       '이 결과는 참고용 자기평가이고 전문가의 심리검사를 대신하지 않아요.' });
+    const word = function (s) { return s.label + ' ' + s.value + '점(' + LV_WORD[fLevel(s.value)] + ')'; };
     const summary = (balanced
-      ? '다섯 갈래가 고르게 나와서 특별히 두드러진 성격이 없는 균형형이에요. 가장 높은 건 ' + top.label + ' ' + top.value + '점이에요.'
-      : '가장 두드러진 성격은 ' + top.label + ' ' + top.value + '점' + (pair ? '과 ' + pair.label + ' ' + pair.value + '점' : '') + '이에요. ' + F[top.key].lv[U.level(top.value)].read) +
+      ? (dev(lead) < 10 ? '다섯 갈래가 모두 보통 근처라서' : '다섯 갈래가 비슷한 점수로 고르게 나와서') + ' 어느 하나가 특별히 두드러지지 않는 균형형이에요. 가장 높은 건 ' + top.label + ' ' + top.value + '점, 가장 낮은 건 ' + bottom.label + ' ' + bottom.value + '점이에요.'
+      : '가장 두드러진 성격은 ' + word(lead) + (pair ? '과 ' + word(pair) : '') + '이에요. ' + F[lead.key].lv[fLevel(lead.value)].read) +
       ' 세부 특성 중에서는 ' + hi[0].label + ' ' + facetVal[hi[0].key] + '점이 가장 높고 ' + lo[0].label + ' ' + facetVal[lo[0].key] + '점이 가장 낮아요.';
     return {
       modeLabel: meta && meta.mode === 'full' ? '정밀 검사' : '기본 검사',
-      headline: balanced ? '균형형' : pair ? F[top.key].nick.replace(/형$/, '') + '·' + F[pair.key].nick : F[top.key].nick,
-      value: top.value,
-      label: balanced ? '두드러진 특성 없음' : '두드러진 특성 · ' + top.label + (pair ? '·' + pair.label : ''),
+      headline: balanced ? '균형형' : pair ? nickOf(lead).replace(/형$/, '') + '·' + nickOf(pair) : nickOf(lead),
+      value: lead.value,
+      label: balanced ? '두드러진 특성 없음' : '두드러진 특성 · ' + sideOf(lead) + (pair ? '·' + sideOf(pair) : ''),
       summary: summary,
       scales: scales,
       sections: sections
@@ -349,6 +368,7 @@
     id: 'personality',
     num: 3,
     kind: 'trait',
+    foldChildren: true,   // 세부 30개 막대는 요인마다 접어 두고 눌러서 펼친다 (결과 화면이 너무 길어지지 않게)
     kindLabel: '성향',
     title: '성격 검사',
     subtitle: '사람을 좋아하는지, 꼼꼼한지, 걱정이 많은지, 새로운 걸 즐기는지. 성격을 다섯 갈래, 서른 가지로 나눠서 봐요.',

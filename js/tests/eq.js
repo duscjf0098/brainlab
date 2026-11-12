@@ -235,6 +235,8 @@
     return out;
   }
 
+  /* 높은 편·낮은 편 기준 (전체·영역·세부 공통): HI 이상 높은 편, LO 미만 낮은 편 */
+  const HI = 80, LO = 60;
   function score(answers, items, meta) {
     const sums = {}, max = {};
     items.forEach(function (it, i) {
@@ -251,30 +253,56 @@
       return { key: b, label: BRANCH[b].label, value: v, children: fs.map(function (f) { return { key: f, label: FACET[f].label, value: facetVal[f], raw: (sums[f] || 0) + '/' + (max[f] || 0) + '점' }; }) };
     });
     const total = Math.round(U.mean(scales.map(function (s) { return s.value; })));
-    const top = scales.slice().sort(function (a, b) { return b.value - a.value; })[0];
-    const facetsSorted = Object.keys(FACET).sort(function (a, b) { return facetVal[b] - facetVal[a]; });
-    const hiF = facetsSorted.slice(0, 2).filter(function (f) { return facetVal[f] >= 70; });
-    const loF = facetsSorted.slice(-2).reverse().filter(function (f) { return facetVal[f] < 55; });
-    const lvl = U.level(total, 75, 45);
-    const bandText = {
-      high: '네 영역이 고르게 높아요. 감정을 정보로 읽고 다루는 데 익숙한 편이에요.',
-      mid: '영역별로 차이가 있어요. 강한 영역은 살리고, 약한 세부 항목의 습관을 하나만 바꿔도 체감이 커요.',
-      low: '감정보다 사실과 행동에 집중하는 스타일이에요. 상대의 신호를 읽는 연습부터 시작하면 좋아요.'
-    }[lvl];
-    const sections = scales.map(function (s) { return { title: s.label + ' ' + s.value, body: BRANCH[s.key][U.level(s.value, 70, 40)] }; });
-    sections.push({ title: '세부 능력 중 강점', body: hiF.length
-      ? hiF.map(function (f) { return FACET[f].label + '(' + facetVal[f] + '): ' + FACET[f].hi; }).join(' ')
+    /* 수준 기준(2026-11-12): 보기 점수가 3·2·1·0이라 아무 보기나 골라도 50점 안팎이 나온다.
+       그래서 80 이상을 높은 편, 60 미만을 낮은 편으로 본다(예전 75·45는 찍어도 "보통", 말투만 보고 골라도 "높음"에 닿았다). */
+    const lv = function (v) { return U.level(v, HI, LO - 1); };
+    const byValue = scales.slice().sort(function (a, b) { return b.value - a.value; });
+    const top = byValue[0], bottom = byValue[byValue.length - 1];
+    const tiedTop = scales.filter(function (s) { return s.value === top.value; });
+    // 점수가 같은 세부 능력은 무작위 순서로 둔다(정렬은 안정적이라 같은 점수끼리는 섞인 순서가 남는다). 늘 감정 인식 쪽이 먼저 뽑히지 않게.
+    const facetsSorted = U.rng().shuffle(Object.keys(FACET)).sort(function (a, b) { return facetVal[b] - facetVal[a]; });
+    const hiAll = facetsSorted.filter(function (f) { return facetVal[f] >= HI; });
+    const loAll = facetsSorted.filter(function (f) { return facetVal[f] < LO; }).reverse();
+    const lvl = lv(total);
+    const bandText = lvl === 'high'
+      ? (bottom.value >= 70 ? '네 영역이 고르게 높아요. 감정을 정보로 읽고 다루는 데 익숙한 편이에요.'
+        : '전체로는 높은 편이지만 ' + bottom.label + ' 영역은 ' + bottom.value + '점으로 다른 영역보다 눈에 띄게 낮아요. 이 영역의 세부 능력부터 살펴보면 좋아요.')
+      : lvl === 'mid'
+        ? (top.value - bottom.value >= 20 ? '영역별로 차이가 있어요. 강한 영역은 살리고, 약한 세부 항목의 습관을 하나만 바꿔도 체감이 커요.'
+          : '네 영역이 비슷하게 보통 수준이에요. 약한 세부 항목의 습관을 하나만 바꿔도 체감이 커요.')
+        : '상황에서 가장 알맞은 대응을 고른 경우가 많지 않았어요. 감정보다 사실과 행동에 집중하는 스타일일 수 있어요. 상대의 신호를 읽는 연습부터 시작하면 좋아요.';
+    const sections = scales.map(function (s) { return { title: s.label + ' ' + s.value, body: BRANCH[s.key][lv(s.value)] }; });
+    const line = function (f, side) { return FACET[f].label + '(' + facetVal[f] + '): ' + FACET[f][side]; };
+    sections.push({ title: '세부 능력 중 강점', body: hiAll.length
+      ? (hiAll.length > 3 ? HI + '점 이상인 세부 능력이 ' + hiAll.length + '가지예요. 그중 셋만 꼽으면, ' : '') + hiAll.slice(0, 3).map(function (f) { return line(f, 'hi'); }).join(' ')
       : '아직 뚜렷하게 높은 세부 능력은 없어요. 가장 높은 건 ' + FACET[facetsSorted[0]].label + ' ' + facetVal[facetsSorted[0]] + '점이에요.' });
-    sections.push({ title: '세부 능력 중 연습할 것', body: loF.length
-      ? loF.map(function (f) { return FACET[f].label + '(' + facetVal[f] + '): ' + FACET[f].lo; }).join(' ')
-      : '특별히 낮은 세부 능력이 없어요. 여덟 가지가 고르게 발달해 있어요.' });
+    const worst = facetsSorted[facetsSorted.length - 1];
+    sections.push({ title: '세부 능력 중 연습할 것', body: loAll.length
+      ? (loAll.length > 3 ? LO + '점 아래인 세부 능력이 ' + loAll.length + '가지예요. 가장 낮은 셋부터 보면, ' : '') + loAll.slice(0, 3).map(function (f) { return line(f, 'lo'); }).join(' ')
+      : facetVal[worst] >= HI ? '특별히 낮은 세부 능력이 없어요. 여덟 가지가 고르게 높아요.'
+        : LO + '점 아래인 세부 능력은 없어요. 가장 낮은 건 ' + FACET[worst].label + ' ' + facetVal[worst] + '점이에요.' });
+    sections.push({ title: '점수 읽는 법', body: '보기마다 0~3점이 숨어 있고, 받은 점수를 0~100으로 바꿔서 보여 드려요. 아무 보기나 골라도 50점 안팎이 나오기 때문에 50점은 "절반"이 아니라 바닥에 가까운 점수예요. ' +
+      HI + '점 이상이면 대부분의 상황에서 가장 좋은 답이나 그다음 답을 골랐다는 뜻이에요. 다른 사람들과 비교해서 매긴 점수는 아니에요. ' +
+      (meta && meta.mode === 'full' ? '' : '기본 검사는 세부 능력마다 3문항이라 세부 점수는 대략적으로 봐 주세요. ') +
+      '상황 판단 문항으로 본 참고용 결과이고, 실제 생활에서의 모습과 다를 수 있어요.' });
+    // 배지: 80점 이상인 영역이 하나만 가장 높으면 그 영역의 별명, 둘이 같이 가장 높으면 두 별명. 그 밖에는 전체 수준을 그대로 적는다.
+    const label = top.value >= HI && tiedTop.length === 1 ? BRANCH[top.key].nick
+      : top.value >= HI && tiedTop.length === 2 ? tiedTop.map(function (s) { return BRANCH[s.key].nick; }).join('·')
+        : lvl === 'high' ? '고르게 높은 편' : lvl === 'mid' ? '보통 수준' : '낮은 편';
     const best = facetsSorted[0];
+    const bestTied = facetsSorted.filter(function (f) { return facetVal[f] === facetVal[best]; });
+    const topText = tiedTop.length === scales.length ? ' 네 영역 점수가 모두 ' + top.value + '점으로 같아요.'
+      : tiedTop.length > 1 ? ' 가장 높은 영역은 ' + tiedTop.map(function (s) { return s.label; }).join(', ') + '(각 ' + top.value + '점)이에요.'
+        : ' 가장 높은 영역은 ' + top.label + ' ' + top.value + '점이에요.';
+    const bestText = bestTied.length === facetsSorted.length ? ''
+      : bestTied.length > 1 ? ' 세부 능력 중에서는 ' + FACET[best].label + ' 등 ' + bestTied.length + '가지가 ' + facetVal[best] + '점으로 가장 높아요.'
+        : ' 세부 능력 중에서는 ' + FACET[best].label + ' ' + facetVal[best] + '점이 가장 높아요.';
     return {
       modeLabel: meta && meta.mode === 'full' ? '정밀 검사' : '기본 검사',
       headline: '정서 지능 지수 ' + total,
       value: total,
-      label: BRANCH[top.key].nick,
-      summary: bandText + ' 가장 두드러진 영역은 ' + top.label + ' ' + top.value + '점이고, 세부 능력 중에서는 ' + FACET[best].label + ' ' + facetVal[best] + '점이 가장 높아요.',
+      label: label,
+      summary: bandText + topText + bestText,
       scales: scales,
       sections: sections
     };

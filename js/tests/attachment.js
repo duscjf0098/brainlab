@@ -115,6 +115,9 @@
     return out;
   }
 
+  /* 두 축 점수가 50점에서 이만큼 안쪽이면 "경계 근처"로 보고 옆 유형을 함께 알려 준다.
+     (모의 재검사에서 경계 근처 사람은 열에 넷다섯이 다른 유형으로 바뀌었다) */
+  const NEAR = 8;
   function score(answers, items, meta) {
     const sums = {}, counts = {};
     items.forEach(function (it, i) {
@@ -146,16 +149,29 @@
       '<circle cx="' + cx + '" cy="' + cy + '" r="7" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>' +
       '</svg>';
     const children = function (d) { return FACETS.filter(function (fc) { return fc.dim === d; }).map(function (fc) { return { key: fc.key, label: fc.label, value: fv[fc.key] }; }); };
-    const topF = FACETS.slice().sort(function (a, b) { return fv[b.key] - fv[a.key]; }).filter(function (fc) { return fv[fc.key] > 50; }).slice(0, 2);
+    // 세부 패턴: 60점 이상인 세부만 "높다"고 풀이한다. 없으면 점수대에 맞게 말한다(전부 "보통이다"로 답해도 "모두 낮은 편"이라고 나오던 문제, 2026-11-12).
+    const byScore = FACETS.slice().sort(function (a, b) { return fv[b.key] - fv[a.key]; });
+    const topF = byScore.filter(function (fc) { return fv[fc.key] >= 60; }).slice(0, 2);
+    const maxF = byScore[0];
     const pattern = topF.length
       ? topF.map(function (fc) { return fc.label + '(' + fv[fc.key] + '): ' + fc.hi; }).join(' ')
-      : '여섯 가지 세부 항목이 모두 낮은 편이에요. 불안과 회피 어느 쪽으로도 크게 기울지 않은, 전형적인 안정형 패턴이에요.';
+      : fv[maxF.key] <= 40 ? '여섯 가지 세부 항목이 모두 낮은 편이에요. 불안과 회피 어느 쪽으로도 크게 기울지 않은, 전형적인 안정형 패턴이에요.'
+        : fv[maxF.key] > 50 ? '뚜렷하게 높은 세부 항목은 없어요. 그중에서는 ' + maxF.label + '(' + fv[maxF.key] + '점)이 가장 높아요.'
+          : '여섯 가지 세부 항목이 모두 보통이거나 낮은 편이에요. 불안과 회피 어느 쪽으로도 크게 기울지 않았어요.';
+    // 경계 근처(50점에서 8점 안쪽): 한두 문항 차이로 유형 이름이 바뀔 수 있으니 옆 유형을 함께 알려 준다
+    const nearAnx = Math.abs(anx - 50) <= NEAR, nearAvo = Math.abs(avo - 50) <= NEAR;
+    const typeAt = function (a, v) { return a ? (v ? 'fearful' : 'anxious') : (v ? 'avoidant' : 'secure'); };
+    const alts = [];
+    if (nearAnx) alts.push(TYPES[typeAt(!(anx > 50), avo > 50)].name);
+    if (nearAvo) alts.push(TYPES[typeAt(anx > 50, !(avo > 50))].name);
+    const which = nearAnx && nearAvo ? '불안과 회피 점수가 모두' : nearAnx ? '불안 점수가' : '회피 점수가';
+    const edge = alts.length ? ' ' + which + ' 경계선(50점)에 가까워서 ' + alts.join('이나 ') + ' 쪽 특징도 함께 있을 수 있어요.' : '';
     return {
       modeLabel: meta && meta.mode === 'full' ? '정밀 검사' : '기본 검사',
       headline: T.name,
       value: anx,
       label: T.nick,
-      summary: T.desc + ' 불안 ' + anx + '점, 회피 ' + avo + '점이고, 좌표 위 점이 내 위치예요.',
+      summary: T.desc + ' 불안 ' + anx + '점, 회피 ' + avo + '점이고, 좌표 위 점이 내 위치예요.' + edge,
       scales: [
         { key: 'anx', label: '불안 (떠날까 봐 걱정하는 정도)', value: anx, children: children('anx') },
         { key: 'avo', label: '회피 (가까워지는 걸 피하는 정도)', value: avo, children: children('avo') }
@@ -166,7 +182,10 @@
         { title: '강점', body: T.strength },
         { title: '주의할 점', body: T.caution },
         { title: '해 볼 만한 것', body: T.tip },
-        { title: '잘 맞는 상대', body: T.match }
+        { title: '잘 맞는 상대', body: T.match },
+        { title: '유형을 읽을 때', body: '유형은 불안 점수와 회피 점수가 각각 50점을 넘는지로 나눠요. 사람은 네 칸 중 하나에 딱 들어가기보다 좌표 위 어딘가에 있으니, 유형 이름보다 두 점수와 점의 위치를 함께 봐 주세요. ' +
+          (alts.length ? '지금은 ' + which + ' 50점에 가까워요. 이럴 때는 한두 문항 차이로 유형 이름이 달라져서, 다시 하면 ' + alts.join('이나 ') + '으로 나올 수도 있어요. ' : '') +
+          '유형은 평생 정해진 게 아니고, 누구를 만나느냐와 어떤 경험을 하느냐에 따라 바뀌어요.' }
       ]
     };
   }
