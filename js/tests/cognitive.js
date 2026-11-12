@@ -523,28 +523,35 @@
       givens.push([left, right]);
     });
     // 질문: 왼쪽 무게를 보기 중에서 찾기
+    /* 오답 무게(2026-11-12): 예전 다섯 묶음은 정답 무게가 늘 네 보기 중 가운데였다. 1~2단계는 보기가 가장 가벼운 도형만으로 되어 있어
+       도형 개수가 곧 무게라서, 가장 적은 보기와 가장 많은 보기를 빼면 둘 중 하나였다(50%). 이제 정답이 무게 순서로 첫째·둘째·셋째·넷째인
+       묶음을 똑같이 두고, 묶음을 먼저 고른 뒤 거기에 맞는 질문 저울을 찾는다(묶음까지 다시 뽑으면 가운데 묶음이 더 자주 통과한다).
+       무게 1인 보기는 내지 않는다(왼쪽에 도형이 둘 이상이라 정답 무게는 늘 2 이상이어서, 1은 보나 마나 오답이다). */
+    const offsetSets = r.shuffle([[1, 2, 3], [1, 2, 4], [-1, 1, 2], [-1, 1, 3], [-2, -1, 1], [-3, -1, 1], [-3, -2, -1], [-4, -2, -1]]);
     let qLeft, cands;
-    for (let g = 0; g < 60; g++) {
-      const n = level <= 2 ? r.int(2, 3) : r.int(2, 4);
-      qLeft = []; for (let j = 0; j < n; j++) qLeft.push(r.pick(shapes));
-      if (level >= 3 && !qLeft.some(function (s) { return s === shapes[shapes.length - 1]; })) continue;
-      const t = bagWeight(qLeft, w);
-      const optShapes = level <= 2 ? [shapes[0]] : shapes;
-      const answerBags = bagsOfWeight(t, optShapes, w, 7).filter(function (b) { return bagKey(b) !== bagKey(qLeft); });
-      if (!answerBags.length) continue;
-      const offsets = r.pick([[-2, -1, 1], [-1, 1, 2], [-3, -1, 1], [-1, 1, 3], [-2, 1, 2]]);
-      const dist = [];
-      offsets.forEach(function (d) { const bs = bagsOfWeight(t + d, optShapes, w, 7); if (bs.length) dist.push(r.pick(bs)); });
-      if (dist.length < 3) continue;
-      cands = { t: t, answer: r.pick(answerBags), dist: dist };
-      break;
+    for (let oi = 0; oi < offsetSets.length && !cands; oi++) {
+      const offsets = offsetSets[oi];
+      for (let g = 0; g < 60; g++) {
+        const n = level <= 2 ? r.int(2, 3) : r.int(2, 4);
+        qLeft = []; for (let j = 0; j < n; j++) qLeft.push(r.pick(shapes));
+        if (level >= 3 && !qLeft.some(function (s) { return s === shapes[shapes.length - 1]; })) continue;
+        const t = bagWeight(qLeft, w);
+        const optShapes = level <= 2 ? [shapes[0]] : shapes;
+        const answerBags = bagsOfWeight(t, optShapes, w, 7).filter(function (b) { return bagKey(b) !== bagKey(qLeft); });
+        if (!answerBags.length) continue;
+        const dist = [];
+        offsets.forEach(function (d) { if (t + d < 2) return; const bs = bagsOfWeight(t + d, optShapes, w, 7); if (bs.length) dist.push(r.pick(bs)); });
+        if (dist.length < 3) continue;
+        cands = { t: t, answer: r.pick(answerBags), dist: dist };
+        break;
+      }
     }
     if (!cands) { qLeft = [shapes[0], shapes[0]]; cands = { t: 2, answer: [shapes[0], shapes[0]], dist: [[shapes[0]], [shapes[0], shapes[0], shapes[0]], [shapes[0], shapes[0], shapes[0], shapes[0]]] }; }
     const o = shuffleOptions(r, [cands.answer].concat(cands.dist), 0);
     const names = shapes.map(function (s) { return VAL_KO.shape[s] + '=' + w[s]; }).join(', ');
     return {
       type: 'choice', part: 'weights', scored: true, level: level, timeLimit: level >= 4 ? 90 : level === 3 ? 75 : 60,
-      prompt: '위 저울들은 모두 균형이 맞아요. 마지막 저울의 물음표 자리에 올려야 균형이 맞는 것은?',
+      prompt: '저울들은 모두 균형이 맞아요. 마지막 저울의 물음표 자리에 올려야 균형이 맞는 것은?',
       promptHtml: '<div class="scales-given">' + givens.map(function (g) { return scaleSVG(g[0], g[1]); }).join('') + scaleSVG(qLeft, null) + '</div>',
       optionsHtml: o.options.map(panSVG), answer: o.answer, optionCols: 2,
       explain: '가장 가벼운 ' + U.josa(VAL_KO.shape[shapes[0]], '을', '를') + ' 1로 두면 ' + U.josa(names, '이에요', '예요') + '. 물음표 저울의 왼쪽 무게는 ' + U.josa(cands.t, '이니까', '니까') + ' 무게가 ' + cands.t + '인 보기가 정답이에요.'
@@ -616,7 +623,8 @@
       second: function () { const a = r.int(1, 10), d = r.int(1, 4), inc = r.int(1, 3); let x = a, step = d; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += step; step += inc; } return { seq: s, explain: '이웃한 수의 차이가 ' + d + ', ' + (d + inc) + ', ' + (d + 2 * inc) + '…처럼 ' + inc + '씩 늘어나요.' }; },
       mulAdd: function () { const a = r.int(2, 5), k = r.pick([1, -1, 3]); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 + k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + (k > 0 ? U.josa(k, '을', '를') + ' 더해요.' : U.josa(-k, '을', '를') + ' 빼요.') }; },
       /* 4단계 */
-      mulSub: function () { const a = r.int(3, 6), k = r.int(1, 3); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 - k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + U.josa(k, '을', '를') + ' 빼요.' }; },
+      mulSub: function () { const k = r.int(1, 3), a = r.int(Math.max(3, k + 1), 6); let x = a;   // a = k 이면 3, 3, 3, …처럼 같은 수만 나온다(2026-11-12 고침)
+        const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 - k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + U.josa(k, '을', '를') + ' 빼요.' }; },
       alt2: function () { const a = r.int(2, 9), d = r.int(2, 5), b = r.int(2, 5); return { seq: six(function (i) { return i % 2 === 0 ? a + d * (i / 2) : b * Math.pow(2, (i - 1) / 2); }), explain: '두 수열이 번갈아 나와요. 홀수 번째는 ' + a + '부터 ' + d + '씩 커지고, 짝수 번째는 ' + b + '부터 2배씩 커져요.' }; },
       primes: function () { const st = r.int(0, 5); return { seq: PRIMES.slice(st, st + 6), explain: '소수(1과 자기 자신으로만 나누어지는 수)가 작은 것부터 차례로 나와요.' }; },
       sqPlusN: function () { const off = r.int(1, 3), sg = r.pick([1, -1]); return { seq: six(function (i) { const n = i + off; return n * n + sg * n; }), explain: 'n²' + (sg > 0 ? '+n' : '−n') + ' (n=' + off + ', ' + (off + 1) + ', …) 꼴이에요. 이웃한 수의 차이가 2씩 늘어나요.' }; },
@@ -631,17 +639,37 @@
     let g = null;
     for (let t = 0; t < 40; t++) {
       const cand = gens[r.pick(pools[level])]();
+      if (cand.seq.slice(0, 5).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).length < 4) continue;   // 같은 수가 되풀이되는 수열은 내지 않는다
       const alts = altNext(cand.seq.slice(0, 5));
       if (alts.every(function (v) { return v === cand.seq[5]; })) { g = cand; break; }
       if (!g) g = cand;
     }
     const seq = g.seq, shown = seq.slice(0, 5), answer = seq[5];
     const d = seq[4] - seq[3];
-    const cands = [answer + d, answer - d, answer + 1, answer - 1, answer + 2, answer - 2, seq[4] * 2, answer + 2 * d, seq[4] + seq[3], seq[4] + d - 1, answer + 3];
-    const seen = {}; seen[answer] = true;
-    const uniq = [];
-    r.shuffle(cands).forEach(function (v) { if (!seen[v] && isFinite(v)) { seen[v] = true; uniq.push(v); } });
-    const o = shuffleOptions(r, [answer].concat(uniq.slice(0, 3)), 0);
+    /* 오답 고르기(2026-11-12). 예전에는 정답 ±1·±2·±d 가운데 셋을 아무렇게나 뽑아서 정답이 네 보기 중 가운데 두 수일 때가 80%였다
+       (둘째로 작은 수만 찍어도 46%). 이제 정답보다 작은 오답의 개수(0~3)를 먼저 고르게 정하고 그만큼을 작은 쪽·큰 쪽 후보에서 뽑는다.
+       앞에 나온 수는 보기로 쓰지 않고, 수가 계속 커지거나 계속 작아지는 수열이면 마지막 수를 넘어선 쪽의 값만 쓴다
+       (그렇지 않은 보기는 규칙을 몰라도 지울 수 있다). 음수가 없는 수열에는 음수 보기를 내지 않는다. */
+    const up = shown.every(function (v, i) { return !i || v > shown[i - 1]; }), down = shown.every(function (v, i) { return !i || v < shown[i - 1]; });
+    const nonNeg = shown.every(function (v) { return v >= 0; }) && answer >= 0;
+    const usable = function (v) {
+      if (!isFinite(v) || v === answer || shown.indexOf(v) >= 0 || (nonNeg && v < 0)) return false;
+      if (up && v <= seq[4]) return false;
+      if (down && v >= seq[4]) return false;
+      return true;
+    };
+    const pool = [answer + d, answer - d, seq[4] * 2, answer + 2 * d, seq[4] + seq[3], seq[4] + d - 1, seq[4] + d + 1];
+    for (let k = 1; k <= 6; k++) pool.push(answer + k, answer - k);
+    const lows = [], highs = [];
+    r.shuffle(pool).forEach(function (v) { if (usable(v) && lows.indexOf(v) < 0 && highs.indexOf(v) < 0) (v < answer ? lows : highs).push(v); });
+    const bLo = Math.max(0, 3 - highs.length), bHi = Math.min(3, lows.length);
+    const below = bLo <= bHi ? r.int(bLo, bHi) : bHi;
+    const dist = lows.slice(0, below).concat(highs.slice(0, 3 - below));
+    // 드물게 후보가 모자라면 정답에서 가까운 수부터 채운다(먼저 같은 조건으로, 그래도 모자라면 조건을 풀어서)
+    [usable, function (v) { return v !== answer && shown.indexOf(v) < 0; }].forEach(function (okv) {
+      for (let k = 1; dist.length < 3 && k < 60; k++) [answer + k, answer - k].forEach(function (v) { if (dist.length < 3 && okv(v) && dist.indexOf(v) < 0) dist.push(v); });
+    });
+    const o = shuffleOptions(r, [answer].concat(dist), 0);
     return {
       type: 'choice', part: 'sequence', scored: true, level: level, timeLimit: level >= 4 ? 60 : 50,
       prompt: '다음에 올 숫자는 무엇일까요?',
@@ -947,7 +975,7 @@
     const o = shuffleOptions(r, [rots[k]].concat(dis), 0);
     return {
       type: 'choice', part: 'rotation', scored: true, level: level, timeLimit: ROT_TIME[level] || 40,
-      prompt: '위 도형을 돌리기만 해서 만들 수 있는 것은? (뒤집으면 안 돼요)',
+      prompt: '이 도형을 돌리기만 해서 만들 수 있는 것은? (뒤집으면 안 돼요)',
       promptHtml: '<div class="poly-prompt">' + polySVG(shape) + '</div>',
       optionsHtml: o.options.map(polySVG), answer: o.answer, optionCols: 4,
       explain: '정답은 원래 도형을 ' + (k * 90) + '° 돌린 모양이에요. 나머지 셋은 모두 원래 도형을 거울에 비춘 모양을 돌린 것이라, 칸 수와 크기는 같아도 돌리기만 해서는 만들 수 없어요.'
@@ -1261,7 +1289,7 @@
     vocab: { label: '어휘', domain: 'verbal', minutes: 4, desc: '주어진 낱말과 뜻이 가장 가까운 말, 또는 반대말을 골라요. 뒤로 갈수록 보기 드문 낱말이 나와요.', where: '아는 단어가 얼마나 많고 정확한지 봐요. 글을 빨리 읽고 정확하게 쓰는 힘의 바탕이에요.' },
     logic: { label: '논리 추론', domain: 'verbal', minutes: 6, desc: '문장이 참이라고 칠 때 반드시 참인 결론을 골라요. 그럴듯한 게 아니라 "반드시" 맞는 걸 찾는 게 포인트예요.', where: '말이 되는지 아닌지 따지는 힘이에요. 계약서나 규정 읽기, 토론, 가짜 뉴스 걸러내기에 쓰여요.' },
     similar: { label: '공통점 찾기', domain: 'verbal', minutes: 4, desc: '두 낱말이 공통으로 속하는 묶음이나 하는 일을 골라요. 겉모습이 아니라 본질적인 공통점을 찾아야 해요.', where: '서로 다른 것에서 공통점을 찾는 힘이에요. 개념을 정리하고 분류하고 요약하는 데 쓰여요.' },
-    rotation: { label: '도형 회전', domain: 'spatial', minutes: 4, desc: '위 도형을 돌리기만 해서 만들 수 있는 걸 골라요. 거울처럼 뒤집은 건 정답이 아니에요.', where: '머릿속에서 모양을 돌리는 힘이에요. 주차, 지도 읽기, 조립, 그림 그리기에 쓰여요.' },
+    rotation: { label: '도형 회전', domain: 'spatial', minutes: 4, desc: '보여 주는 도형을 돌리기만 해서 만들 수 있는 걸 골라요. 거울처럼 뒤집은 건 정답이 아니에요.', where: '머릿속에서 모양을 돌리는 힘이에요. 주차, 지도 읽기, 조립, 그림 그리기에 쓰여요.' },
     fold: { label: '전개도 접기', domain: 'spatial', minutes: 5, desc: '펼쳐 놓은 전개도를 접어 정육면체를 만들었을 때 나올 수 있는 모양을 골라요. 무늬는 상자 바깥쪽에 그려져 있어요. 화살표처럼 방향이 있는 무늬는 놓인 방향까지 맞아야 하고, 점처럼 돌려도 똑같은 무늬는 방향을 따지지 않아요.', where: '평면을 머릿속에서 입체로 접어 보는 힘이에요. 상자 포장, 종이접기, 옷 개기, 설명서 보고 조립하기에 쓰여요.' },
     blocks: { label: '블록 세기', domain: 'spatial', minutes: 5, desc: '쌓아 놓은 블록이 모두 몇 개인지 세요. 블록은 모두 바닥이나 다른 블록 위에 놓여 있어서, 위에 블록이 있으면 그 아래에도 블록이 있어요. 예를 들어 2층 블록 아래 1층 자리가 가려져 안 보여도 거기에 블록이 있다고 세요. 또 블록은 옆 블록과 면이 맞닿아 한 덩어리로 붙어 있어요. 따로 떨어져 선 블록은 없고, 그 밖에 숨은 블록도 없어요.', where: '보이는 모습만으로 안 보이는 부분까지 그려 보는 힘이에요. 짐 싣기, 창고 정리, 도면 읽기, 물건이 몇 개 들었는지 어림하기에 쓰여요.' },
     digitF: { label: '숫자 앞으로', domain: 'memory', minutes: 2, desc: '숫자가 한 자리씩 나타나요. 다 나온 뒤 화면의 숫자 버튼으로 보인 순서 그대로 눌러요.', where: '본 것을 그대로 잠깐 기억하는 힘이에요. 전화번호나 주문을 외우는 데 쓰여요.' },
@@ -1336,8 +1364,10 @@
   /* 기준값 버전. 익명 통계로 보내는 결과에 붙어서 어느 기준값으로 낸 z인지 구분한다. NORMS·LEVEL_P를 바꾸면 함께 바꾼다(tools/norms-from-stats.cjs --write 가 자동으로 바꿈).
      ai-est-2026-10-18b = 2026-10-18 고침을 한 번에 담은 버전(배포된 ai-est-2026-10-18 다음): 공간 세 과제 생성기·적응형 7문항·LEVEL_P, 기억 폭 순서·최대 길이·
      부분 점수, 반응 과제 절차·실수 감점, OBS·TASK_REL. 회전·전개도·블록, 기억 폭 4과제, 반응 3과제는 이 버전부터 문항·절차가 달라서
-     tools/norms-from-stats.cjs 가 원자료(/export)에서 그 전 버전(design-2026-10-18·ai-est-2026-10-18) 행을 뺀다. */
-  const NORMS_VERSION = 'ai-est-2026-10-18b';
+     tools/norms-from-stats.cjs 가 원자료(/export)에서 그 전 버전(design-2026-10-18·ai-est-2026-10-18) 행을 뺀다.
+     ai-est-2026-11-12 = 수열·저울 추론의 오답 만드는 법을 바꾼 버전(보기만 보고 찍으면 46~50%가 맞던 것을 25%로). 기준값(LEVEL_P·NORMS·OBS)은 그대로다.
+     두 과제의 그 전 버전 행은 찍어서 맞힌 몫이 더 커서, 같은 도구가 원자료에서 뺀다. */
+  const NORMS_VERSION = 'ai-est-2026-11-12';
   /* 폭 과제 부분 점수(spanScore의 part)의 기준값(2026-10-18): NORMS의 최장 폭 평균·sd에서 바꿔 쓴다. part = 최장 폭 − 0.5 × (두 번째 시도에서만 맞힌 길이 수)라
      평균은 shift만큼 낮고 퍼짐은 scale배다. 시행 단위 모형(한 시행의 정답 확률 σ((μ − 길이)/τ), μ = a + b·θ, a·b는 지금 진행 규칙과 새 최대 길이로 푼 최장 폭이
      NORMS 평균·sd와 같아지게 맞춤, 4만 명)에서 τ = 0.55일 때 네 과제 모두 shift 0.24~0.25, scale 0.96~0.97이었다(τ 0.4면 0.18~0.19·0.97~0.98, 0.7이면 0.29~0.30·0.94).
