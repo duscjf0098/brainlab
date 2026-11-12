@@ -18,6 +18,7 @@
   const MAX_RESULTS = 40;
   let session = null;
   let lastResult = null;   // 저장이 막힌 브라우저에서도 방금 결과를 보여 주기 위한 메모리 사본
+  let lastSave = null;     // 방금 결과를 저장한 결과 { ok, off, dropped } (U.saveResults). 결과 화면의 안내 문구를 고르는 데 쓴다
   let cleanup = null;
   function saveSession() { if (session) U.sstore.set(SESSION_KEY, session); }
   const TIME_KEY = 'bl.timeFactor';   // 1 표준 · 1.5 여유 · 0 무제한
@@ -56,7 +57,7 @@
     if (mount) { const c = mount(); if (typeof c === 'function') cleanup = c; }
   }
   function go(hash) { location.hash = hash; }
-  function results() { return U.store.get(STORE_KEY, []); }
+  function results() { const v = U.store.get(STORE_KEY, []); return Array.isArray(v) ? v : []; }
 
   /* ---------- 라우팅 ---------- */
   function route() {
@@ -285,15 +286,14 @@
     result.at = Date.now();
     result.elapsed = Date.now() - session.startedAt;
     if (BL.stats) result.sid = BL.stats.newId();   // 익명 통계용 결과 id (무작위, 같은 결과를 두 번 보내지 않게)
-    let all = results();
-    all.push(result);
-    if (all.length > MAX_RESULTS) all = all.slice(all.length - MAX_RESULTS);
-    const saved = U.store.set(STORE_KEY, all);
+    // 저장 공간이 모자라면 다시 보기 → 오래된 결과 순으로 덜어 내며 저장한다(util.js saveResults). 그래도 안 되면 메모리 사본으로 보여 준다.
+    const saved = U.saveResults(STORE_KEY, results().concat([result]), MAX_RESULTS);
     lastResult = result;
+    lastSave = saved;
     if (BL.stats) BL.stats.enqueue(result);   // 익명 통계 참여 중이면 결과 화면에서 보낸다
     session = null;
     U.sstore.remove(SESSION_KEY);
-    go('#/result/' + t.id + '/' + (saved ? all.length - 1 : 'last'));
+    go('#/result/' + t.id + '/' + (saved.ok ? saved.list.length - 1 : 'last'));
   }
 
   /* ---------- 문항 렌더러 ---------- */
@@ -507,6 +507,7 @@
       const factor = ctx && typeof ctx.timeFactor === 'number' ? ctx.timeFactor : 1;
       const limit = it.practice || !it.timeLimit || factor === 0 ? 0 : Math.round(it.timeLimit * factor);
       const opts = it.optionsHtml ? it.optionsHtml : it.options.map(function (o) { return '<span class="opt-text">' + U.esc(o) + '</span>'; });
+      el.classList.toggle('has-fig', !!it.promptHtml);   // 그림이 있는 문항은 작은 화면에서 문제 문장을 조금 작게 쓴다(style.css)
       el.innerHTML =
         (limit ? '<div class="timer-row"><div class="timer"><div class="timer-bar" id="tbar"></div></div><span class="timer-num mono" id="tnum">' + limit + '</span></div>' : '') +
         (it.practice ? '<div class="practice-tag">연습 문제 · 점수에 안 들어가요</div>' : '') +
@@ -1106,18 +1107,25 @@
     }
   };
   /* ---------- 결과 ---------- */
-  function scaleHtml(s, child) {
+  /* fold: 세부 막대를 접어 두고 눌러서 펼친다 (검사 정의의 foldChildren. 세부가 서른 개인 성격 검사에서 쓴다) */
+  function scaleHtml(s, child, fold) {
     const lo = s.range ? s.range[0] : 0, hi = s.range ? s.range[1] : 100;
     const pct = U.clamp((s.value - lo) / (hi - lo) * 100, 0, 100);
     const tick = s.range ? '<div class="bar-tick" style="left:' + ((100 - lo) / (hi - lo) * 100) + '%" title="평균 100"></div>' : '';
+    const kids = s.children && s.children.length ? '<div class="scale-children">' + s.children.map(function (c) { return scaleHtml(c, true); }).join('') + '</div>' : '';
     return '<div class="scale' + (child ? ' scale-child' : '') + (s.range ? ' scale-iq' : '') + '"><div class="scale-head"><span>' + U.esc(s.label) + '</span>' +
       '<span class="mono">' + s.value + (s.raw ? ' <small>' + U.esc(s.raw) + '</small>' : '') + (child && s.key ? '<small class="real" data-real="' + U.esc(s.key) + '"></small>' : '') + '</span></div>' +
       '<div class="bar">' + tick + '<div class="bar-fill" style="width:' + pct + '%"></div></div></div>' +
-      (s.children && s.children.length ? '<div class="scale-children">' + s.children.map(function (c) { return scaleHtml(c, true); }).join('') + '</div>' : '');
+      (kids && fold ? '<details class="scale-more"><summary>세부 ' + s.children.length + '개 점수 보기</summary>' + kids + '</details>' : kids);
   }
-  function reviewHtml(review) {
-    if (!review || !review.length) return '';
-    return '<details class="review"><summary>틀린 문항 다시 보기 (' + review.length + ')</summary>' + review.map(function (rv) {
+  /* 틀린 문항 다시 보기. 저장 공간을 아끼려고 오래된 결과에서는 빼 두므로(util.js packResults), 빠진 결과에는 그 사실을 한 줄로 알린다. */
+  function reviewHtml(result) {
+    const review = result.review;
+    if (!review || !review.length) {
+      return result.reviewDropped ? '<p class="review-gone">틀린 문항 다시 보기(' + result.reviewDropped + '문항)는 저장 공간을 아끼려고 가장 최근 결과 몇 건에만 남겨 둬요.</p>' : '';
+    }
+    return (result.reviewNote ? '<p class="review-gone">' + U.esc(result.reviewNote) + '</p>' : '') +
+      '<details class="review"><summary>틀린 문항 다시 보기 (' + review.length + ')</summary>' + review.map(function (rv) {
       const chosen = rv.chosenHtml ? '<div class="rv-opt">' + rv.chosenHtml + '</div>' : '<span>' + U.esc(rv.chosen == null ? '시간 초과' : rv.chosen) + '</span>';
       const answer = rv.answerHtml ? '<div class="rv-opt">' + rv.answerHtml + '</div>' : '<span>' + U.esc(rv.answer) + '</span>';
       return '<div class="rv"><p class="rv-title mono">' + U.esc(rv.title) + '</p>' +
@@ -1162,7 +1170,7 @@
       '<p class="summary">' + U.esc(result.summary) + '</p>' +
       statsNoticeHtml(t, opts) +
       (result.plot || '') +
-      '<div class="scales">' + (result.scales || []).map(function (s) { return scaleHtml(s, false); }).join('') + '</div>' +
+      '<div class="scales">' + (result.scales || []).map(function (s) { return scaleHtml(s, false, t.foldChildren); }).join('') + '</div>' +
       '<div class="actions actions-share">' +
       (BL.card.hasKakao() ? '<button class="btn btn-kakao" id="kakao">카카오톡 공유</button>' : '') +
       '<button class="btn" id="share">공유</button><button class="btn" id="copy">링크 복사</button><button class="btn" id="save">이미지 저장</button></div>' +
@@ -1170,7 +1178,7 @@
       (t.merge && !opts.profile ? '<a class="btn btn-block profile-link" href="#/profile/' + t.id + '">종합 프로필 보기 · 따로 푼 과제를 합친 결과</a>' : '') +
       explainHtml(t, result) +
       sections +
-      reviewHtml(result.review) +
+      reviewHtml(result) +
       relatedHtml(t) +
       '<div class="actions"><a class="btn btn-primary" href="#/test/' + t.id + '">' + (opts.profile ? '다른 과제 풀기' : '다시 하기') + '</a><a class="btn" href="#/">다른 실험</a></div>' +
       '<p class="notice">이 결과는 참고용 자기평가예요. 전문가의 심리검사나 의학적 진단을 대신하지 않고, 점수는 그날의 상태와 환경에 따라 달라질 수 있어요.</p>' +
@@ -1266,14 +1274,26 @@
     const t = BL.tests[id];
     if (idx === 'last') {
       if (!lastResult || lastResult.testId !== id) { go('#/test/' + id); return; }
-      setScreen(resultHtml(t, lastResult, { banner: '이 브라우저는 저장이 꺼져 있어 결과가 기록에 남지 않아요. 창을 닫기 전에 이미지로 저장해 두세요.' }), function () { mountResult(t, lastResult); });
+      // 저장이 꺼진 브라우저와 저장 공간이 꽉 찬 경우를 나눠서 알려 준다
+      const banner = lastSave && !lastSave.off
+        ? '저장 공간이 가득 차서 이 결과를 기록에 남기지 못했어요. 창을 닫기 전에 이미지로 저장해 두세요. "내 기록"에서 오래된 기록을 지우면 다음 결과부터 다시 저장될 수 있어요.'
+        : '이 브라우저는 저장이 꺼져 있어 결과가 기록에 남지 않아요. 창을 닫기 전에 이미지로 저장해 두세요.';
+      const viewLast = withComparison(t, lastResult, results());
+      setScreen(resultHtml(t, viewLast, { banner: banner }), function () { mountResult(t, viewLast); });
       return;
     }
     const all = results();
-    const result = all[Number(idx)];
+    let result = all[Number(idx)];
     if (!result || result.testId !== id) { go('#/test/' + id); return; }
+    // 방금 끝낸 결과는 메모리 사본으로 보여 준다: 저장 공간이 모자라 다시 보기를 빼고 저장했더라도 이번 한 번은 볼 수 있다
+    const fresh = lastResult && lastResult.testId === id && lastResult.at === result.at;
+    let banner = '';
+    if (fresh) {
+      if (lastResult.review && !result.review) result = Object.assign({}, lastResult, { reviewNote: '저장 공간이 모자라서 이 다시 보기는 기록에 남기지 못했어요. 지금 이 화면에서만 볼 수 있어요.' });
+      if (lastSave && lastSave.dropped) banner = '저장 공간이 모자라서 가장 오래된 기록 ' + lastSave.dropped + '개를 지우고 이 결과를 저장했어요.';
+    }
     const view = withComparison(t, result, all.slice(0, Number(idx)));
-    setScreen(resultHtml(t, view), function () { mountResult(t, view); });
+    setScreen(resultHtml(t, view, banner ? { banner: banner } : null), function () { mountResult(t, view); });
   }
   /* 같은 검사의 직전 결과와 비교하는 항목을 맨 앞에 덧붙인다 (표시용, 저장하지 않음) */
   function withComparison(t, result, earlier) {
@@ -1297,8 +1317,12 @@
       });
     }
     if (!lines.length) return result;
+    // 덧붙이는 말은 검사 성격에 맞춘다: 푸는 검사는 연습 효과, 성향 검사는 그날의 기분과 뽑힌 문항에 따른 흔들림
+    const tail = result.tasks && prev.tasks ? '같은 과제를 다시 풀면 익숙해져서 오르는 것이 보통이니, 큰 차이만 의미 있게 보세요.'
+      : t.kind === 'trait' ? '성향 점수는 그날의 기분과 이번에 나온 문항에 따라 몇 점씩 달라져요. 10점 안쪽 차이는 달라졌다고 보기 어려워요.'
+        : '같은 상황을 다시 보면 익숙해져서 오를 수 있으니, 큰 차이만 의미 있게 보세요.';
     const copy = Object.assign({}, result);
-    copy.sections = [{ title: '지난 결과와 비교 (' + U.fmtDate(prev.at) + ')', body: lines.join(' · ') + '. 같은 과제를 다시 풀면 익숙해져서 오르는 것이 보통이니, 큰 차이만 의미 있게 보세요.' }].concat(result.sections || []);
+    copy.sections = [{ title: '지난 결과와 비교 (' + U.fmtDate(prev.at) + ')', body: lines.join(' · ') + '. ' + tail }].concat(result.sections || []);
     return copy;
   }
 
@@ -1376,18 +1400,38 @@
   /* ---------- 기록 ---------- */
   function renderHistory() {
     const all = results();
-    const rows = all.map(function (r, i) { return rowHtml(r, i); }).reverse().join('');
+    // 기록마다 삭제 버튼을 붙인다. 다른 탭에서 목록이 바뀌어도 엉뚱한 기록을 지우지 않게 순번이 아니라 검사 id와 저장 시각으로 찾는다.
+    const rows = all.map(function (r, i) {
+      const row = rowHtml(r, i);
+      return row ? '<div class="row-wrap">' + row + '<button class="row-del" data-id="' + U.esc(r.testId) + '" data-at="' + U.esc(r.at) + '" aria-label="' + U.esc(BL.tests[r.testId].title + ' ' + U.fmtDate(r.at)) + ' 기록 삭제">삭제</button></div>' : '';
+    }).reverse().join('');
     setScreen(
       '<div class="wrap">' +
       '<a class="back" href="#/">← 실험 목록</a>' +
       '<p class="eyebrow">이 브라우저에 남은 결과</p><h1 class="title">내 기록</h1>' +
       (rows ? '<div class="rows">' + rows + '</div><button class="btn btn-ghost btn-block" id="clear">기록 모두 삭제</button>' : '<p class="empty">아직 기록이 없어요. 첫 실험을 시작해 보세요.</p>') +
-      '<p class="notice">기록은 이 브라우저의 저장 공간에만 있어요. 브라우저 데이터를 지우면 함께 사라져요.</p>' +
+      '<p class="notice">기록은 이 브라우저의 저장 공간에만 있어요. 브라우저 데이터를 지우면 함께 사라져요. 최근 ' + MAX_RESULTS + '개까지 남기고, 틀린 문항 다시 보기는 자리를 많이 차지해서 가장 최근 결과 몇 건에만 남겨 둬요.</p>' +
       '</div>',
       function () {
         const btn = document.getElementById('clear');
         if (btn) btn.addEventListener('click', function () {
           if (confirm('모든 기록을 삭제할까요? 되돌릴 수 없어요.')) { U.store.remove(STORE_KEY); renderHistory(); }
+        });
+        app.querySelectorAll('.row-del').forEach(function (b) {
+          b.addEventListener('click', function () {
+            const list = results();
+            const id = b.getAttribute('data-id'), at = Number(b.getAttribute('data-at'));
+            let i = -1;
+            list.forEach(function (r, k) { if (r && r.testId === id && r.at === at) i = k; });
+            if (i >= 0) {
+              if (!confirm('이 기록을 지울까요? 되돌릴 수 없어요.')) return;
+              list.splice(i, 1);
+              if (list.length) U.saveResults(STORE_KEY, list, MAX_RESULTS); else U.store.remove(STORE_KEY);
+            }
+            const y = window.scrollY;   // 지운 뒤에도 보던 자리에 머문다
+            renderHistory();
+            window.scrollTo(0, y);
+          });
         });
       }
     );
@@ -1400,7 +1444,7 @@
       '<a class="back" href="#/">← 실험 목록</a>' +
       '<p class="eyebrow">무료 · 로그인 없음</p><h1 class="title">두뇌실험실 안내</h1>' +
       '<section class="rs"><h3>무엇을 하는 곳인가요</h3><p>머리 쓰는 힘, 감정 다루는 힘, 성격, 연애 패턴, 끌리는 일을 스스로 재 보는 곳이에요. 돈을 받지 않고 로그인도 없어요. 문항은 전부 이 사이트를 위해 직접 만들었거나, 누구나 쓸 수 있게 공개된 문항을 우리말로 옮긴 거예요.</p></section>' +
-      '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전, 전개도 접기, 블록 세기), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따르고, 문항은 공개된 국제 성격 문항(IPIP)을 번역해서 손봤어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p><p>진로 흥미 유형 검사는 심리학자 존 홀랜드의 여섯 가지 흥미 유형(현실·탐구·예술·사회·진취·관습)을 틀로 삼아, 유형마다 두 갈래씩 해 보고 싶은 활동으로 재요. 문항은 이 사이트를 위해 직접 썼어요. 흥미는 하고 싶은 마음이라서 적성이나 능력과는 달라요.</p><p>연애 스타일 검사는 사회학자 존 리가 나눈 사랑의 여섯 가지 스타일(에로스, 루두스, 스토르게, 프래그마, 마니아, 아가페)을 틀로 삼고, 문항은 이 사이트를 위해 직접 썼어요.</p></section>' +
+      '<section class="rs"><h3>검사는 어떻게 만들었나요</h3><p>인지 능력 검사는 지능 연구에서 오래 쓰인 과제 형식을 따라요. 규칙 찾기(도형 행렬, 도형 유추, 도형 계열, 수열, 저울 추론), 언어(유추, 어휘, 논리, 공통점 찾기), 공간(도형 회전, 전개도 접기, 블록 세기), 기억(숫자 앞으로와 거꾸로, 위치, 숫자-문자 순서), 속도와 주의(단순 반응, 선택 반응, 색-단어 간섭, 기호 찾기)예요. 도형과 숫자 문제는 규칙을 바탕으로 매번 새로 만들어져요.</p><p>정서 지능 검사는 감정을 알아채고, 쓰고, 이해하고, 다루는 네 갈래로 보는 모델을 틀로 삼고, 갈래마다 두 가지를 상황 판단 문제로 재요.</p><p>성격 검사는 빅파이브 모델을 따라 성격을 다섯 갈래로 보고, 갈래마다 여섯 가지씩 모두 서른 가지 세부 특성을 봐요. 문항은 누구나 쓸 수 있게 공개된 국제 성격 문항(IPIP)의 구조를 바탕으로 우리말로 옮기거나 새로 썼어요.</p><p>연애 애착 유형 검사는 성인 애착을 불안과 회피 두 축으로 보는 모델을 바탕으로, 축마다 세 가지 패턴을 봐요.</p><p>진로 흥미 유형 검사는 심리학자 존 홀랜드의 여섯 가지 흥미 유형(현실·탐구·예술·사회·진취·관습)을 틀로 삼아, 유형마다 두 갈래씩 해 보고 싶은 활동으로 재요. 문항은 이 사이트를 위해 직접 썼어요. 흥미는 하고 싶은 마음이라서 적성이나 능력과는 달라요.</p><p>연애 스타일 검사는 사회학자 존 리가 나눈 사랑의 여섯 가지 스타일(에로스, 루두스, 스토르게, 프래그마, 마니아, 아가페)을 틀로 삼고, 문항은 이 사이트를 위해 직접 썼어요.</p></section>' +
       '<section class="rs"><h3>점수는 어디에 쓰면 좋나요</h3><p>검사를 마치면 결과 화면에서 그 능력이나 성향이 생활 어디에 쓰이고 어떤 영향을 주는지 함께 보여 드려요. 결과는 "내가 뭘 잘하고 뭘 연습하면 좋은지" 감을 잡는 용도로 보면 딱 좋아요. 사람을 평가하거나 줄 세우는 데 쓰라고 만든 게 아니에요.</p></section>' +
       '<section class="rs"><h3>한계</h3><p>모든 결과는 참고용이에요. 많은 사람에게 실시해서 검증한 공인 검사가 아니고, 공식 IQ나 진단을 내주지 않아요. 점수는 그날 컨디션, 기기, 환경에 따라 달라져요. 마음 건강이 걱정된다면 전문가와 상담하세요.</p></section>' +
       '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 결과 기록은 이 브라우저에 저장돼요. ' + (BL.stats && BL.stats.available() ? '인지 능력 검사는 문항별 정답 여부를 이름 없이 모아 난이도를 맞추는 데 써요(아래 \u0022익명 통계\u0022에서 끌 수 있어요). ' : '') + '카카오톡 공유를 누를 때만, 함께 보낼 결과 이미지가 카카오 서버에 올라가요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +
@@ -1417,6 +1461,14 @@
       '<p>보내지 않는 것: 이름, 연락처, IP 주소, 기기 식별자, 정확한 시각, 문항 내용. 결과마다 새로 만든 무작위 번호만 붙여서, 보낸 자료를 나와 연결할 방법이 없어요. 자료가 ' + BL.stats.MIN_N + '명이 넘으면 결과 화면에 "실제 응시자 기준 상위 %"를 함께 보여 드려요.</p>' +
       '<label class="switch"><input type="checkbox" id="stats-opt"' + (BL.stats.enabled() ? ' checked' : '') + '><span>익명 통계에 참여</span></label></section>';
   }
+
+  /* 시작할 때 한 번: 예전 판에서 쌓인 기록의 다시 보기를 덜어 저장 공간을 비운다 (덜어 낼 것이 있을 때만 다시 쓴다) */
+  (function compactResults() {
+    const all = results();
+    if (!all.length) return;
+    const packed = U.packResults(all);
+    if (packed.some(function (r, i) { return r !== all[i]; })) U.store.set(STORE_KEY, packed);
+  })();
 
   window.addEventListener('hashchange', route);
   route();
