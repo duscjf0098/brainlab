@@ -39,6 +39,43 @@ BL.util = (function () {
     });
   }
 
+  /* 저장소(localStorage)에서 읽은 그림 마크업을 화면에 넣기 전에 거른다(2026-11-13).
+     결과의 다시 보기 그림(promptHtml·chosenHtml·answerHtml)과 애착 좌표 그림(plot)은 마크업 그대로 저장돼서, 같은 출처의 다른 페이지가
+     저장소를 건드리면 결과를 열 때마다 심긴 스크립트가 돌 수 있었다. 허용 목록 밖의 요소는 안의 내용까지 통째로 빼고,
+     속성은 실제 그림이 쓰는 이름(FIG_ATTRS)만 남기고, 값도 실제 그림 모양만 받는다: class 는 그림이 쓰는 이름(FIG_CLASSES)뿐일 때만, style 은 --w:143 같은
+     숫자 변수뿐일 때만, url( 은 문서 안 참조(clip-path="url(#id)")만, id 는 clipPath 의 clipN 만, 역슬래시가 든 값은 지운다. 느슨하게 두면 스크립트는 못 돌려도
+     바깥 주소 불러오기(결과를 연 시각 추적), 화면 덮기(style 의 position:fixed, 사이트 CSS 의 .sheet 같은 class), 저장 버튼 id 가로채기가 가능했다.
+     그림을 바꿔서 새 태그나 새 모양의 속성을 쓰면 여기 규칙에도 넣는다. 빠진 것은 node .claude/checks/figtags.cjs "$PWD" 가 찾는다
+     (figTagOk·figAttrOk 를 그대로 불러 실제 그림 수천 개에 대 본다). 빠뜨리면 결과 화면의 그림이 조용히 사라지거나 깨진다. */
+  const FIG_TAGS = /^(svg|g|path|rect|circle|line|polygon|polyline|ellipse|text|tspan|defs|clippath|div|span|p|b|small)$/i;
+  const FIG_ATTRS = /^(aria-hidden|aria-label|class|clip-path|cx|cy|d|data-p|fill|font-size|font-weight|height|id|opacity|points|r|role|rx|stroke|stroke-dasharray|stroke-linejoin|stroke-width|style|text-anchor|transform|viewbox|width|x|x1|x2|y|y1|y2)$/;
+  const FIG_CLASSES = /^(an-label|an-pair|an-sep|analogy|bl|blk|blk-prompt|blk-rule|br|bt|cell|cell-missing|cf|cs|cs-l|cs-r|cube|fold-net|fold-prompt|matrix|matrix2|mono|pan-opt|plot|plot-axis|plot-q|poly|poly-prompt|scale|scales-given|seq|seq-q|series|sq)$/;
+  const BSLASH = String.fromCharCode(92);
+  function figTagOk(tag) { return FIG_TAGS.test(String(tag)); }
+  function figAttrOk(tag, name, value) {
+    const nm = String(name).toLowerCase(), v = String(value);
+    if (!FIG_ATTRS.test(nm)) return false;                                                           // on*·href·src·tabindex·cursor·mask 등은 이름에서 걸린다
+    if (nm === 'class' && !v.split(/\s+/).filter(Boolean).every(function (c) { return FIG_CLASSES.test(c); })) return false;   // 사이트 CSS 의 다른 class(.sheet 등)로 화면을 덮지 못하게
+    if ((nm === 'width' || nm === 'height') && String(tag).toLowerCase() !== 'rect') return false;   // 크기 속성은 그림 안 네모에만(svg 를 화면보다 크게 만들지 못하게)
+    if (v.indexOf(BSLASH) >= 0) return false;                                                       // CSS 이스케이프로 아래 검사를 피해 가지 못하게
+    if (nm === 'style' && !/^\s*(--[a-z-]+\s*:\s*-?[\d.]+\s*;?\s*)+$/i.test(v)) return false;       // 숫자 변수(--w:143)만
+    if (/url\s*\(/i.test(v) && !/^url\(#[\w-]+\)$/.test(v.trim())) return false;                   // 문서 안 참조만
+    if (nm === 'id' && !(String(tag).toLowerCase() === 'clippath' && /^clip\d+$/.test(v))) return false;   // 화면의 다른 id(저장 버튼 등)를 가로채지 못하게
+    return true;
+  }
+  function safeFig(html) {
+    if (html == null || html === '') return '';
+    if (typeof DOMParser !== 'function') return esc(html);   // 거를 수 없는 환경이면 글자로만 보여 준다
+    let box;
+    try { box = new DOMParser().parseFromString('<div>' + String(html) + '</div>', 'text/html').body.firstChild; } catch (e) { return ''; }
+    if (!box) return '';
+    Array.prototype.slice.call(box.querySelectorAll('*')).forEach(function (n) {
+      if (!figTagOk(n.tagName)) { if (n.parentNode) n.parentNode.removeChild(n); return; }
+      Array.prototype.slice.call(n.attributes).forEach(function (a) { if (!figAttrOk(n.tagName, a.name, a.value)) n.removeAttribute(a.name); });
+    });
+    return box.innerHTML;
+  }
+
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function mean(arr) { return arr.length ? arr.reduce(function (s, v) { return s + v; }, 0) / arr.length : 0; }
   function median(arr) {
@@ -154,6 +191,6 @@ BL.util = (function () {
     return { ok: false, off: false, list: out, dropped: dropped };
   }
 
-  return { rng: rng, esc: esc, clamp: clamp, mean: mean, median: median, fmtDate: fmtDate, level: level, store: store, sstore: sstore, pad2: pad2, josa: josa, batchim: batchim, normCdf: normCdf,
+  return { rng: rng, esc: esc, safeFig: safeFig, figTagOk: figTagOk, figAttrOk: figAttrOk, clamp: clamp, mean: mean, median: median, fmtDate: fmtDate, level: level, store: store, sstore: sstore, pad2: pad2, josa: josa, batchim: batchim, normCdf: normCdf,
     packResults: packResults, saveResults: saveResults, storageOff: storageOff };
 })();

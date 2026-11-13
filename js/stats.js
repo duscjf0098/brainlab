@@ -17,8 +17,19 @@
   const OPT_KEY = 'bl.stats.share', NOTICE_KEY = 'bl.stats.noticed', QUEUE_KEY = 'bl.stats.queue', CACHE_KEY = 'bl.stats.cache';
   const CACHE_MS = 10 * 60 * 1000, QUEUE_MAX = 10, MIN_N = 30;
   function available() { return !!BASE; }
-  function enabled() { return available() && U.store.get(OPT_KEY, true) !== false; }
-  function setEnabled(v) { U.store.set(OPT_KEY, !!v); if (!v) U.store.remove(QUEUE_KEY); }
+  /* 끄기를 저장하지 못했을 때(저장 공간이 꽉 참) 이 페이지에서라도 꺼 두는 표시(2026-11-13). sessionStorage 에도 적어 새로고침 뒤에도 이어 간다. */
+  let offMem = false;
+  function enabled() { return available() && !offMem && U.sstore.get(OPT_KEY, true) !== false && U.store.get(OPT_KEY, true) !== false; }
+  /* 끌 때는 큐부터 지워 자리를 만든 뒤 꺼짐을 쓴다(2026-11-13). 예전에는 꺼짐을 먼저 썼는데, 저장 공간이 꽉 차 있으면 그 쓰기가 조용히
+     실패해서 스위치는 꺼진 것처럼 보여도 다음 방문에 다시 켜지고 남은 큐를 보냈다. 돌려주는 값 = 설정을 저장했는지(못 했으면 이번 방문 동안만 꺼짐). */
+  function setEnabled(v) {
+    if (!v) U.store.remove(QUEUE_KEY);
+    let ok = U.store.set(OPT_KEY, !!v);
+    if (!ok && v) { U.store.remove(OPT_KEY); ok = U.store.get(OPT_KEY, true) !== false; }   // 켜기는 값을 지워도 된다(없으면 참여)
+    offMem = !v && !ok;
+    if (offMem) U.sstore.set(OPT_KEY, false); else U.sstore.remove(OPT_KEY);
+    return ok;
+  }
   function noticed() { return U.store.get(NOTICE_KEY, false) === true; }
   function markNoticed() { U.store.set(NOTICE_KEY, true); }
   function newId() {
@@ -57,7 +68,8 @@
   }
   /* 결과를 낸 기준값에 반영된 실제 응시자 수. 버전 이름 'data-<날짜>-n<명>'에서 읽는다. 실제 자료가 아닌 판(설계값 'design-…', AI 추정값 'ai-est-…' 등)이면 0. */
   function normsN(version) { const m = /-n(\d+)$/.exec(String(version || '')); return m ? Number(m[1]) : 0; }
-  function queue() { const q = U.store.get(QUEUE_KEY, []); return Array.isArray(q) ? q : []; }
+  // 객체가 아닌 항목(null 등)은 거른다(2026-11-13): 저장소가 어긋나 있으면 enqueue 가 예외를 던져 검사 끝내기가 멈췄다
+  function queue() { const q = U.store.get(QUEUE_KEY, []); return Array.isArray(q) ? q.filter(function (x) { return x && typeof x === 'object'; }) : []; }
   function enqueue(result) {
     if (!enabled()) return false;
     const p = payloadOf(result);
@@ -67,32 +79,28 @@
     U.store.set(QUEUE_KEY, q.slice(-QUEUE_MAX));
     return true;
   }
+  /* 큐는 보내기 전에 비우지 않고, 보낸 것(또는 다시 보내도 소용없는 것)만 하나씩 지운다(2026-11-13). 예전에는 보내기 전에 큐를 통째로 비워서,
+     차례로 보내는 도중에 창을 닫으면 아직 안 보낸 결과가 사라졌다. 두 탭이 같은 결과를 함께 보내도 서버가 sid 로 한 번만 받는다. */
   let sending = null;
   function flush() {
     if (!enabled()) return Promise.resolve();
     if (sending) return sending;
     const q = queue();
     if (!q.length) return Promise.resolve();
-    U.store.set(QUEUE_KEY, []);
-    sending = q.reduce(function (pr, p) { return pr.then(function () { return send(p); }); }, Promise.resolve())
+    // 보내는 도중에 참여를 끄면 남은 것은 보내지 않는다
+    sending = q.reduce(function (pr, p) { return pr.then(function () { return enabled() ? send(p) : null; }); }, Promise.resolve())
       .then(function () { sending = null; }, function () { sending = null; });
     return sending;
   }
-  function requeue(p) {
-    if (!enabled()) return;
-    const q = queue().filter(function (x) { return x.sid !== p.sid; });
-    q.push(p);
-    U.store.set(QUEUE_KEY, q.slice(-QUEUE_MAX));
-  }
+  function drop(sid) { U.store.set(QUEUE_KEY, queue().filter(function (x) { return x && x.sid !== sid; })); }
   function send(p) {
     if (typeof fetch !== 'function') return Promise.resolve();
     return fetch(BASE + '/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p), keepalive: true })
       .then(function (res) {
-        // 400(모양이 틀림)·403(허용되지 않은 출처)·413(너무 큼)은 다시 보내도 같으니 버린다. 그 밖(429, 5xx)은 큐에 남긴다.
-        if (res.ok || res.status === 400 || res.status === 403 || res.status === 413) return;
-        throw new Error('status ' + res.status);
+        // 400(모양이 틀림)·403(허용되지 않은 출처)·413(너무 큼)은 다시 보내도 같으니 큐에서 지운다. 그 밖(429, 5xx, 네트워크)은 큐에 그대로 둔다.
+        if (res.ok || res.status === 400 || res.status === 403 || res.status === 413) drop(p && p.sid);
       })
-      .catch(function () { requeue(p); });
+      .catch(function () { });
   }
   /* 집계 받기 (sessionStorage 10분 캐시). 실패하면 null. */
   function get() {

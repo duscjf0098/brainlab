@@ -49,15 +49,55 @@
   }
   document.addEventListener('visibilitychange', function () { if (!document.hidden && wakeWanted) wakeOn(); });
 
-  function setScreen(html, mount) {
+  /* 화면이 바뀔 때 문서 제목과 초점(2026-11-13). 예전에는 innerHTML 만 바꿔서 눌렀던 버튼이 지워지면 초점이 body 로 떨어지고(키보드 사용자는 문항마다
+     Tab 을 처음부터 다시 눌렀다) 화면 낭독기는 새 화면이 떴는지 몰랐으며, 탭 제목은 어느 화면에서나 홈 제목이었다.
+     제목 = 화면의 h1 글자(검사 화면은 화면 낭독기용 h1 = 검사 이름). 홈은 index.html 의 제목(검색용) 그대로 둔다(renderHome).
+     결과·종합 프로필·미리보기 화면은 h1 이 점수·유형이라 "결과 · 검사 이름"을 따로 넘긴다(title). 그대로 쓰면 결과가 방문 기록·탭 목록·화면 공유에 남는다.
+     초점 = 검사 화면은 문항의 첫 글(연습 표시, 안내 카드 제목, 상황 글, 질문), 결과 화면은 안내 띠가 있으면 그 띠, 그 밖의 화면은 h1.
+     읽기 시작점이라 tabindex="-1" 로 주고 초점 테두리는 그리지 않는다(style.css). 기억 폭 과제처럼 한 문항 안에서 화면이 바뀌는 곳은 spanInput 이 따로 옮긴다.
+     숫자 키 같은 단축키는 document 에서 받으므로 초점이 제목에 있어도 그대로 듣는다. 처음 연 화면은 브라우저 기본대로 둔다(문서 맨 앞부터 읽기). */
+  const HOME_TITLE = document.title;
+  const FOCUS_IN_ITEM = '.item .practice-tag, .item .section-card h2, .item .scenario, .item .q-lead, .item .q-prompt';
+  let firstScreen = true;
+  function setScreen(html, mount, title) {
     if (cleanup) { try { cleanup(); } catch (e) { } cleanup = null; }
     document.body.classList.remove('running');
     app.innerHTML = html;
     window.scrollTo(0, 0);
     if (mount) { const c = mount(); if (typeof c === 'function') cleanup = c; }
+    const h1 = app.querySelector('h1');
+    // 결과 화면은 제목을 따로 받는다(title): h1 이 점수·유형이라 그대로 쓰면 방문 기록과 탭 목록에 '추정 IQ 87' 같은 결과가 남는다(2026-11-13)
+    const name = title || (h1 && h1.textContent.trim() ? h1.textContent.trim().slice(0, 40) : '');
+    document.title = (name ? name + ' — ' : '') + '두뇌실험실';
+    if (firstScreen) { firstScreen = false; return; }
+    const target = app.querySelector(FOCUS_IN_ITEM) || app.querySelector('.banner') || h1;   // 결과 화면에 안내 띠(저장 실패 등)가 있으면 거기부터 읽게 한다
+    if (target) {
+      target.setAttribute('tabindex', '-1');
+      try { target.focus({ preventScroll: true }); } catch (e) { }
+    }
   }
   function go(hash) { location.hash = hash; }
-  function results() { const v = U.store.get(STORE_KEY, []); return Array.isArray(v) ? v : []; }
+  /* 화면을 "돌려보내는" 이동(세션 없는 진행 화면, 없는 결과 번호, 모르는 주소, 검사 끝 → 결과)은 방문 기록을 쌓지 않고 지금 항목을 바꿔 끼운다(2026-11-13).
+     예전에는 location.hash 로 넘겨서, 결과 화면에서 뒤로 가면 #/run 으로 돌아가 다시 소개로 넘겨지고 그 소개에서 뒤로 가면 또 #/run 으로 가는 식이라
+     뒤로 가기로는 사이트를 빠져나갈 수 없었다(카카오톡 인앱 브라우저에서 특히 불편). 사용자가 앞으로 나아가는 이동(검사 시작 등)은 지금처럼 go 로 기록을 쌓는다.
+     replaceState 는 hashchange 를 일으키지 않아 route() 를 직접 부른다. 바꿔 끼우기가 막힌 환경이면 location.replace 로 넘긴다(그때는 hashchange 로 route). */
+  function redirect(hash) {
+    // 지금 문서 주소에 해시만 바꿔 붙인 절대 주소를 쓴다. '#…'만 넘기면 기준 주소가 다른 문서(srcdoc iframe, <base>)에서는 엉뚱한 문서로 넘어갈 수 있다
+    const url = location.href.replace(/#.*$/, '') + hash;
+    try { history.replaceState(null, '', url); } catch (e) { }
+    if (location.hash !== hash) { try { location.replace(url); } catch (e) { location.hash = hash; } return; }   // 주소가 안 바뀌었는데 route() 를 부르면 같은 곳으로 계속 돌려보낼 수 있다
+    route();
+  }
+  /* 저장된 결과 목록. 객체가 아닌 항목(null 등)은 거른다(2026-11-13): 다른 판·손으로 고친 값이 섞이면 홈과 내 기록 화면이 통째로 깨졌다.
+     모든 읽기·삭제·저장이 이 함수를 지나므로 화면의 번호와 목록의 번호가 서로 맞는다. */
+  function results() {
+    const v = U.store.get(STORE_KEY, []);
+    return Array.isArray(v) ? v.filter(function (r) { return r && typeof r === 'object' && typeof r.testId === 'string'; }) : [];
+  }
+  /* 주소의 검사 id 가 실제 검사인지(2026-11-13). BL.tests[b] 로만 보면 #/test/constructor 같은 Object 기본 이름도 참이 되어 화면이 깨졌다. */
+  function has(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(BL.tests, id); }
+  /* 저장 시각 → 날짜 글자. 시각이 없는 예전 결과는 빈 글자(NaN.NaN… 대신) */
+  function fmtAt(at) { return typeof at === 'number' && at > 0 ? U.fmtDate(at) : ''; }
 
   /* ---------- 라우팅 ---------- */
   function route() {
@@ -65,15 +105,16 @@
     const a = p[0], b = p[1], c = p[2];
     if (a !== 'run') wakeOff();   // 검사 화면을 떠나면 화면 꺼짐 막기를 푼다
     if (!a) return renderHome();
-    if (a === 'test' && BL.tests[b]) return renderIntro(b);
-    if (a === 'run' && BL.tests[b]) return renderRun(b);
-    if (a === 'result' && BL.tests[b]) return renderResult(b, c);
-    if (a === 'preview' && BL.tests[b]) return renderPreview(b, c);
-    if (a === 'gallery' && b) return renderGallery(b, c, p[3]);
-    if (a === 'profile' && BL.tests[b] && BL.tests[b].merge) return renderProfile(b);
+    if (a === 'test' && has(b)) return renderIntro(b);
+    if (a === 'run' && has(b)) return renderRun(b);
+    if (a === 'result' && has(b)) return renderResult(b, c);
+    if (a === 'preview' && has(b)) return renderPreview(b, c);
+    // 문항 갤러리(검수용)는 로컬 개발에서만 연다(2026-11-13). 공개 사이트에서는 언어 과제 고정 문항의 정답을 다 볼 수 있어서 익명 통계의 기준값 보정이 오염될 수 있었다.
+    if (a === 'gallery' && b && /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return renderGallery(b, c, p[3]);
+    if (a === 'profile' && has(b) && BL.tests[b].merge) return renderProfile(b);
     if (a === 'history') return renderHistory();
     if (a === 'about') return renderAbout();
-    go('#/');
+    redirect('#/');
   }
 
   /* ---------- 홈 ---------- */
@@ -87,10 +128,13 @@
       '<span class="card-go" aria-hidden="true">→</span>' +
       '</a>';
   }
+  /* 저장된 결과를 보여 줄 때 검사 정의가 글 표기를 지금 것으로 바꿔 준다(2026-11-13. 인지 검사의 등급·상위/하위 글, 애착 유형 이름). 저장된 값은 그대로 둔다 */
+  function shown(r) { const t = r && has(r.testId) ? BL.tests[r.testId] : null; return t && typeof t.relabel === 'function' ? t.relabel(r) : r; }
   function rowHtml(r, idx) {
+    if (!r || !has(r.testId)) return '';
+    r = shown(r);
     const t = BL.tests[r.testId];
-    if (!t) return '';
-    return '<a class="row tint-' + t.id + '" href="#/result/' + t.id + '/' + idx + '"><span class="row-title">' + U.esc(t.title) + (r.modeLabel ? ' · ' + U.esc(r.modeLabel) : '') + '</span><span class="row-sub">' + U.esc(r.headline) + (r.label ? ' · ' + U.esc(r.label) : '') + '</span><span class="row-date mono">' + U.fmtDate(r.at) + '</span></a>';
+    return '<a class="row tint-' + t.id + '" href="#/result/' + t.id + '/' + idx + '"><span class="row-title">' + U.esc(t.title) + (r.modeLabel ? ' · ' + U.esc(r.modeLabel) : '') + '</span><span class="row-sub">' + U.esc(r.headline) + (r.label ? ' · ' + U.esc(r.label) : '') + '</span><span class="row-date mono">' + fmtAt(r.at) + '</span></a>';
   }
   function renderHome() {
     const all = results();
@@ -111,6 +155,7 @@
       recentHtml +
       '</div>'
     );
+    document.title = HOME_TITLE;   // 홈은 검색 결과·공유 미리보기와 같은 원래 제목
   }
 
   /* ---------- 소개 ---------- */
@@ -155,12 +200,13 @@
     const modes = t.modes;
     const savedSession = U.sstore.get(SESSION_KEY, null);
     const canResume = savedSession && savedSession.id === id && Array.isArray(savedSession.items) && savedSession.index < savedSession.items.length;
+    const prog = canResume ? progressOf(savedSession) : null;   // 진행 화면 머리와 같은 계산(아직 만들지 않은 적응형 문항까지 센다)
     const resumeHtml = canResume
-      ? '<div class="resume"><div><strong>진행 중인 검사가 있어요</strong><span class="muted small">' + savedSession.items.slice(0, savedSession.index).filter(function (x) { return x.scored; }).length + ' / ' + savedSession.items.filter(function (x) { return x.scored; }).length + ' 문항 완료</span></div><div class="resume-btns"><a class="btn btn-primary" href="#/run/' + id + '">이어서 하기</a><button class="btn" id="discard">새로 시작</button></div></div>'
+      ? '<div class="resume"><div><strong>진행 중인 검사가 있어요</strong><span class="muted small">' + prog.done + ' / ' + prog.total + ' 문항 완료</span></div><div class="resume-btns"><a class="btn btn-primary" href="#/run/' + id + '">이어서 하기</a><button class="btn" id="discard">새로 시작</button></div></div>'
       : '';
     const tf = getTimeFactor();
     const timeHtml = t.timed
-      ? '<div class="time-set"><span class="modes-label">제한 시간</span><div class="seg">' + [[1, '표준'], [1.5, '여유 ×1.5'], [0, '무제한']].map(function (o) { return '<button class="seg-btn' + (tf === o[0] ? ' on' : '') + '" data-tf="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div><span class="muted small">제한 시간이 있는 규칙 찾기·언어·공간 문제에만 적용돼요. 여유나 무제한으로 풀면 점수가 조금 높게 나올 수 있어서, 결과와 종합 프로필에 그렇게 풀었다고 표시돼요.</span></div>'
+      ? '<div class="time-set"><span class="modes-label">제한 시간</span><div class="seg">' + [[1, '표준'], [1.5, '여유 ×1.5'], [0, '무제한']].map(function (o) { return '<button class="seg-btn' + (tf === o[0] ? ' on' : '') + '" data-tf="' + o[0] + '" aria-pressed="' + (tf === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div><span class="muted small">제한 시간이 있는 규칙 찾기·언어·공간 문제에만 적용돼요. 여유나 무제한으로 풀면 점수가 조금 높게 나올 수 있어서, 결과와 종합 프로필에 그렇게 풀었다고 표시돼요.</span></div>'
       : '';
     const startHtml = modes
       ? '<p class="modes-label">' + (t.tasks ? '한 번에 풀기' : '검사 길이 고르기') + '</p><div class="modes">' + modes.map(function (m) {
@@ -191,7 +237,8 @@
         document.querySelectorAll('.seg-btn').forEach(function (b) {
           b.addEventListener('click', function () {
             setTimeFactor(Number(b.getAttribute('data-tf')));
-            document.querySelectorAll('.seg-btn').forEach(function (x) { x.classList.toggle('on', x === b); });
+            // 고른 칸은 색과 함께 aria-pressed 로도 알린다(화면 낭독기, 2026-11-13)
+            document.querySelectorAll('.seg-btn').forEach(function (x) { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); });
           });
         });
         const btn = document.getElementById('start');
@@ -202,13 +249,24 @@
   }
 
   /* ---------- 진행 ---------- */
+  /* 점수에 드는 문항의 진행 수 { done 지금 문항 앞까지, total 전체 }. 진행 화면 머리와 소개 화면의 "진행 중인 검사" 카드가 함께 쓴다(2026-11-13).
+     예전에는 소개 카드가 이미 만든 문항만 세어서, 적응형 검사를 절반쯤 푼 사람에게 "40 / 49 문항 완료"(진행 화면은 41 / 89)처럼 거의 끝난 것으로 보였다.
+     적응형 스텁의 아직 만들지 않은 문항도 전체에 넣고, 화면에 띄운 적응형 문항은 목록에도 있고 스텁의 남은 수에도 들어 있어 한 번 뺀다. */
+  function progressOf(s) {
+    const it = s.items[s.index];
+    const pending = s.items.reduce(function (n, x) { return n + (x && x.type === 'adaptive' && x.state ? Math.max(0, x.count - x.state.done) : 0); }, 0);
+    return {
+      done: s.items.slice(0, s.index).filter(function (x) { return x && x.scored; }).length,
+      total: s.items.filter(function (x) { return x && x.scored; }).length + pending - (it && it.adaptive ? 1 : 0)
+    };
+  }
   function renderRun(id) {
     const t = BL.tests[id];
     if (!session || session.id !== id) {
       // 새로고침이나 탭 복원 뒤에는 진행 중이던 검사를 이어 간다
       const saved = U.sstore.get(SESSION_KEY, null);
       if (saved && saved.id === id && Array.isArray(saved.items)) session = saved;
-      else { go('#/test/' + id); return; }
+      else { redirect('#/test/' + id); return; }
     }
     const it = session.items[session.index];
     if (!it) { finish(); return; }
@@ -220,10 +278,32 @@
       renderRun(id);
       return;
     }
-    const pending = session.items.reduce(function (s, x) { return s + (x.type === 'adaptive' && x.state ? Math.max(0, x.count - x.state.done) : 0); }, 0);
-    // 화면에 띄운 적응형 문항은 목록에도 있고 스텁의 남은 수에도 들어 있어 한 번 뺀다
-    const scoredTotal = session.items.filter(function (x) { return x.scored; }).length + pending - (it.adaptive ? 1 : 0);
-    const scoredDone = session.items.slice(0, session.index).filter(function (x) { return x.scored; }).length;
+    /* 답을 고른 직후(다음 문항으로 넘어가기 전 0.2초)나 시간 초과 알림 중(1.1초)에 나갔다가 돌아온 문항(it.leftMs === 0, 2026-11-13).
+       객관식 렌더러가 고른 보기(it.picked, 시간 초과면 없음)와 쓴 시간(it.spentMs)을 적어 두었으니 그대로 답으로 기록하고 다음 문항으로 간다.
+       그러지 않으면 고른 답이 사라지고, 정밀 검사는 같은 문제를 1초 남은 채로 다시 받아 이미 난 시간 초과를 되돌릴 수 있었다. */
+    if (it.type === 'choice' && !it.practice && it.leftMs === 0) {
+      const ans = typeof it.picked === 'number' ? it.picked : null;
+      session.answers[session.index] = ans;
+      session.times[session.index] = typeof it.spentMs === 'number' ? it.spentMs : Math.round((it.timeLimit || 0) * 1000);
+      if (it.adaptive && t.adaptRecord) t.adaptRecord(session.items[session.index + 1], it, ans);
+      session.index += 1;
+      saveSession();
+      renderRun(id);
+      return;
+    }
+    /* 제한 시간이 있는 적응형 문항을 다시 띄우려는 경우(2026-11-13): 새로고침, 뒤로 가기나 제목 링크로 나갔다가 "이어서 하기"로 돌아온 때.
+       이미 본 문제(choice 렌더러가 처음 띄울 때 it.leftMs 를 적는다)라서 답을 기록하지 않고 빼서 같은 단계의 새 문제로 바꾼다(멈춤 카드의 redo 와 같은 처리).
+       예전에는 같은 문제를 제한 시간 처음부터 다시 받아서 어려운 문항의 제한 시간을 사실상 없앨 수 있었다. 나가기 전에 멈춤으로 센 적이 없으면(it.held) 여기서 센다.
+       단계표대로 푸는 정밀 검사 문항은 choice 렌더러가 남은 시간부터 이어 간다. */
+    if (it.adaptive && typeof it.leftMs === 'number') {
+      if (!it.held) session.pauses = (session.pauses || 0) + 1;
+      session.items.splice(session.index, 1);
+      saveSession();
+      renderRun(id);
+      return;
+    }
+    const prog = progressOf(session);
+    const scoredTotal = prog.total, scoredDone = prog.done;
     const pct = Math.round(scoredDone / scoredTotal * 100);
     // 시간 제한이 없는 검사는 이전 문항으로 돌아가 답을 바꿀 수 있다. 인지 검사는 제한 시간과 적응형 진행 때문에 되돌리지 않는다.
     const answerable = function (x) { return x && x.scored && (x.type === 'likert' || x.type === 'choice'); };
@@ -232,9 +312,11 @@
     const answeredHere = !t.timed && answerable(it) && session.answers[session.index] != null;
     const nav = prevIdx >= 0 || answeredHere ? '<div class="run-nav">' + (prevIdx >= 0 ? '<button class="btn btn-ghost" id="prev">← 이전 문항</button>' : '<span></span>') +
       (answeredHere ? '<button class="btn btn-ghost" id="next">다음 →</button>' : '') + '</div>' : '';
-    const chrome = '<div class="run-head"><a class="run-title" href="#/test/' + id + '">' + U.esc(t.title) + '</a>' +
+    // 화면 낭독기용 h1(문서 제목도 이것으로)과 진행 막대의 역할·값(2026-11-13). 막대 값은 끝낸 문항 수, 머리 숫자는 지금 문항 번호다.
+    const chrome = '<h1 class="sr-only">' + U.esc(t.title) + '</h1>' +
+      '<div class="run-head"><a class="run-title" href="#/test/' + id + '">' + U.esc(t.title) + '</a>' +
       '<span class="run-count mono">' + (scoredDone + (it.scored ? 1 : 0)) + ' / ' + scoredTotal + '</span></div>' +
-      '<div class="progress"><div class="progress-bar" style="width:' + pct + '%"></div></div>';
+      '<div class="progress" role="progressbar" aria-label="진행" aria-valuemin="0" aria-valuemax="' + scoredTotal + '" aria-valuenow="' + scoredDone + '"><div class="progress-bar" style="width:' + pct + '%"></div></div>';
     setScreen('<div class="wrap run tinted tint-' + id + '">' + chrome + '<div id="item" class="item"></div>' + nav + '</div>', function () {
       session.shownAt = Date.now();
       const pb = document.getElementById('prev');
@@ -252,6 +334,9 @@
         timeFactor: session.timeFactor, prev: session.answers[session.index], save: saveSession,
         // 렌더러가 화면을 벗어나 멈추거나 다시 한 횟수를 센다(결과에 남김)
         paused: function () { session.pauses = (session.pauses || 0) + 1; saveSession(); },
+        // 멈췄던 문항을 이어 풀 때(멈춤 카드의 "이어서 풀기", 다시 열린 문항) 응답 시간의 기준점을 옮긴다(2026-11-13).
+        // spentMs = 그 문항에서 제한 시간이 실제로 흐른 만큼. 멈춘 동안(다른 앱, 다른 화면)이 응답 시간에 섞이지 않게 한다.
+        resumed: function (spentMs) { session.shownAt = Date.now() - Math.max(0, spentMs || 0); },
         // 화면을 벗어나 멈춘 적응형 문항: 답을 기록하지 않고(단계 그대로) 빼서, 스텁이 같은 단계의 새 문항을 내게 한다
         redo: it.adaptive ? function () {
           if (session.items[session.index] !== it) return;
@@ -290,19 +375,30 @@
     const saved = U.saveResults(STORE_KEY, results().concat([result]), MAX_RESULTS);
     lastResult = result;
     lastSave = saved;
-    if (BL.stats) BL.stats.enqueue(result);   // 익명 통계 참여 중이면 결과 화면에서 보낸다
+    if (BL.stats) { try { BL.stats.enqueue(result); } catch (e) { } }   // 익명 통계 참여 중이면 결과 화면에서 보낸다. 큐가 어긋나 있어도 검사 끝내기는 멈추지 않는다
     session = null;
     U.sstore.remove(SESSION_KEY);
-    go('#/result/' + t.id + '/' + (saved.ok ? saved.list.length - 1 : 'last'));
+    // 진행 화면(#/run) 기록을 결과로 바꿔 끼운다: 결과에서 뒤로 가면 소개, 한 번 더 가면 그 앞 화면으로 간다(2026-11-13)
+    redirect('#/result/' + t.id + '/' + (saved.ok ? saved.list.length - 1 : 'last'));
   }
 
   /* ---------- 문항 렌더러 ---------- */
+  /* 그린 직후 잠깐(READY_MS) 들어온 누름은 받지 않는다(2026-11-13). 휴대폰에서 빠르게 두 번 탭하면 두 번째 탭이 방금 새로 그린 화면의 같은 자리
+     (리커트 다섯 칸, 그림 보기 격자, 시작 버튼)를 눌러서, 보지도 않은 문항에 답이 들어가거나 안내 카드를 읽지 않고 넘어갔다.
+     객관식·리커트는 렌더러 안에서 같은 시각을 보고(키보드 입력도 같은 길을 지나 함께 막힌다), 시작·다음 버튼은 onReady 로 건다. */
+  const READY_MS = 300;
+  function onReady(btn, fn) {
+    const at = performance.now() + READY_MS;
+    btn.addEventListener('click', function (e) { if (performance.now() < at) return; fn(e); });
+  }
+  /* 기기에서 "동작 줄이기"를 켰는지(2026-11-13). 켰으면 부드럽게 굴리기를 쓰지 않는다(style.css 의 prefers-reduced-motion 과 짝) */
+  function reduceMotion() { try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   /* 과제 시작 카드. html = 그림 예시처럼 렌더러가 만든 마크업(사용자 입력이 아니다) */
   function introCard(el, it, onStart, extra, html) {
     el.innerHTML = '<div class="section-card"><p class="eyebrow">과제</p><h2>' + U.esc(it.title) + '</h2><p>' + U.esc(it.desc) + '</p>' + (html || '') +
       (extra ? '<p class="muted small">' + U.esc(extra) + '</p>' : '') +
       '<button class="btn btn-primary btn-block" id="go">시작</button></div>';
-    el.querySelector('#go').addEventListener('click', onStart);
+    onReady(el.querySelector('#go'), onStart);
   }
   /* ---------- 반응 과제 공용 (2026-10-18) ---------- */
   // 자극을 넣은 뒤 두 번째 화면 갱신 때 부른다. 그때가 자극이 실제로 화면에 그려진 시각에 가깝다. 화면 갱신이 멈춘 상태(숨은 탭)면 늦게 불리거나 안 불린다.
@@ -334,7 +430,7 @@
   }
   function practiceEnd(el, text, onGo) {
     el.innerHTML = '<div class="section-card"><p class="eyebrow">연습 끝</p><h2>이제 진짜예요</h2><p>' + U.esc(text) + '</p><button class="btn btn-primary btn-block" id="go">시작</button></div>';
-    el.querySelector('#go').addEventListener('click', onGo);
+    onReady(el.querySelector('#go'), onGo);
   }
 
   /* ---------- 기억 폭 과제 공용 (2026-10-18) ----------
@@ -407,6 +503,10 @@
         el.innerHTML = '<div class="practice-fb ' + (ok ? 'ok' : 'bad') + '"><p class="practice-title">' + (ok ? '정답이에요.' : '아쉽네요. 틀렸어요.') + '</p>' +
           (ok ? '' : spec.answerHtml(stim)) + '<p class="practice-explain">' + U.esc(spec.rule) + '</p>' +
           '<button class="btn btn-primary btn-block" id="pnext">' + (again ? '한 번 더 연습' : '연습 끝내기') + '</button></div>';
+        // 객관식 연습 피드백과 같게: 화면 낭독기가 결과를 읽고, 초점이 문서로 떨어지지 않게 결과 글로 옮긴다(2026-11-13)
+        const fb = el.querySelector('.practice-fb'), pt = fb && fb.querySelector('.practice-title');
+        if (fb) fb.setAttribute('role', 'status');
+        if (pt) { pt.setAttribute('tabindex', '-1'); try { pt.focus({ preventScroll: true }); } catch (e) { } }
         el.querySelector('#pnext').addEventListener('click', function () {
           if (gone) return;
           if (again) practiceStep(); else practiceEnd(el, spec.real, startRun);
@@ -478,15 +578,24 @@
     function submit() { if (sent || vals.length !== n) return; sent = true; ok.disabled = true; undo.disabled = true; judge(vals.slice()); }
     undo.addEventListener('click', pop);
     ok.addEventListener('click', submit);
-    // Enter는 기본 동작(포커스된 버튼 누르기)을 막아 마지막에 누른 버튼이 한 번 더 들어가지 않게 한다
+    /* Enter = 확인. 다 채웠으면 기본 동작(초점 있는 버튼 누르기)을 막고 확인한다(마우스로 누른 뒤 Enter 를 쳐도 마지막 버튼이 한 번 더 들어가지 않게).
+       덜 채웠을 때 초점이 칸·키패드 버튼에 있으면 그 버튼을 누르게 둔다(2026-11-13): 예전에는 Enter 를 늘 막아서 키보드로 고른 칸에서 Enter 가 듣지 않았다(Space 만 됐다). */
     const onKey = function (e) {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'Backspace') { e.preventDefault(); pop(); }
-      else if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      else if (e.key === 'Enter') {
+        const a = document.activeElement;
+        // '하나 지우기'에 초점이 있으면 늘 그 버튼이 눌리게 둔다(2026-11-13): 예전에는 다 채운 뒤 지우려고 Enter 를 누르면 고치려던 답이 그대로 제출됐다
+        if (a && a.matches && (a.matches('#undo') || (vals.length !== n && a.matches('.gcell, .lns-btn')))) return;
+        e.preventDefault(); submit();
+      }
       else if (opts.key) opts.key(e.key);
     };
     document.addEventListener('keydown', onKey);
     refresh();
+    // 같은 문항 안에서 화면이 바뀐 것이라 setScreen 이 초점을 옮겨 주지 않는다. 안내 글로 초점을 옮겨, 키보드 사용자가 Tab 한 번에 칸·키패드에 닿게 한다(2026-11-13)
+    const qp = el.querySelector('.practice-tag') || el.querySelector('.q-prompt');   // 연습이면 "연습 · 점수에 안 들어가요" 표시부터 읽게(setScreen 과 같은 규칙)
+    if (qp) { qp.setAttribute('tabindex', '-1'); try { qp.focus({ preventScroll: true }); } catch (e) { } }
     return { put: put, off: function () { document.removeEventListener('keydown', onKey); } };
   }
 
@@ -499,60 +608,71 @@
         (it.where ? '<p class="where"><span class="mono">일상에서</span>' + U.esc(it.where) + '</p>' : '') +
         (it.count ? '<p class="mono muted small">' + U.esc(it.count) + '</p>' : '') +
         '<button class="btn btn-primary btn-block" id="go">' + (it.sub ? '시작' : '다음') + '</button></div>';
-      el.querySelector('#go').addEventListener('click', function () { done(null); });
+      onReady(el.querySelector('#go'), function () { done(null); });
     },
 
     choice: function (it, el, done, ctx) {
-      let answered = false, gone = false, timer = null, tick = null, paused = false, left = 0, clockAt = 0;
+      let answered = false, gone = false, sent = false, timer = null, tick = null, paused = false, left = 0, clockAt = 0;
+      let chosen = null, doneAt = 0;   // 고른 보기(시간 초과면 null)와 그 시각. 다음 문항으로 넘어가기 전에 화면을 떠나면 keep() 이 문항에 적어 둔다
+      const readyAt = performance.now() + READY_MS;   // 그린 직후의 누름은 받지 않는다(두 번 탭 막기, onReady 와 같은 이유)
+      const send = function (v) { if (gone) return; sent = true; done(v); };
       const factor = ctx && typeof ctx.timeFactor === 'number' ? ctx.timeFactor : 1;
       const limit = it.practice || !it.timeLimit || factor === 0 ? 0 : Math.round(it.timeLimit * factor);
       const opts = it.optionsHtml ? it.optionsHtml : it.options.map(function (o) { return '<span class="opt-text">' + U.esc(o) + '</span>'; });
       el.classList.toggle('has-fig', !!it.promptHtml);   // 그림이 있는 문항은 작은 화면에서 문제 문장을 조금 작게 쓴다(style.css)
+      // 단계 점은 그 과제의 최고 단계만큼 그린다(2026-11-13. 예전에는 늘 6칸이라 5단계까지인 과제는 끝까지 가도 한 칸이 비었다). 모르면 6칸.
+      const maxL = (BL.tests.cognitive && BL.tests.cognitive.maxLevel || {})[it.part] || 6;
       el.innerHTML =
-        (limit ? '<div class="timer-row"><div class="timer"><div class="timer-bar" id="tbar"></div></div><span class="timer-num mono" id="tnum">' + limit + '</span></div>' : '') +
+        // 남은 시간 줄: 화면 낭독기에 이름을 준다. role=timer 는 매초 읽지 않는다(2026-11-13)
+        (limit ? '<div class="timer-row" role="timer" aria-label="남은 시간(초)"><div class="timer"><div class="timer-bar" id="tbar"></div></div><span class="timer-num mono" id="tnum">' + limit + '</span></div>' : '') +
         (it.practice ? '<div class="practice-tag">연습 문제 · 점수에 안 들어가요</div>' : '') +
-        (it.level ? '<div class="q-meta"><span class="level-dots" aria-hidden="true">' + '●'.repeat(it.level) + '○'.repeat(Math.max(0, 6 - it.level)) + '</span><span class="mono">' + it.level + '단계' + (it.level >= 4 ? ' · 상위 문항' : '') + '</span></div>' : '') +
+        (it.level ? '<div class="q-meta"><span class="level-dots" aria-hidden="true">' + '●'.repeat(it.level) + '○'.repeat(Math.max(0, maxL - it.level)) + '</span><span class="mono">' + it.level + '단계' + (it.level >= 4 ? ' · 상위 문항' : '') + '</span></div>' : '') +
         (it.scenario ? '<div class="scenario">' + U.esc(it.scenario) + '</div>' : '') +
         '<p class="q-prompt">' + U.esc(it.prompt) + '</p>' +
         (it.promptHtml || '') +
         '<div class="options cols-' + (it.optionCols || 1) + (it.optionsHtml ? ' options-visual' : '') + '">' +
-        opts.map(function (o, i) { return '<button class="opt" data-i="' + i + '">' + (it.optionsHtml ? o : '<span class="opt-key mono">' + (i + 1) + '</span>' + o) + '</button>'; }).join('') +
+        // 그림 보기는 그림이 aria-hidden 이라 버튼 이름이 비었다. "보기 N"을 이름으로 준다(화면 낭독기·음성 제어·숫자 키 안내, 2026-11-13). 화면에 번호는 그리지 않는다.
+        opts.map(function (o, i) { return '<button class="opt" data-i="' + i + '"' + (it.optionsHtml ? ' aria-label="보기 ' + (i + 1) + '"' : '') + '>' + (it.optionsHtml ? o : '<span class="opt-key mono">' + (i + 1) + '</span>' + o) + '</button>'; }).join('') +
         '</div>';
       // 연습 문제: 고르면 정답과 규칙을 보여 주고, 버튼을 눌러야 본 문항으로 간다
       const showPractice = function (i) {
         const ok = i === it.answer;
         const box = document.createElement('div');
         box.className = 'practice-fb ' + (ok ? 'ok' : 'bad');
-        // 그림 보기에는 번호가 안 보이므로 "N번" 대신 초록 테두리로 표시한 보기를 가리킨다
-        box.innerHTML = '<p class="practice-title">' + (ok ? '정답이에요.' : it.optionsHtml ? '아쉽네요. 정답은 초록 테두리로 표시한 보기예요.' : '아쉽네요. 정답은 ' + (it.answer + 1) + '번이에요.') + '</p>' +
+        box.setAttribute('role', 'status');
+        // 그림 보기에는 번호가 안 보이므로 초록 테두리로 표시한 보기를 가리키고, 색을 못 보는 사람을 위해 몇 번째 보기인지도 함께 말한다(2026-11-13)
+        box.innerHTML = '<p class="practice-title">' + (ok ? '정답이에요.' : it.optionsHtml ? '아쉽네요. 정답은 초록 테두리로 표시한 ' + (it.answer + 1) + '번째 보기예요.' : '아쉽네요. 정답은 ' + (it.answer + 1) + '번이에요.') + '</p>' +
           (it.optionsHtml ? '<div class="rv-opt">' + it.optionsHtml[it.answer] + '</div>' : '') +
           '<p class="practice-explain">' + U.esc(it.explain || '') + '</p>' +
           '<button class="btn btn-primary btn-block" id="pnext">본 문항 시작</button>';
         el.appendChild(box);
         el.querySelectorAll('.opt').forEach(function (b, k) { b.disabled = true; if (k === it.answer) b.classList.add('correct'); });
-        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        el.querySelector('#pnext').addEventListener('click', function () { if (!gone) done(null); });
+        box.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'nearest' });
+        // 보기 버튼이 꺼지면서 초점이 문서로 떨어지지 않게 결과 글로 옮긴다(버튼에 바로 주면 그린 직후 300ms 안의 Enter 가 무시돼 헷갈린다)
+        const pt = box.querySelector('.practice-title');
+        if (pt) { pt.setAttribute('tabindex', '-1'); try { pt.focus({ preventScroll: true }); } catch (e) { } }
+        onReady(el.querySelector('#pnext'), function () { send(null); });
       };
       // 누르는 순간 타이머를 멈춘다. 마지막 순간에 누른 답이 시간 초과로 처리되지 않도록.
       const pick = function (i) {
-        if (answered || gone || paused) return;
-        answered = true;
+        if (answered || gone || paused || performance.now() < readyAt) return;
+        answered = true; chosen = i; doneAt = Date.now();
         if (timer) clearTimeout(timer);
         if (tick) clearInterval(tick);
-        el.querySelectorAll('.opt.selected').forEach(function (x) { x.classList.remove('selected'); });
+        el.querySelectorAll('.opt.selected').forEach(function (x) { x.classList.remove('selected'); x.removeAttribute('aria-pressed'); });
         const b = el.querySelector('.opt[data-i="' + i + '"]');
-        if (b) b.classList.add('selected');
+        if (b) { b.classList.add('selected'); b.setAttribute('aria-pressed', 'true'); }   // 고른 보기는 색과 함께 aria-pressed 로도 알린다(2026-11-13)
         if (it.practice) { showPractice(i); return; }
-        setTimeout(function () { if (!gone) done(i); }, 180);
+        setTimeout(function () { send(i); }, 180);
       };
       el.querySelectorAll('.opt').forEach(function (b) {
         b.addEventListener('click', function () { pick(Number(b.getAttribute('data-i'))); });
       });
       // 이전 문항으로 돌아왔을 때는 전에 고른 답을 표시해 둔다
-      if (ctx && typeof ctx.prev === 'number') { const pv = el.querySelector('.opt[data-i="' + ctx.prev + '"]'); if (pv) pv.classList.add('selected'); }
+      if (ctx && typeof ctx.prev === 'number') { const pv = el.querySelector('.opt[data-i="' + ctx.prev + '"]'); if (pv) { pv.classList.add('selected'); pv.setAttribute('aria-pressed', 'true'); } }
       const onKey = function (e) {
         const n = parseInt(e.key, 10);
-        if (n >= 1 && n <= opts.length && !e.ctrlKey && !e.metaKey && !e.altKey) pick(n - 1);
+        if (n >= 1 && n <= opts.length && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) pick(n - 1);   // 누르고 있기(자동 반복)는 받지 않는다: 문항이 줄줄이 넘어간다
       };
       document.addEventListener('keydown', onKey);
       /* 제한 시간: 남은 시간(left, ms)만큼 막대·숫자·마감 타이머를 돌린다. 화면을 벗어나면(카톡 알림, 다른 앱, 화면 꺼짐) 멈춘다(2026-10-18).
@@ -572,13 +692,22 @@
         // 시간이 다 되면 말없이 넘어가지 않고 잠깐 알려 준 뒤 넘어간다
         timer = setTimeout(function () {
           if (answered || gone || paused) return;
-          answered = true; if (tick) clearInterval(tick);
+          answered = true; chosen = null; doneAt = Date.now(); if (tick) clearInterval(tick);
           el.querySelectorAll('.opt').forEach(function (b) { b.disabled = true; });
           const toast = document.createElement('div'); toast.className = 'toast'; toast.setAttribute('role', 'status');
           toast.textContent = '시간이 다 됐어요. 다음 문항으로 넘어가요.';
           el.appendChild(toast);
-          setTimeout(function () { if (!gone) done(null); }, 1100);
+          setTimeout(function () { send(null); }, 1100);
         }, left);
+      }
+      /* 남은 시간을 문항(it.leftMs)에 적어 세션에 저장한다(2026-11-13). 새로고침이나 뒤로 가기·제목 링크로 나갔다가 "이어서 하기"로 돌아오면
+         처음 시간부터가 아니라 이 시간부터 이어 간다(적응형 문항은 renderRun 이 같은 단계의 새 문제로 바꾼다). 답을 고르거나 시간이 다 된 뒤
+         다음 문항으로 넘어가기 전(0.2~1.1초)에 나가면 남은 시간을 0으로 적는다. 다 넘어간 뒤(sent)에는 적지 않는다. */
+      function keep() {
+        if (!limit || sent) return;
+        if (answered) { it.leftMs = 0; it.picked = chosen; it.spentMs = Math.max(0, Math.round(limit * 1000 - left + (doneAt - clockAt))); }   // 다시 열리면 renderRun 이 이 답을 기록하고 넘어간다
+        else it.leftMs = paused ? left : Math.max(1000, left - (Date.now() - clockAt));
+        if (ctx && typeof ctx.save === 'function') ctx.save();
       }
       /* 화면을 벗어나면 시간을 멈추고 문제와 보기를 가린다(.item.paused). 돌아와서 "이어서 풀기"를 누르면, 적응형 문항은 답을 기록하지 않고 같은 단계의
          새 문항으로 바꾸고(ctx.redo, 멈춘 동안 보던 문제를 생각해 두는 요령 막기), 단계표대로 푸는 정밀 검사 문항은 남은 시간으로 이어 간다. 멈춘 횟수는 결과에 남는다. */
@@ -589,7 +718,10 @@
         if (tick) clearInterval(tick);
         timer = tick = null;
         left = Math.max(1000, left - (Date.now() - clockAt));
-        if (ctx && typeof ctx.paused === 'function') ctx.paused();
+        // 남은 시간과 "이번 멈춤은 셌음"(it.held)을 문항에 적는다. ctx.paused 가 세션을 저장한다.
+        // 멈춘 채로 새로고침되거나 나갔다 돌아와도 같은 멈춤을 두 번 세지 않는다.
+        it.leftMs = left; it.held = true;
+        if (ctx && typeof ctx.paused === 'function') ctx.paused(); else if (ctx && typeof ctx.save === 'function') ctx.save();
         const swap = !!(ctx && typeof ctx.redo === 'function');
         el.classList.add('paused');
         const card = document.createElement('div');
@@ -601,44 +733,59 @@
         card.querySelector('#resume').addEventListener('click', function () {
           if (gone || !paused) return;
           if (swap) { ctx.redo(); return; }
-          paused = false;
+          paused = false; it.held = false;
+          if (ctx && typeof ctx.resumed === 'function') ctx.resumed(limit * 1000 - left);   // 멈춘 동안은 응답 시간에 넣지 않는다
           el.classList.remove('paused');
           if (card.parentNode) card.parentNode.removeChild(card);
           runClock();
         });
       }
-      const onVis = function () { if (document.hidden) pause(); };
+      const onVis = function () { if (!document.hidden) return; if (answered) keep(); else pause(); };   // 답을 고른 직후 가려지면 그 답을 적어 둔다(pagehide 없이 탭이 죽는 기기 대비)
+      // 새로고침·창 닫기: 풀던 중이면 멈추고(남은 시간 저장), 답을 고르거나 시간이 다 돼 넘어가기 직전이면 남은 시간 0으로 적는다
+      const onHide = function () { if (answered) keep(); else pause(); };
       if (limit) {
-        left = limit * 1000;
+        // 다시 열린 문항(전에 띄운 적이 있어 it.leftMs 가 있음): 남은 시간부터 이어 가고, 응답 시간도 전에 쓴 시간부터 잰다.
+        // 나가기 전에 멈춤으로 센 적이 없으면(제목 링크·뒤로 가기로 나간 경우) 여기서 멈춤 한 번으로 센다(2026-11-13).
+        const again = typeof it.leftMs === 'number' && isFinite(it.leftMs);
+        const counted = !!it.held;
+        left = again ? U.clamp(it.leftMs, 1000, limit * 1000) : limit * 1000;
+        it.leftMs = left; it.held = false;
+        if (again && ctx && typeof ctx.resumed === 'function') ctx.resumed(limit * 1000 - left);
+        if (again && !counted && ctx && typeof ctx.paused === 'function') ctx.paused();
+        // 적응형 문항은 처음 띄울 때 바로 적어 둔다(이미 본 문제라는 표시. pagehide 가 안 오는 환경에서도 다시 열면 새 문제로 바뀌게).
+        // 정밀 검사 세션은 커서(약 460KB) 문항마다 쓰지 않고, 멈출 때·나갈 때만 쓴다.
+        else if (!again && it.adaptive && ctx && typeof ctx.save === 'function') ctx.save();
         runClock();
         document.addEventListener('visibilitychange', onVis);
-        window.addEventListener('pagehide', pause);
+        window.addEventListener('pagehide', onHide);
         if (document.hidden) pause();
       }
-      return function () { gone = true; if (timer) clearTimeout(timer); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', pause); };
+      return function () { keep(); gone = true; if (timer) clearTimeout(timer); if (tick) clearInterval(tick); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', onHide); };
     },
 
     likert: function (it, el, done, ctx) {
       const labels = it.labels || ['전혀 아니다', '아니다', '보통이다', '그렇다', '매우 그렇다'];
       let finished = false;
       el.innerHTML = (it.lead ? '<p class="q-lead">' + U.esc(it.lead) + '</p>' : '') + '<p class="q-prompt q-likert">' + U.esc(it.text) + '</p>' +
-        '<div class="likert">' + labels.map(function (l, i) {
+        // 다섯 칸을 질문과 묶어 화면 낭독기가 어느 질문의 답인지 알게 한다(2026-11-13)
+        '<div class="likert" role="group" aria-label="' + U.esc(it.text) + '">' + labels.map(function (l, i) {
           return '<button class="lk lk-' + (i + 1) + '" data-v="' + (i + 1) + '"><span class="lk-dot"></span><span class="lk-label">' + U.esc(l) + '</span></button>';
         }).join('') + '</div>';
       let gone = false;
+      const readyAt = performance.now() + READY_MS;   // 다섯 칸이 늘 같은 자리라, 앞 문항에서 두 번 탭한 두 번째 탭이 이 문항에 들어가지 않게 한다
       const pick = function (v) {
-        if (finished || gone) return;
+        if (finished || gone || performance.now() < readyAt) return;
         finished = true;
-        el.querySelectorAll('.lk.selected').forEach(function (x) { x.classList.remove('selected'); });
+        el.querySelectorAll('.lk.selected').forEach(function (x) { x.classList.remove('selected'); x.removeAttribute('aria-pressed'); });
         const b = el.querySelector('.lk[data-v="' + v + '"]');
-        if (b) b.classList.add('selected');
+        if (b) { b.classList.add('selected'); b.setAttribute('aria-pressed', 'true'); }
         setTimeout(function () { if (!gone) done(v); }, 150);
       };
       el.querySelectorAll('.lk').forEach(function (b) {
         b.addEventListener('click', function () { pick(Number(b.getAttribute('data-v'))); });
       });
-      if (ctx && typeof ctx.prev === 'number') { const pv = el.querySelector('.lk[data-v="' + ctx.prev + '"]'); if (pv) pv.classList.add('selected'); }
-      const onKey = function (e) { const n = parseInt(e.key, 10); if (n >= 1 && n <= 5) pick(n); };
+      if (ctx && typeof ctx.prev === 'number') { const pv = el.querySelector('.lk[data-v="' + ctx.prev + '"]'); if (pv) { pv.classList.add('selected'); pv.setAttribute('aria-pressed', 'true'); } }
+      const onKey = function (e) { if (e.repeat) return; const n = parseInt(e.key, 10); if (n >= 1 && n <= 5) pick(n); };   // 누르고 있기(자동 반복)는 받지 않는다
       document.addEventListener('keydown', onKey);
       return function () { gone = true; document.removeEventListener('keydown', onKey); };
     },
@@ -733,7 +880,9 @@
           T(then, 500 + g.seq.length * 1000 + 150);
         },
         /* 응답은 전체 키패드(숫자 1~9, 자음 ㄱ~ㅅ)에서 고른다. 방금 본 것만 버튼으로 주면 외울 필요 없이 정렬만 하면 되어
-           기억 과제가 아니게 된다 (실제로 점수가 부풀었던 원인). 누른 버튼은 꺼 두고, 하나 지우면 다시 켠다. */
+           기억 과제가 아니게 된다 (실제로 점수가 부풀었던 원인). 누른 버튼은 꺼 두고, 하나 지우면 다시 켠다.
+           끌 때 disabled 대신 aria-disabled + .used 로 흐리게 한다(2026-11-13): disabled 로 바꾸면 키보드로 누른 버튼에서 초점이 body 로 떨어져
+           다음 입력마다 Tab 을 처음부터 다시 눌러야 했다. 숫자는 숫자 키로도 넣는다(이미 넣은 숫자는 무시, 버튼과 같다). */
         ask: function (g, n, p, judge) {
           const btn = function (k) { return '<button class="lns-btn mono" data-v="' + k + '">' + k + '</button>'; };
           el.innerHTML = '<div class="span-stage">' + practiceTag(p) + '<p class="q-prompt">본 것을 떠올려 숫자는 작은 것부터, 그다음 자음은 ㄱㄴㄷ 순서로 누르세요</p>' +
@@ -742,9 +891,15 @@
             '<div class="lns-grp"><span class="lns-grp-label mono">자음</span><div class="lns-btns lns-cons">' + LETTERS.map(btn).join('') + '</div></div></div>' +
             SPAN_INPUT_TOOLS + '</div>';
           const btns = el.querySelectorAll('.lns-btn');
-          const inp = spanInput(el, n, { onChange: function (vals) { btns.forEach(function (b) { b.disabled = vals.indexOf(b.getAttribute('data-v')) >= 0; }); } },
-            function (vals) { judge(vals.join('') === g.target.join('')); });
-          btns.forEach(function (b) { b.addEventListener('click', function () { if (!b.disabled) inp.put(b.getAttribute('data-v')); }); });
+          let used = [];
+          const inp = spanInput(el, n, {
+            onChange: function (vals) {
+              used = vals.slice();
+              btns.forEach(function (b) { const u = used.indexOf(b.getAttribute('data-v')) >= 0; b.setAttribute('aria-disabled', u ? 'true' : 'false'); b.classList.toggle('used', u); });
+            },
+            key: function (k) { if (/^[1-9]$/.test(k) && used.indexOf(k) < 0) inp.put(k); }
+          }, function (vals) { judge(vals.join('') === g.target.join('')); });
+          btns.forEach(function (b) { b.addEventListener('click', function () { if (b.getAttribute('aria-disabled') !== 'true') inp.put(b.getAttribute('data-v')); }); });
           return inp.off;
         },
         answerHtml: function (g) { return '<p class="mono muted">정답 순서: ' + g.target.join(' ') + '</p>'; },
@@ -916,7 +1071,8 @@
       }
       function arm() {
         state = 'wait';
-        draw('wait', '기다리세요', '화면이 밝아지고 "지금!"이 뜨면 탭');
+        // 판 문구는 '탭' 대신 '누르다'로 쓴다(2026-11-13). 마우스·키보드로 하는 PC 사용자에게도 맞는 말이다.
+        draw('wait', '기다리세요', '화면이 밝아지고 "지금!"이 뜨면 누르세요');
         T(function () {
           if (state !== 'wait') return;
           const p = pad();
@@ -939,17 +1095,17 @@
         e.preventDefault();
         if (finished) return;
         if (state === 'idle' || state === 'shown' || state === 'again') { arm(); return; }
-        if (state === 'wait') { retry('early', '너무 빨라요', '"지금!"을 보고 누르세요 · 탭해서 다시', true); return; }
+        if (state === 'wait') { retry('early', '너무 빨라요', '"지금!"을 보고 누르세요 · 눌러서 다시', true); return; }
         if (state !== 'go') return;
         const inp = inputOf(e);
         const ms = Math.round(evTime(e) - t0);
-        if (ms < MIN[inp]) { retry('early', '너무 빨라요', '신호를 보고 누르세요 · 탭해서 다시', true); return; }
-        if (ms > MAX) { retry('early', '조금 늦었어요', '화면을 보고 있다가 바로 누르세요 · 탭해서 다시', false); return; }
+        if (ms < MIN[inp]) { retry('early', '너무 빨라요', '신호를 보고 누르세요 · 눌러서 다시', true); return; }
+        if (ms > MAX) { retry('early', '조금 늦었어요', '화면을 보고 있다가 바로 누르세요 · 눌러서 다시', false); return; }
         state = 'shown';
         if (practice) {
           pdone++;
-          if (pdone >= practiceN) { practice = false; starts = markStart(it, ctx); draw('shown', ms + ' ms', '연습 끝 · 이제 진짜예요 · 탭해서 시작'); }
-          else draw('shown', ms + ' ms', '연습이에요 · 탭해서 다음');
+          if (pdone >= practiceN) { practice = false; starts = markStart(it, ctx); draw('shown', ms + ' ms', '연습 끝 · 이제 진짜예요 · 눌러서 시작'); }
+          else draw('shown', ms + ' ms', '연습이에요 · 눌러서 다음');
           return;
         }
         times.push(ms);
@@ -959,7 +1115,7 @@
           draw('done', ms + ' ms', '측정 완료');
           T(function () { done({ times: times, touch: touches, mouse: mouse, early: early, slow: slow, away: away, restarts: starts }); }, 800);
         } else {
-          draw('shown', ms + ' ms', '탭해서 다음');
+          draw('shown', ms + ' ms', '눌러서 다음');
         }
       }
       // 화면을 벗어나면 진행 중이던 한 번은 취소하고 다시 잰다(일찍 누름으로 세지 않음)
@@ -967,13 +1123,22 @@
         if (!document.hidden || finished || (state !== 'wait' && state !== 'go')) return;
         if (!practice) away++;
         state = 'again'; timers.forEach(clearTimeout); timers = [];
-        draw('idle', '탭해서 다시', '화면을 벗어나서 이번 번은 다시 해요');
+        draw('idle', '눌러서 다시', '화면을 벗어나서 이번 번은 다시 해요');
       }
+      /* 키보드(스페이스·엔터)로도 할 수 있게 한다(2026-11-13). 판이 button 이라 키를 누르면 click 만 생기는데 판은 pointerdown 만 받아서,
+         키보드만 쓰는 사람은 이 과제를 끝낼 수 없었다. onTap 이 keydown 을 키보드 입력('k', 기준 MIN.k)으로 보고 e.timeStamp 로 잰다.
+         누르고 있을 때의 자동 반복은 받지 않고, 시작 카드가 떠 있을 때(판이 없을 때)는 그 카드의 버튼이 받게 둔다. */
+      function onKey(e) {
+        if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || (e.key !== ' ' && e.key !== 'Spacebar' && e.key !== 'Enter') || !pad()) return;
+        onTap(e);   // onTap 이 preventDefault 로 화면 스크롤과 버튼 click 을 막는다
+      }
+      document.addEventListener('keydown', onKey);
       document.addEventListener('visibilitychange', onVis);
-      introCard(el, it, function () { if (!practice) starts = markStart(it, ctx); draw('idle', '탭하여 시작', '화면이 밝아지고 "지금!"이 뜨면 최대한 빨리 탭'); },
+      introCard(el, it, function () { if (!practice) starts = markStart(it, ctx); draw('idle', '눌러서 시작', '화면이 밝아지고 "지금!"이 뜨면 최대한 빨리 누르세요'); },
         it.trials + '번 재요.' + (practiceN ? ' 먼저 연습으로 ' + practiceN + '번 해 봐요. 연습은 점수에 안 들어가요.' : '') +
-        ' "지금!"이 뜨기 전이나 뜨자마자 누르면 그 번은 다시 하고 일찍 누름으로 세요. 일찍 누름이 3번 이상이면 평균(100)까지만 인정해요.');
-      return function () { timers.forEach(clearTimeout); document.removeEventListener('visibilitychange', onVis); };
+        ' "지금!"이 뜨기 전이나 뜨자마자 누르면 그 번은 다시 하고 일찍 누름으로 세요. 일찍 누름이 3번 이상이면 평균(100)까지만 인정해요.' +
+        ' PC에서는 화면을 누르는 대신 스페이스 바를 눌러도 돼요.');
+      return function () { timers.forEach(clearTimeout); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); };
     },
 
     choicert: function (it, el, done, ctx) {
@@ -1114,23 +1279,24 @@
     const tick = s.range ? '<div class="bar-tick" style="left:' + ((100 - lo) / (hi - lo) * 100) + '%" title="평균 100"></div>' : '';
     const kids = s.children && s.children.length ? '<div class="scale-children">' + s.children.map(function (c) { return scaleHtml(c, true); }).join('') + '</div>' : '';
     return '<div class="scale' + (child ? ' scale-child' : '') + (s.range ? ' scale-iq' : '') + '"><div class="scale-head"><span>' + U.esc(s.label) + '</span>' +
-      '<span class="mono">' + s.value + (s.raw ? ' <small>' + U.esc(s.raw) + '</small>' : '') + (child && s.key ? '<small class="real" data-real="' + U.esc(s.key) + '"></small>' : '') + '</span></div>' +
+      '<span class="mono">' + U.esc(s.value) + (s.raw ? ' <small>' + U.esc(s.raw) + '</small>' : '') + (child && s.key ? '<small class="real" data-real="' + U.esc(s.key) + '"></small>' : '') + '</span></div>' +
       '<div class="bar">' + tick + '<div class="bar-fill" style="width:' + pct + '%"></div></div></div>' +
       (kids && fold ? '<details class="scale-more"><summary>세부 ' + s.children.length + '개 점수 보기</summary>' + kids + '</details>' : kids);
   }
-  /* 틀린 문항 다시 보기. 저장 공간을 아끼려고 오래된 결과에서는 빼 두므로(util.js packResults), 빠진 결과에는 그 사실을 한 줄로 알린다. */
+  /* 틀린 문항 다시 보기. 저장 공간을 아끼려고 오래된 결과에서는 빼 두므로(util.js packResults), 빠진 결과에는 그 사실을 한 줄로 알린다.
+     그림(promptHtml·chosenHtml·answerHtml)은 저장소에서 온 마크업이라 U.safeFig 로 거른 뒤 넣는다(2026-11-13). */
   function reviewHtml(result) {
     const review = result.review;
     if (!review || !review.length) {
-      return result.reviewDropped ? '<p class="review-gone">틀린 문항 다시 보기(' + result.reviewDropped + '문항)는 저장 공간을 아끼려고 가장 최근 결과 몇 건에만 남겨 둬요.</p>' : '';
+      return result.reviewDropped ? '<p class="review-gone">틀린 문항 다시 보기(' + U.esc(result.reviewDropped) + '문항)는 저장 공간을 아끼려고 가장 최근 결과 몇 건에만 남겨 둬요.</p>' : '';
     }
     return (result.reviewNote ? '<p class="review-gone">' + U.esc(result.reviewNote) + '</p>' : '') +
       '<details class="review"><summary>틀린 문항 다시 보기 (' + review.length + ')</summary>' + review.map(function (rv) {
-      const chosen = rv.chosenHtml ? '<div class="rv-opt">' + rv.chosenHtml + '</div>' : '<span>' + U.esc(rv.chosen == null ? '시간 초과' : rv.chosen) + '</span>';
-      const answer = rv.answerHtml ? '<div class="rv-opt">' + rv.answerHtml + '</div>' : '<span>' + U.esc(rv.answer) + '</span>';
+      const chosen = rv.chosenHtml ? '<div class="rv-opt">' + U.safeFig(rv.chosenHtml) + '</div>' : '<span>' + U.esc(rv.chosen == null ? '시간 초과' : rv.chosen) + '</span>';
+      const answer = rv.answerHtml ? '<div class="rv-opt">' + U.safeFig(rv.answerHtml) + '</div>' : '<span>' + U.esc(rv.answer) + '</span>';
       return '<div class="rv"><p class="rv-title mono">' + U.esc(rv.title) + '</p>' +
         (rv.scenario ? '<p class="rv-prompt muted">' + U.esc(rv.scenario) + '</p>' : '') +
-        (rv.promptHtml ? '<div class="rv-visual">' + rv.promptHtml + '</div>' : '<p class="rv-prompt">' + U.esc(rv.prompt) + '</p>') +
+        (rv.promptHtml ? '<div class="rv-visual">' + U.safeFig(rv.promptHtml) + '</div>' : '<p class="rv-prompt">' + U.esc(rv.prompt) + '</p>') +
         '<div class="rv-ans"><div><span class="rv-k">내 답</span>' + chosen + '</div><div><span class="rv-k">정답</span>' + answer + '</div></div>' +
         '<p class="rv-explain">' + U.esc(rv.explain) + '</p></div>';
     }).join('') + '</details>';
@@ -1145,7 +1311,7 @@
   function statsNoticeHtml(t, opts) {
     if (!BL.stats || !BL.stats.available() || t.id !== 'cognitive' || opts.profile || opts.preview || BL.stats.noticed()) return '';
     return '<div class="stats-notice" id="stats-notice"><strong>익명 통계에 참여하고 있어요</strong>' +
-      '<p>문항별 정답 여부와 응답 시간을 이름 없이 모아 문항 난이도와 추정 IQ 기준값을 맞추는 데 써요. 문항 내용은 보내지 않고 번호만 보내고, 이름·연락처·IP·기기 식별자는 받지 않아요. ' + BL.stats.MIN_N + '명이 넘으면 결과에 "실제 응시자 기준 상위 %"도 함께 보여 드려요. 안내 페이지에서 언제든 끌 수 있어요.</p>' +
+      '<p>문항별 정답 여부와 응답 시간을 이름 없이 모아 문항 난이도와 추정 IQ 기준값을 맞추는 데 써요. 문항 내용은 보내지 않고 번호만 보내고, 이름·연락처·IP·기기 식별자는 받지 않아요. ' + BL.stats.MIN_N + '명이 넘으면 결과에 "실제 응시자와 견준 위치(상위·하위 %)"도 함께 보여 드려요. 안내 페이지에서 언제든 끌 수 있어요.</p>' +
       '<label class="switch"><input type="checkbox" id="stats-opt"' + (BL.stats.enabled() ? ' checked' : '') + '><span>익명 통계에 참여</span></label></div>';
   }
   /* "실제 응시자 n명 기준 상위 %" 자리(집계가 오고 표본이 충분하면 mountStats 가 채운다)와,
@@ -1164,12 +1330,12 @@
     return '<div class="wrap result tinted tint-' + t.id + '">' +
       (opts.banner ? '<div class="banner">' + opts.banner + '</div>' : '') +
       '<a class="back" href="#/">← 실험 목록</a>' +
-      '<div class="result-hero"><p class="eyebrow">결과 · ' + U.esc(t.title) + (result.modeLabel ? ' · ' + U.esc(result.modeLabel) : '') + (result.at ? ' · ' + U.fmtDate(result.at) : '') + '</p>' +
+      '<div class="result-hero"><p class="eyebrow">결과 · ' + U.esc(t.title) + (result.modeLabel ? ' · ' + U.esc(result.modeLabel) : '') + (fmtAt(result.at) ? ' · ' + fmtAt(result.at) : '') + '</p>' +
       '<h1 class="headline">' + U.esc(result.headline) + '</h1>' +
       (result.label ? '<span class="badge">' + U.esc(result.label) + '</span>' : '') + realNormSlot(t, result) + '</div>' +
       '<p class="summary">' + U.esc(result.summary) + '</p>' +
       statsNoticeHtml(t, opts) +
-      (result.plot || '') +
+      U.safeFig(result.plot) +   // 애착 좌표 그림: 저장소에서 온 마크업이라 거른 뒤 넣는다(2026-11-13)
       '<div class="scales">' + (result.scales || []).map(function (s) { return scaleHtml(s, false, t.foldChildren); }).join('') + '</div>' +
       '<div class="actions actions-share">' +
       (BL.card.hasKakao() ? '<button class="btn btn-kakao" id="kakao">카카오톡 공유</button>' : '') +
@@ -1195,7 +1361,12 @@
       '<p>이미지를 <strong>길게 눌러</strong> "사진에 저장"이나 "이미지 저장"을 고르세요.' + (r.inApp ? ' 카카오톡 같은 앱 안에서는 파일 내려받기가 막혀 있어서 이 방법이 가장 확실해요.' : '') + '</p>' +
       '<div class="sheet-btns">' + (r.canShareFile ? '<button class="btn" id="sheet-share">공유로 저장</button>' : '') + (r.canDownload ? '<button class="btn" id="sheet-dl">파일로 받기</button>' : '') +
       '<button class="btn btn-primary" id="sheet-close">닫기</button></div></div>';
-    const close = function () { sheet.remove(); document.removeEventListener('keydown', onKey); };
+    // 닫으면 초점을 창을 연 버튼(이미지 저장)으로 돌려준다(2026-11-13). 예전에는 body 로 떨어져 키보드 사용자가 처음부터 다시 찾아야 했다.
+    const back = document.activeElement;
+    const close = function () {
+      sheet.remove(); document.removeEventListener('keydown', onKey);
+      if (back && back !== document.body && typeof back.focus === 'function' && document.body.contains(back)) { try { back.focus(); } catch (e) { } }
+    };
     const onKey = function (e) { if (!document.body.contains(sheet)) { document.removeEventListener('keydown', onKey); return; } if (e.key === 'Escape') close(); };
     sheet.addEventListener('click', function (e) { if (e.target === sheet) close(); });
     document.addEventListener('keydown', onKey);
@@ -1246,45 +1417,63 @@
     }
     if (BL.stats && BL.stats.available() && t.id === 'cognitive') return mountStats(result);
   }
-  /* 익명 통계: 첫 안내의 스위치를 연결하고, 큐에 든 결과를 보내고, 집계가 오면 임시 기준값 옆에 "실제 응시자 기준 상위 %"를 채운다 */
+  /* 익명 통계 스위치(첫 안내·안내 페이지 공용). 저장 공간이 꽉 차서 끄기를 기억하지 못했으면 스위치 아래에 알린다(2026-11-13, stats.js setEnabled). */
+  function bindStatsSwitch(input) {
+    if (!input) return;
+    const label = input.closest('.switch');
+    let msg = null;
+    input.addEventListener('change', function () {
+      const ok = BL.stats.setEnabled(input.checked);
+      if (ok || input.checked || !label) { if (msg) { msg.remove(); msg = null; } return; }
+      if (!msg) { msg = document.createElement('p'); msg.className = 'switch-note muted small'; msg.setAttribute('role', 'status'); label.parentNode.insertBefore(msg, label.nextSibling); }
+      msg.textContent = U.storageOff() ? '이 브라우저는 저장이 꺼져 있어서 설정을 기억하지 못해요. 이번 방문 동안은 꺼 둘게요.' : '이 브라우저의 저장 공간이 가득 차서 설정을 기억하지 못했어요. 이번 방문 동안은 꺼 둘게요.';
+    });
+  }
+  /* 익명 통계: 첫 안내의 스위치를 연결하고, 큐에 든 결과를 보내고, 집계가 오면 임시 기준값 옆에 "실제 응시자 기준 상위 %"를 채운다.
+     돌려주는 정리 함수를 결과 화면 mount 가 setScreen 에 넘긴다(2026-11-13. 예전에는 넘기지 않아 타이머가 다른 화면에서 돌았다). */
   function mountStats(result) {
     const notice = document.getElementById('stats-notice');
     if (notice) {
       BL.stats.markNoticed();
-      notice.querySelector('#stats-opt').addEventListener('change', function (e) { BL.stats.setEnabled(e.target.checked); });
+      bindStatsSwitch(notice.querySelector('#stats-opt'));
     }
-    // 처음 안내가 보일 때는 끌 시간을 주고 8초 뒤에, 아니면 바로 보낸다. 화면을 먼저 떠나면 그때 보낸다(꺼져 있으면 안 보냄).
+    // 처음 안내가 보일 때는 끌 시간을 주고 8초 뒤에, 아니면 바로 보낸다. 화면을 먼저 떠나면, 안내가 보였을 때는 보내지 않고(안내 페이지에서 끌 수도 있으니)
+    // 다음 결과 화면이나 다음 방문 때 보내고, 아니면 떠날 때 보낸다(꺼져 있으면 안 보냄).
     const timer = setTimeout(function () { BL.stats.flush(); }, notice ? 8000 : 300);
+    let live = true;   // 이 화면이 떠 있는지. 집계 응답이 늦게 오면 그때 떠 있는 다른 결과 화면에 이 결과의 값을 쓰지 않게 한다(2026-11-13)
     BL.stats.get().then(function (stats) {
       const line = document.getElementById('real-overall');
-      if (!stats || !stats.tasks || !line) return;
+      if (!live || !stats || !stats.tasks || !line) return;
       const kind = result.coverage ? null : BL.stats.modeKind(result.mode);   // 종합 프로필은 과제별로만 비교
       const dist = kind === 'task' ? (stats.tasks[result.mode.slice(5)] || {}).z : kind ? (stats.overall || {})[kind] : null;
       const tp = BL.stats.topPct(result.z, dist);
-      if (tp) { line.textContent = '실제 응시자 ' + tp.n + '명 기준 상위 ' + tp.top + '% (표준 시간으로 푼 사람들과 비교)'; line.hidden = false; }
+      // 가운데보다 아래면 '하위 n%'로 쓴다(2026-11-13. 임시 기준값 쪽 표기와 같은 규칙: 예전에는 늘 '상위 84%'처럼 써서 거꾸로 읽혔다)
+      const side = function (top) { return top <= 50 ? '상위 ' + top + '%' : '하위 ' + (100 - top) + '%'; };
+      if (tp) { line.textContent = '실제 응시자 ' + tp.n + '명 기준 ' + side(tp.top) + ' (표준 시간으로 푼 사람들과 비교)'; line.hidden = false; }
       document.querySelectorAll('[data-real]').forEach(function (el) {
         const k = el.getAttribute('data-real'), task = result.tasks && result.tasks[k];
         const r = task ? BL.stats.topPct(task.z, stats.tasks[k] && stats.tasks[k].z) : null;
-        if (r) el.textContent = '· 실제 상위 ' + r.top + '% (' + r.n + '명)';
+        if (r) el.textContent = '· 실제 ' + side(r.top) + ' (' + r.n + '명)';
       });
     });
-    return function () { clearTimeout(timer); BL.stats.flush(); };
+    return function () { live = false; clearTimeout(timer); if (!notice) BL.stats.flush(); };
   }
   function renderResult(id, idx) {
     const t = BL.tests[id];
     if (idx === 'last') {
-      if (!lastResult || lastResult.testId !== id) { go('#/test/' + id); return; }
+      if (!lastResult || lastResult.testId !== id) { redirect('#/test/' + id); return; }
       // 저장이 꺼진 브라우저와 저장 공간이 꽉 찬 경우를 나눠서 알려 준다
       const banner = lastSave && !lastSave.off
         ? '저장 공간이 가득 차서 이 결과를 기록에 남기지 못했어요. 창을 닫기 전에 이미지로 저장해 두세요. "내 기록"에서 오래된 기록을 지우면 다음 결과부터 다시 저장될 수 있어요.'
         : '이 브라우저는 저장이 꺼져 있어 결과가 기록에 남지 않아요. 창을 닫기 전에 이미지로 저장해 두세요.';
       const viewLast = withComparison(t, lastResult, results());
-      setScreen(resultHtml(t, viewLast, { banner: banner }), function () { mountResult(t, viewLast); });
+      setScreen(resultHtml(t, viewLast, { banner: banner }), function () { return mountResult(t, viewLast); }, '결과 · ' + t.title);
       return;
     }
     const all = results();
     let result = all[Number(idx)];
-    if (!result || result.testId !== id) { go('#/test/' + id); return; }
+    if (!result || result.testId !== id) { redirect('#/test/' + id); return; }
+    result = shown(result);
     // 방금 끝낸 결과는 메모리 사본으로 보여 준다: 저장 공간이 모자라 다시 보기를 빼고 저장했더라도 이번 한 번은 볼 수 있다
     const fresh = lastResult && lastResult.testId === id && lastResult.at === result.at;
     let banner = '';
@@ -1293,36 +1482,50 @@
       if (lastSave && lastSave.dropped) banner = '저장 공간이 모자라서 가장 오래된 기록 ' + lastSave.dropped + '개를 지우고 이 결과를 저장했어요.';
     }
     const view = withComparison(t, result, all.slice(0, Number(idx)));
-    setScreen(resultHtml(t, view, banner ? { banner: banner } : null), function () { mountResult(t, view); });
+    // mount 가 돌려주는 정리 함수(익명 통계 타이머·늦은 집계 응답 막기)를 setScreen 에 넘긴다(2026-11-13)
+    setScreen(resultHtml(t, view, banner ? { banner: banner } : null), function () { return mountResult(t, view); }, '결과 · ' + t.title);
   }
-  /* 같은 검사의 직전 결과와 비교하는 항목을 맨 앞에 덧붙인다 (표시용, 저장하지 않음) */
+  /* 같은 검사의 지난 결과와 비교하는 항목을 맨 앞에 덧붙인다 (표시용, 저장하지 않음).
+     과제가 있는 결과(인지 검사)는 과제마다 그 과제를 푼 가장 최근 결과와 견준다(2026-11-13). 예전에는 바로 앞 인지 결과 하나만 봐서,
+     도형 행렬 → 숫자 앞으로 → 도형 행렬처럼 과제별 검사를 번갈아 풀면 바로 앞 결과에 같은 과제가 없어 비교가 사라졌다.
+     제목의 날짜는 견준 결과 가운데 가장 최근 것. 그 밖의 검사는 같은 검사의 바로 앞 결과와 견준다. */
   function withComparison(t, result, earlier) {
-    const prev = earlier.filter(function (r) { return r && r.testId === t.id; }).pop();
-    if (!prev) return result;
+    const same = earlier.filter(function (r) { return r && r.testId === t.id; });
+    if (!same.length) return result;
     const iq = function (z) { return Math.round(U.clamp(100 + 15 * z, 55, 145)); };
     const delta = function (a, b) { return a + ' → ' + b + ' (' + (b - a >= 0 ? '+' : '') + (b - a) + ')'; };
     const lines = [];
-    if (result.tasks && prev.tasks) {
+    let lastAt = 0;
+    if (result.tasks) {
       const labelOf = function (k) {
         let l = k;
         (result.scales || []).forEach(function (s) { if (s.key === k) l = s.label; (s.children || []).forEach(function (c) { if (c.key === k) l = c.label; }); });
         return l;
       };
       const scored = function (x) { return x && !x.invalid && typeof x.z === 'number'; };   // 측정 안 된 과제는 비교하지 않는다
-      Object.keys(result.tasks).forEach(function (k) { if (scored(prev.tasks[k]) && scored(result.tasks[k])) lines.push(labelOf(k) + ' ' + delta(iq(prev.tasks[k].z), iq(result.tasks[k].z))); });
+      Object.keys(result.tasks).forEach(function (k) {
+        if (!scored(result.tasks[k])) return;
+        const p = same.filter(function (r) { return r.tasks && scored(r.tasks[k]); }).pop();
+        if (!p) return;
+        lines.push(labelOf(k) + ' ' + delta(iq(p.tasks[k].z), iq(result.tasks[k].z)));
+        if (typeof p.at === 'number' && p.at > lastAt) lastAt = p.at;
+      });
     } else {
+      const prev = same[same.length - 1];
       (result.scales || []).forEach(function (s) {
         const p = (prev.scales || []).filter(function (x) { return x.key === s.key; })[0];
         if (p) lines.push(s.label + ' ' + delta(p.value, s.value));
       });
+      lastAt = prev.at;
     }
     if (!lines.length) return result;
     // 덧붙이는 말은 검사 성격에 맞춘다: 푸는 검사는 연습 효과, 성향 검사는 그날의 기분과 뽑힌 문항에 따른 흔들림
-    const tail = result.tasks && prev.tasks ? '같은 과제를 다시 풀면 익숙해져서 오르는 것이 보통이니, 큰 차이만 의미 있게 보세요.'
+    const tail = result.tasks ? '같은 과제를 다시 풀면 익숙해져서 오르는 것이 보통이니, 큰 차이만 의미 있게 보세요.'
       : t.kind === 'trait' ? '성향 점수는 그날의 기분과 이번에 나온 문항에 따라 몇 점씩 달라져요. 10점 안쪽 차이는 달라졌다고 보기 어려워요.'
         : '같은 상황을 다시 보면 익숙해져서 오를 수 있으니, 큰 차이만 의미 있게 보세요.';
     const copy = Object.assign({}, result);
-    copy.sections = [{ title: '지난 결과와 비교 (' + U.fmtDate(prev.at) + ')', body: lines.join(' · ') + '. ' + tail }].concat(result.sections || []);
+    const when = fmtAt(lastAt);
+    copy.sections = [{ title: '지난 결과와 비교' + (when ? ' (' + when + ')' : ''), body: lines.join(' · ') + '. ' + tail }].concat(result.sections || []);
     return copy;
   }
 
@@ -1334,7 +1537,7 @@
       return;
     }
     merged.testId = id; merged.at = Date.now();
-    setScreen(resultHtml(t, merged, { profile: true, banner: '종합 프로필 · 과제별 가장 최근 결과를 합친 값이에요. 과제를 다시 풀면 자동으로 갱신돼요.' }), function () { mountResult(t, merged); });
+    setScreen(resultHtml(t, merged, { profile: true, banner: '종합 프로필 · 과제별 가장 최근 결과를 합친 값이에요. 과제를 다시 풀면 자동으로 갱신돼요.' }), function () { return mountResult(t, merged); }, '종합 프로필 · ' + t.title);
   }
 
   function randomAnswer(it, r) {
@@ -1357,7 +1560,7 @@
   function renderGallery(key, level, n) {
     const t = BL.tests.cognitive;
     const tk = t.tasks.filter(function (k) { return k.key === key; })[0];
-    if (!tk) return go('#/');
+    if (!tk || !(t.maxLevel || {})[key]) return redirect('#/');   // 객관식 문항이 없는 기억·속도 과제는 갤러리로 그릴 것이 없다(예전에는 오류가 났다)
     const MAXL = { matrix: 6, figAnalogy: 5, series: 3, sequence: 5, weights: 5, rotation: 5, fold: 5, blocks: 5 };
     const cnt = Math.min(12, parseInt(n, 10) || (level === 'all' ? 1 : 4));
     const levels = level === 'all' ? Array.from({ length: MAXL[key] || 5 }, function (_, i) { return i + 1; }) : [Math.max(1, parseInt(level, 10) || 1)];
@@ -1394,16 +1597,18 @@
     }
     const result = t.score(answers, items, { times: items.map(function () { return r.int(4000, 20000); }), mode: mode });
     result.testId = id; result.at = Date.now();
-    setScreen(resultHtml(t, result, { banner: '미리보기 · 무작위 응답으로 만든 결과예요. 저장되지 않아요.', preview: true }), function () { mountResult(t, result); });
+    setScreen(resultHtml(t, result, { banner: '미리보기 · 무작위 응답으로 만든 결과예요. 저장되지 않아요.', preview: true }), function () { return mountResult(t, result); }, '미리보기 · ' + t.title);
   }
 
   /* ---------- 기록 ---------- */
   function renderHistory() {
     const all = results();
     // 기록마다 삭제 버튼을 붙인다. 다른 탭에서 목록이 바뀌어도 엉뚱한 기록을 지우지 않게 순번이 아니라 검사 id와 저장 시각으로 찾는다.
+    // 저장 시각이 없는 예전 결과만 순번(data-i)으로 찾는다(2026-11-13. 예전에는 data-at 이 비어 어떤 기록과도 맞지 않아 지워지지 않았다).
     const rows = all.map(function (r, i) {
       const row = rowHtml(r, i);
-      return row ? '<div class="row-wrap">' + row + '<button class="row-del" data-id="' + U.esc(r.testId) + '" data-at="' + U.esc(r.at) + '" aria-label="' + U.esc(BL.tests[r.testId].title + ' ' + U.fmtDate(r.at)) + ' 기록 삭제">삭제</button></div>' : '';
+      const when = fmtAt(r.at);
+      return row ? '<div class="row-wrap">' + row + '<button class="row-del" data-id="' + U.esc(r.testId) + '" data-at="' + U.esc(r.at) + '" data-i="' + i + '" aria-label="' + U.esc(BL.tests[r.testId].title + (when ? ' ' + when : '')) + ' 기록 삭제">삭제</button></div>' : '';
     }).reverse().join('');
     setScreen(
       '<div class="wrap">' +
@@ -1423,6 +1628,10 @@
             const id = b.getAttribute('data-id'), at = Number(b.getAttribute('data-at'));
             let i = -1;
             list.forEach(function (r, k) { if (r && r.testId === id && r.at === at) i = k; });
+            if (i < 0) {   // 저장 시각이 없는(숫자가 아닌) 예전 결과는 순번으로 찾는다
+              const j = Number(b.getAttribute('data-i'));
+              if (list[j] && list[j].testId === id && typeof list[j].at !== 'number') i = j;
+            }
             if (i >= 0) {
               if (!confirm('이 기록을 지울까요? 되돌릴 수 없어요.')) return;
               list.splice(i, 1);
@@ -1450,7 +1659,7 @@
       '<section class="rs"><h3>개인정보</h3><p>이름, 생년월일, 연락처를 묻지 않아요. 결과 기록은 이 브라우저에 저장돼요. ' + (BL.stats && BL.stats.available() ? '인지 능력 검사는 문항별 정답 여부를 이름 없이 모아 난이도를 맞추는 데 써요(아래 \u0022익명 통계\u0022에서 끌 수 있어요). ' : '') + '카카오톡 공유를 누를 때만, 함께 보낼 결과 이미지가 카카오 서버에 올라가요. "내 기록"에서 언제든 지울 수 있어요.</p></section>' +
       statsAboutHtml() +
       '</div>',
-      function () { const c = document.getElementById('stats-opt'); if (c) c.addEventListener('change', function (e) { BL.stats.setEnabled(e.target.checked); }); }
+      function () { if (BL.stats) bindStatsSwitch(document.getElementById('stats-opt')); }
     );
   }
   /* 안내 페이지의 익명 통계 설명과 스위치 (수집 서버 주소가 설정돼 있을 때만) */
@@ -1458,7 +1667,7 @@
     if (!BL.stats || !BL.stats.available()) return '';
     return '<section class="rs"><h3>익명 통계</h3><p>인지 능력 검사의 문항별 정답 여부를 이름 없이 모아 문항 난이도와 추정 IQ 기준값을 실제 응시자에 맞게 맞추는 데 써요.</p>' +
       '<p>보내는 것: 문항 번호(그때그때 만드는 도형·숫자 문제는 난이도 단계), 맞았는지, 응답 시간, 과제별 점수(기억 폭, 반응 시간), 검사 종류와 시간 설정, 터치인지 마우스인지. 서버는 날짜만 일 단위로 남겨요.</p>' +
-      '<p>보내지 않는 것: 이름, 연락처, IP 주소, 기기 식별자, 정확한 시각, 문항 내용. 결과마다 새로 만든 무작위 번호만 붙여서, 보낸 자료를 나와 연결할 방법이 없어요. 자료가 ' + BL.stats.MIN_N + '명이 넘으면 결과 화면에 "실제 응시자 기준 상위 %"를 함께 보여 드려요.</p>' +
+      '<p>보내지 않는 것: 이름, 연락처, IP 주소, 기기 식별자, 정확한 시각, 문항 내용. 결과마다 새로 만든 무작위 번호만 붙여서, 보낸 자료를 나와 연결할 방법이 없어요. 자료가 ' + BL.stats.MIN_N + '명이 넘으면 결과 화면에 "실제 응시자와 견준 위치(상위·하위 %)"를 함께 보여 드려요.</p>' +
       '<label class="switch"><input type="checkbox" id="stats-opt"' + (BL.stats.enabled() ? ' checked' : '') + '><span>익명 통계에 참여</span></label></section>';
   }
 

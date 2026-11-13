@@ -93,7 +93,8 @@ BL.card = (function () {
       y += step;
     });
 
-    x.fillStyle = '#8a7f78'; x.font = '400 23px ' + FONT;
+    // 참고용 안내는 이 이미지의 면책 문구라 잘 보이게 쓴다(2026-11-13): #8a7f78 23px 은 크림 바탕에서 3.7:1 이고 폰 화면 폭으로 줄이면 8px 남짓이었다(지금 6.2:1, 28px)
+    x.fillStyle = '#675c55'; x.font = '500 28px ' + FONT;
     x.fillText('참고용 자기평가예요 · 전문 검사를 대신하지 않아요', 80, H - 92);
     x.font = '500 23px ' + MONO; x.fillText(U.fmtDate(result.at || Date.now()), 80, H - 52);
     return c;
@@ -133,7 +134,7 @@ BL.card = (function () {
       if (fw > 0) { roundRect(x, 64, y + 14, Math.max(fw, 12), 12, 6); x.fillStyle = tc[2]; x.fill(); }
       y += step;
     });
-    x.fillStyle = '#8a7f78'; x.font = '400 19px ' + FONT;
+    x.fillStyle = '#675c55'; x.font = '400 19px ' + FONT;   // 큰 이미지의 참고용 안내와 같은 색(2026-11-13)
     x.fillText('참고용 자기평가 · ' + siteUrl().replace(/^https?:\/\//, '').replace(/\/$/, ''), 64, SQ - 36);
     return c;
   }
@@ -225,7 +226,8 @@ BL.card = (function () {
       (result.scales || []).map(function (s) { return s.label + ' ' + s.value; }).join(' · ') + '\n' + url;
   }
 
-  function fileName(test) { return '두뇌실험실_' + test.id + '_' + new Date().toISOString().slice(0, 10) + '.png'; }
+  /* 파일 이름의 날짜는 이 기기의 현지 날짜로 쓴다(2026-11-13). 예전 toISOString 은 세계 표준시라 한국에서 0~9시에 저장하면 전날 날짜가 붙어 이미지 안 날짜와 달랐다 */
+  function fileName(test, result) { const d = new Date((result && typeof result.at === 'number' && result.at) || Date.now()); return '두뇌실험실_' + test.id + '_' + d.getFullYear() + '-' + U.pad2(d.getMonth() + 1) + '-' + U.pad2(d.getDate()) + '.png'; }
 
   /* 이미지는 버튼을 누른 그 순간에 동기로 만든다 (toDataURL). 예전처럼 toBlob을 기다린 뒤 다운로드·공유를 부르면
      "사용자가 누른 직후" 상태가 끝나 휴대폰 브라우저와 카카오톡 안 브라우저에서 아무 일도 안 일어났다.
@@ -249,7 +251,7 @@ BL.card = (function () {
   function saveImage(result, test) {
     let url;
     try { url = dataUrl(result, test); } catch (e) { return { how: 'error' }; }
-    const name = fileName(test);
+    const name = fileName(test, result);
     if (!touchDevice()) { triggerDownload(url, name); return { how: 'downloaded', url: url, name: name }; }
     return { how: 'preview', url: url, name: name, inApp: inApp(), canDownload: !inApp(), canShareFile: canShareFile(url, name) };
   }
@@ -274,7 +276,7 @@ BL.card = (function () {
     try {
       let url = null;
       try { url = dataUrl(result, test); } catch (e) { url = null; }
-      if (url && canShareFile(url, fileName(test))) return shareFile(url, fileName(test), text);
+      if (url && canShareFile(url, fileName(test, result))) return shareFile(url, fileName(test, result), text);
       if (navigator.share) return navigator.share({ title: '두뇌실험실', text: text }).then(done, fail);
       if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return 'copied'; }, function () { return 'none'; });
       return Promise.resolve('none');
