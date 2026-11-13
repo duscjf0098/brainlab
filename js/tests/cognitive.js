@@ -192,10 +192,19 @@
     }
     return null;
   }
+  /* 보기에만 두 값으로 나오는 가짜 속성. 2026-11-13: 예전에는 개수·크기도 똑같이 골랐는데, 정답 값이 낮은 쪽(행렬 기본 개수 1~2,
+     유추 크기 s·m)에 몰려 있어 다른 값이 대개 더 컸다. 그래서 "두 값뿐인 개수·크기는 작은 쪽"이 70~84% 맞았다.
+     이제 순서 없는 속성(모양·채움)을 먼저 고르고, 개수·크기를 고를 수밖에 없으면 정답보다 큰 값과 작은 값을 반반으로 고른다. */
   function pickFoil(r, answer, exclude) {
     const pool = ATTRS.filter(function (x) { return exclude.indexOf(x) < 0; });
-    const a = r.pick(pool.length ? pool : ['frame']);
-    return { attr: a, vals: [answer[a], r.pick(DOMAIN[a].filter(function (v) { return v !== answer[a]; }))] };
+    const un = pool.filter(function (x) { return x === 'shape' || x === 'fill'; });
+    const a = r.pick(un.length ? un : pool.length ? pool : ['frame']);
+    const others = DOMAIN[a].filter(function (v) { return v !== answer[a]; });
+    if (a === 'count' || a === 'size') {
+      const i = DOMAIN[a].indexOf(answer[a]), up = others.filter(function (v) { return DOMAIN[a].indexOf(v) > i; }), dn = others.filter(function (v) { return DOMAIN[a].indexOf(v) < i; });
+      return { attr: a, vals: [answer[a], r.pick(up.length && dn.length ? (r.next() < 0.5 ? up : dn) : (up.length ? up : dn))] };
+    }
+    return { attr: a, vals: [answer[a], r.pick(others)] };
   }
 
   /* ===== 집합 연산 (모서리 점 · 선) ===== */
@@ -213,7 +222,8 @@
     for (let t = 0; t < 80; t++) {
       const a = randomSet(r, order, 1, 3), b = randomSet(r, order, 1, 3);
       const c = OPS[op](a, b, order);
-      if (!c || c === a || c === b || a === b) continue;
+      // 2026-11-13: 결과가 전체 집합(점 네 개·선 네 개)이면 원소 수가 같은 오답 보기를 만들 수 없어(sameSizeSets) 쓰지 않는다
+      if (!c || c === a || c === b || a === b || c.length === order.length) continue;
       return [a, b, c];
     }
     return [order.slice(0, 2), order.slice(1, 3), OPS.union(order.slice(0, 2), order.slice(1, 3), order)];
@@ -224,7 +234,9 @@
     const others = Object.keys(OPS).filter(function (o) { return o !== op; });
     for (let t = 0; t < 120; t++) {
       const rows = [logicRow(r, op, order), logicRow(r, op, order), logicRow(r, op, order)];
-      const ok = others.every(function (o) { return rows.slice(0, 2).some(function (row) { return OPS[o](row[0], row[1], order) !== row[2]; }); });
+      /* 2026-11-13: "둘째에서 첫째를 뺀 것"(B−A)도 예시 두 행 중 하나에서 틀려야 한다. 안 그러면 배타(xor)와 B−A가 셋째 행에서 갈려
+         5~6단계의 0.5~1%가 답이 둘로 읽혔다. */
+      const ok = others.every(function (o) { return rows.slice(0, 2).some(function (row) { return OPS[o](row[0], row[1], order) !== row[2]; }); }) && rows.slice(0, 2).some(function (row) { return OPS.sub(row[1], row[0], order) !== row[2]; });
       if (ok) return rows;
     }
     return [logicRow(r, op, order), logicRow(r, op, order), logicRow(r, op, order)];
@@ -248,7 +260,8 @@
       const left0 = randomSet(r, order, 1, 3), c0 = OPS[op](left0, K, order);
       if (!c0 || c0 === left0) continue;
       const left1 = randomSet(r, order, 1, 3), c1 = OPS[op](left1, K, order);
-      if (!c1 || c1 === left1 || left1 === left0) continue;
+      // 2026-11-13: 정답(c1)이 전체 집합이면 원소 수가 같은 오답 보기를 만들 수 없어(sameSizeSets) 쓰지 않는다
+      if (!c1 || c1 === left1 || left1 === left0 || c1.length === order.length) continue;
       if (!kUnique(left0, c0, left1, c1, order)) continue;
       return { K: K, rows: [[left0, c0], [left1, c1]] };
     }
@@ -258,13 +271,14 @@
     if (op === 'sub') return { K: o.slice(0, 1), rows: [[o.slice(0, 3), o.slice(1, 3)], [o.slice(0, 2), o.slice(1, 2)]] };
     return { K: o.slice(0, 1), rows: [[o.slice(1, 2), o.slice(0, 2)], [o.slice(1, 3), o.slice(0, 3)]] };
   }
-  function logicFoils(r, a, b, op, order, answer, n) {
-    n = n || 3;
-    const vals = [answer];
-    Object.keys(OPS).filter(function (o) { return o !== op; }).forEach(function (o) { const v = OPS[o](a, b, order); if (v && vals.indexOf(v) < 0) vals.push(v); });
-    let guard = 0;
-    while (vals.length < n && guard++ < 60) { const v = randomSet(r, order, 1, 3); if (vals.indexOf(v) < 0) vals.push(v); }
-    return vals.slice(0, n);
+  /* 집합 보기(선·모서리 점, 2026-11-13): 원소 수가 정답과 같은 다른 집합으로 만든다(모자라면 하나 많거나 적은 집합).
+     예전에는 다른 연산(합·교·배타·빼기)의 결과를 오답으로 썼는데(logicFoils, 이때 지움), 그 값들이 모두 합집합의 부분집합이라 합집합 정답이 늘 가장 큰 집합이 되어
+     "점·선이 가장 많은 보기"를 고르면 4단계에서 33~39% 맞았다(우연 12.5%). */
+  function sameSizeSets(r, answer, order, n) {
+    const subs = allSubsets(order).concat(['']);
+    const same = subs.filter(function (s) { return s.length === answer.length && s !== answer; });
+    if (same.length >= n - 1) return [answer].concat(r.sample(same, n - 1));
+    return [answer].concat(r.sample(subs.filter(function (s) { return s !== answer && Math.abs(s.length - answer.length) === 1; }), n - 1));
   }
   /* 보기 8개가 속성마다 정확히 균형(4값×2 또는 2값×4)을 이루도록 값 집합을 맞춘다. set[0]은 정답 값. */
   function fitSet(r, a, set) {
@@ -288,7 +302,34 @@
   const CYCLIC = { rot: true, pos: true };
   function nextVal(a, v, step) { const s = PROG_SEQ[a]; const i = s.indexOf(v); return CYCLIC[a] ? s[((i + step) % s.length + s.length) % s.length] : s[Math.min(s.length - 1, Math.max(0, i + step))]; }
 
-  function makeMatrix(r, level, tries) {
+  /* 2×2는 예시 행이 하나뿐이라, 설계 규칙 말고도 그럴듯한 읽기가 있다(2026-11-13): "오른쪽 칸은 늘 위 오른쪽과 같은 값",
+     개수의 "곱셈(비율)", 집합의 "세로 방향 연산"(위 왼쪽→아래 왼쪽을 맞춘 연산을 위 오른쪽에 적용), "K에서 왼쪽을 뺀 것".
+     정답이 아닌 보기 중에 모든 속성이 "정답 값이거나 이런 다른 읽기 값"인 것이 있으면 그 읽기로 푼 사람도 맞는 셈이라 다시 만든다.
+     예전에는 4~5단계 문항의 4~5%가 이랬다. */
+  function altClash(cells, options, ans, progAttrs, logicAttrs) {
+    const tl = cells[0], tr = cells[1], bl = cells[2], answer = options[ans], alt = {};
+    progAttrs.forEach(function (a) {
+      const v = [];
+      if (tl[a] !== tr[a]) v.push(tr[a]);
+      /* 개수의 곱셈 읽기는 일반 비율로 본다(2026-11-13): 예전에는 두 배(1→2)처럼 나누어떨어질 때만 봐서, 줄어드는 진행 "2→1, 4→?"(설계 답 3)를 반으로 읽은 답 2를 못 막았다. */
+      if (a === 'count' && tl[a] !== tr[a]) { const q = bl[a] * tr[a] / tl[a]; if (q === Math.round(q) && q >= 1 && q <= 4 && q !== answer[a]) v.push(q); }
+      alt[a] = v;
+    });
+    logicAttrs.forEach(function (a) {
+      const order = a === 'marks' ? 'abcd' : 'hvde', subs = allSubsets(order).concat(['']), v = [];
+      if (tl[a] !== tr[a]) v.push(tr[a]);
+      Object.keys(OPS).forEach(function (op) { subs.forEach(function (K) { if (OPS[op](tl[a], K, order) === bl[a]) v.push(OPS[op](tr[a], K, order)); }); });
+      subs.forEach(function (K) { if (OPS.sub(K, tl[a], order) === tr[a]) v.push(OPS.sub(K, bl[a], order)); });
+      alt[a] = v;
+    });
+    return options.some(function (c, i) { return i !== ans && ALL_ATTRS.every(function (a) { return c[a] === answer[a] || (alt[a] || []).indexOf(c[a]) >= 0; }); });
+  }
+  /* 보기를 균형 있게 못 만들 때 다시 만드는 한도(2026-11-13). 예전에는 보기를 6개로 줄이거나 1개만 내서 화면(4열)과 채점의 추측 확률(1/8, 1/6)이
+     어긋났다. 실제로는 1만 문항 넘게 돌려도 한 번도 안 생기지만, 한도를 다 쓰면 한 단계 낮은 문항을 낸다(문항 단계는 채점에 그대로 기록된다).
+     횟수는 읽기 쉬운지 다시 만드는 횟수(tries)와 따로 센다(disTries). 우연히 실패한 것이면 몇 번 안에 풀리고, 만드는 방식이 잘못돼
+     늘 실패하는 경우에도 폰이 오래 멈추지 않게 작게 둔다. 1단계에서도 다 쓰면 오류를 낸다(끝없이 다시 만들지 않게). */
+  const DIS_RETRY = 5;
+  function makeMatrix(r, level, tries, disTries) {
     const grid = level >= 4 && r.next() < 0.4 ? 2 : 3;
     const recipe = {
       1: { cat: 1, prog: 0, logic: 0, pool: ['shape', 'fill', 'count', 'size'] },
@@ -303,7 +344,8 @@
     // 기본값 (모든 칸 공통)
     const base = { frame: level >= 3 && r.next() < 0.4 ? r.pick(FRAMES.slice(1)) : 'none', shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.int(1, 2), size: r.pick(SIZES), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
     // 진행 속성 고르기 (회전·반전은 비대칭 모양을 요구하고, 위치는 개수 1을 요구한다)
-    const progAttrs = recipe.prog ? r.sample(recipe.progPool, recipe.prog) : [];
+    // 3×3에서는 크기를 진행 속성으로 쓰지 않는다(2026-11-13). 크기는 세 단계뿐이라 세 행이 모두 작게·중간·크게가 되어 사실상 "열 고정"인데 해설은 진행이라 했고, 정답이 늘 "크게"였다.
+    const progAttrs = recipe.prog ? r.sample(recipe.progPool.filter(function (a) { return !(grid === 3 && a === 'size'); }), recipe.prog) : [];
     let flipAttr = false;
     if (grid === 2 && level >= 5 && r.next() < 0.35) flipAttr = true;
     if (progAttrs.indexOf('rot') >= 0 || flipAttr) base.shape = flipAttr ? 'lshape' : r.pick(ASYM);
@@ -322,12 +364,23 @@
     if (grid === 2 && catAttrs.length && !catAttrs.some(function (a) { return spec[a].rule === 'col'; }) && !progAttrs.length && !flipAttr) spec[catAttrs[0]].rule = 'col';
     progAttrs.forEach(function (a) {
       const seq = PROG_SEQ[a];
-      const step = a === 'rot' && r.next() < 0.3 ? -1 : 1;
+      /* 2026-11-13: 개수·크기도 커지기·작아지기를 반반으로 하고, 시작값을 범위 안에서 고른다. 예전에는 늘 커지는 쪽이고 시작값이 0~1로 고정이라
+         정답 값이 보기 값들 중 늘 같은 순위였다("가장 작은 값 빼기"가 3단계 20%, 우연 12.5%). */
+      /* 2×2 개수 진행은 정답 칸의 값(1~4)을 먼저 고르게 정하고(ai), 끝값이면 방향을 그쪽으로, 아래 줄 시작값을 거기서 거꾸로 정한다(2026-11-14).
+         예전에는 시작값과 방향을 따로 뽑아 정답이 1:2:2:1 비율이라, 보기 개수 {1,2,3,4}에서 2나 3을 고르면 그 문항의 1/6이 맞았다(우연 1/8). 방향은 여전히 반반이다. */
+      const ai = grid === 2 && a === 'count' ? r.int(0, seq.length - 1) : -1;
+      const step = ai === 0 ? -1 : ai === seq.length - 1 ? 1 : (a === 'rot' && r.next() < 0.3) || (!CYCLIC[a] && r.next() < 0.5) ? -1 : 1;
       const starts = [];
-      for (let row = 0; row < grid; row++) starts.push(CYCLIC[a] ? r.int(0, seq.length - 1) : (a === 'count' ? r.int(0, 1) : 0));
+      for (let row = 0; row < grid; row++) starts.push(CYCLIC[a] ? r.int(0, seq.length - 1) : (step > 0 ? r.int(0, seq.length - grid) : r.int(grid - 1, seq.length - 1)));
+      if (ai >= 0) starts[1] = ai - step;
+      /* 3×3에서 첫째·둘째 행의 시작값이 같으면 위 두 행이 같은 세 값을 가져 "각 행에 세 값이 한 번씩"(라틴)으로도 읽히고,
+         그 읽기의 답은 진행의 답과 다르다(2026-11-13, 3단계 0.2%가 실제로 답이 둘). 시작값을 다르게 하면 두 행의 값 묶음이 달라져 라틴으로 읽을 수 없다. */
+      if (grid === 3 && starts[0] === starts[1]) { const valid = seq.map(function (_, i) { return i; }).filter(function (i) { return CYCLIC[a] || (step > 0 ? i <= seq.length - grid : i >= grid - 1); }); const pool = valid.filter(function (i) { return i !== starts[0]; }); if (pool.length) starts[1] = r.pick(pool); }
       spec[a] = { kind: 'prog', step: step, starts: starts };
     });
-    if (flipAttr) spec.flip = { kind: 'flip' };
+    /* 좌우 반전은 왼쪽 칸의 시작값 f0(0·1)을 무작위로 둔다(2026-11-13). 예전에는 flip이 열 번호라 정답이 늘 뒤집힌 ㄱ이어서,
+       안 뒤집힌 보기 4개는 보기만 봐도 오답이었다(좌우 문항에서 25%, 우연 12.5%). */
+    if (flipAttr) spec.flip = { kind: 'flip', f0: r.int(0, 1) };
     const logicAttrs = recipe.logic ? r.sample(['marks', 'lines'], recipe.logic) : [];
     logicAttrs.forEach(function (a) {
       const order = a === 'marks' ? 'abcd' : 'hvde';
@@ -344,8 +397,8 @@
         if (s.rule === 'col') return s.vals[col];
         return s.vals[(s.perm[row] + col) % 3];
       }
-      if (s.kind === 'prog') { const seq = PROG_SEQ[a]; return CYCLIC[a] ? seq[((s.starts[row] + s.step * col) % seq.length + seq.length) % seq.length] : seq[Math.min(seq.length - 1, s.starts[row] + col)]; }
-      if (s.kind === 'flip') return col;
+      if (s.kind === 'prog') { const seq = PROG_SEQ[a]; return CYCLIC[a] ? seq[((s.starts[row] + s.step * col) % seq.length + seq.length) % seq.length] : seq[s.starts[row] + s.step * col]; }   // 순서 속성의 시작값은 끝까지 범위 안에 들도록 골랐다(위 starts)
+      if (s.kind === 'flip') return col ^ s.f0;
       return s.rows[row][col];
     }
     const cells = [];
@@ -353,28 +406,53 @@
       const c = {}; ALL_ATTRS.forEach(function (a) { c[a] = value(a, row, col); }); cells.push(c);
     }
     const answer = cells[cells.length - 1];
-    const lastRow = grid - 1;
 
     // 보기: 달라지는 속성마다 값 세 가지(정답 포함), 균형 배치
     const varying = {};
     catAttrs.forEach(function (a) { varying[a] = fitSet(r, a, [answer[a]].concat(spec[a].vals)); });
-    progAttrs.forEach(function (a) { const v = answer[a]; varying[a] = fitSet(r, a, [v, nextVal(a, v, -1), nextVal(a, v, 1), nextVal(a, v, 2)]); });
+    /* 진행 보기 값(2026-11-13): 개수는 늘 네 값 전부, 크기는 정답과 이웃한 값 하나(위·아래 중 무작위). 예전 [정답, 한 칸 앞, 한 칸 뒤, 두 칸 뒤]는
+       끝값에서 잘려 정답이 늘 같은 순위가 됐다. */
+    progAttrs.forEach(function (a) {
+      const v = answer[a];
+      if (a === 'count') varying[a] = [v].concat(r.shuffle(PROG_SEQ.count.filter(function (x) { return x !== v; })));
+      else if (a === 'size') varying[a] = [v, r.pick(SIZES.filter(function (x) { return Math.abs(SIZES.indexOf(x) - SIZES.indexOf(v)) === 1; }))];
+      else varying[a] = fitSet(r, a, [v, nextVal(a, v, -1), nextVal(a, v, 1), nextVal(a, v, 2)]);
+    });
     if (flipAttr) varying.flip = [answer.flip, answer.flip ? 0 : 1];
     logicAttrs.forEach(function (a) {
       const s = spec[a];
-      varying[a] = fitSet(r, a, s.kind === 'logic' ? logicFoils(r, s.rows[lastRow][0], s.rows[lastRow][1], s.op, s.order, answer[a], 4) : logicFoils(r, s.rows[lastRow][0], s.K, s.op, s.order, answer[a], 4));
+      varying[a] = sameSizeSets(r, answer[a], s.order, 4);   // 원소 수가 정답과 같은 집합(2026-11-13, sameSizeSets 주석)
     });
     const foilEx = function () { return Object.keys(varying).concat(progAttrs.indexOf('rot') >= 0 || flipAttr ? ['shape'] : []).concat(progAttrs.indexOf('pos') >= 0 ? ['count'] : []); };
     if (Object.keys(varying).length === 1) { const f = pickFoil(r, answer, foilEx()); varying[f.attr] = f.vals; }
     let dis = balancedDistractors(r, answer, varying, 8);
     if (!dis) { const f = pickFoil(r, answer, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, answer, varying, 8); }
-    if (!dis) dis = balancedDistractors(r, answer, varying, 6) || [];
+    // 보기 수를 줄이지 않고 다시 만든다(2026-11-13, DIS_RETRY 주석)
+    if (!dis) {
+      if ((disTries || 0) < DIS_RETRY) return makeMatrix(r, level, tries, (disTries || 0) + 1);
+      if (level > 1) return makeMatrix(r, level - 1);
+      throw new Error('도형 행렬 보기를 만들지 못함');
+    }
     const o = shuffleOptions(r, [answer].concat(dis), 0);
-    if ((tries || 0) < RETRY && !legible(cells.concat(o.options))) return makeMatrix(r, level, (tries || 0) + 1);
+    // 2×2는 다른 읽기로도 맞는 오답이 있으면 다시 만든다(2026-11-13, altClash 주석)
+    if ((tries || 0) < RETRY && (!legible(cells.concat(o.options)) || (grid === 2 && altClash(cells, o.options, o.answer, progAttrs, logicAttrs)))) return makeMatrix(r, level, (tries || 0) + 1, disTries);
 
+    /* 방향 진행과 좌우 반전이 함께 있는 2×2는 한 문장으로 쓴다(2026-11-13). 그림은 돌린 다음 뒤집은 것이라(cellSVG의 변환 순서),
+       두 문장으로 따로 쓰면 "뒤집은 뒤 돌리기"로 읽은 사람에게는 도는 방향이 반대가 된다. */
+    const rotFlip = flipAttr && progAttrs.indexOf('rot') >= 0;
+    /* 왼쪽 칸이 뒤집혀 있으면(f0=1) 같은 문장의 도는 방향이 반대다(2026-11-13). 칸 그림 = 뒤집기^f·돌리기(a)이고 뒤집기·돌리기(s)·뒤집기 = 돌리기(−s)라서,
+       "왼쪽을 s만큼 돌린 뒤 좌우로 뒤집기"의 결과는 f0=0이면 돌리기(a+s)를 뒤집은 것, f0=1이면 안 뒤집은 돌리기(a−s)다. 오른쪽 칸은 늘 a+step이므로 f0=1이면 s = −step. */
+    const rfCw = rotFlip && (spec.rot.step > 0) === (spec.flip.f0 === 0);
     const explain = catAttrs.map(function (a) { return ATTR_KO[a] + ': ' + (grid === 2 && spec[a].rule === 'col' ? '왼쪽과 오른쪽이 각각 정해진 값' : RULE_KO[spec[a].rule]); })
-      .concat(progAttrs.map(function (a) { return ATTR_KO[a] + ': ' + (a === 'rot' ? '오른쪽으로 갈수록 ' + (spec[a].step > 0 ? '시계 방향' : '반시계 방향') + '으로 90°씩 돎' : a === 'pos' ? '오른쪽으로 갈수록 시계 방향으로 한 칸씩 이동' : '오른쪽으로 갈수록 한 단계씩 커짐'); }))
-      .concat(flipAttr ? ['좌우: 오른쪽은 왼쪽을 거울처럼 뒤집은 것'] : [])
+      .concat(progAttrs.filter(function (a) { return !(rotFlip && a === 'rot'); }).map(function (a) {
+        const up = spec[a].step > 0;
+        // 개수는 "하나씩 늘어남/줄어듦", 크기는 "한 단계씩 커짐/작아짐"(2026-11-13: 예전에는 개수에도 "한 단계씩 커짐"이라 어색했다)
+        return ATTR_KO[a] + ': ' + (a === 'rot' ? '오른쪽으로 갈수록 ' + (up ? '시계 방향' : '반시계 방향') + '으로 90°씩 돎'
+          : a === 'pos' ? '오른쪽으로 갈수록 시계 방향으로 한 칸씩 이동'
+          : a === 'count' ? '오른쪽으로 갈수록 하나씩 ' + (up ? '늘어남' : '줄어듦')
+          : '오른쪽으로 갈수록 한 단계씩 ' + (up ? '커짐' : '작아짐'));
+      }))
+      .concat(rotFlip ? ['방향·좌우: 오른쪽은 왼쪽을 ' + (rfCw ? '시계 방향' : '반시계 방향') + '으로 90° 돌린 뒤 좌우로 뒤집은 것'] : flipAttr ? ['좌우: 오른쪽은 왼쪽을 거울처럼 뒤집은 것'] : [])
       .concat(logicAttrs.map(function (a) { const s = spec[a]; return ATTR_KO[a] + ': ' + (s.kind === 'logic' ? '셋째 열은 ' + OP_KO[s.op] : '오른쪽은 ' + OPK_KO[s.op]); }))
       .join(' / ');
     return {
@@ -395,17 +473,37 @@
     return out.length >= 3 ? out : out.slice(0, 2);
   }
   const TRANS_KO = { fill: '채움', shape: '모양', frame: '틀', size: '크기', count: '개수', rot: '방향', flip: '좌우', marks: '모서리 점', lines: '선' };
-  function makeFigAnalogy(r, level, tries) {
+  function makeFigAnalogy(r, level, tries, disTries) {
     const nT = [1, 1, 2, 2, 3][level - 1], nN = [0, 1, 1, 2, 2][level - 1];
     const pool = level <= 2 ? ['fill', 'shape', 'size', 'count', 'frame'] : ['fill', 'shape', 'frame', 'size', 'count', 'rot', 'flip', 'marks', 'lines'];
-    let trans = r.sample(pool, nT);
-    if (trans.indexOf('rot') >= 0 && trans.indexOf('flip') >= 0) trans = trans.filter(function (t) { return t !== 'flip'; });
-    if (trans.indexOf('shape') >= 0 && (trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0)) trans = trans.filter(function (t) { return t !== 'shape'; });
+    /* 서로 막는 변환(방향·좌우는 함께 못 쓰고, 모양을 바꾸면 방향·좌우가 안 보인다)은 고를 때 건너뛰어 변환 수 nT를 지킨다(2026-11-13).
+       예전에는 뽑은 뒤 빼기만 해서 3·4단계의 6~7%가 변환 1개, 5단계의 20%가 2개 이하라 한 단계 아래 문항과 같았다. */
+    const trans = [];
+    r.shuffle(pool).forEach(function (t) {
+      if (trans.length >= nT) return;
+      const ori = trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0;
+      if ((t === 'rot' || t === 'flip') && (ori || trans.indexOf('shape') >= 0)) return;
+      if (t === 'shape' && ori) return;
+      trans.push(t);
+    });
     const A = { frame: r.pick(FRAMES), shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.int(1, 3), size: r.pick(['s', 'm']), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
     if (trans.indexOf('rot') >= 0) A.shape = r.pick(['triangle', 'arrow']);
     if (trans.indexOf('flip') >= 0) A.shape = 'lshape';
     if (trans.indexOf('marks') >= 0) A.marks = r.next() < 0.5 ? '' : randomSet(r, 'abcd', 1, 2);
     if (trans.indexOf('lines') >= 0) A.lines = r.next() < 0.5 ? '' : randomSet(r, 'hvde', 1, 1);
+    /* 변환 속성의 A 값은 변환 방향을 먼저 정하고 그 방향으로 갈 수 있는 값 전체에서 고른다(2026-11-13). C는 아래에서 A를 복사하므로 그 전에 정한다.
+       예전에는 크기 s·m, 개수 1~3에서만 고르고 끝값이면 반대쪽으로 옮겨서 보기 크기가 {m,l}이면 정답은 늘 l, 개수가 {3,4}면 늘 4였고,
+       방향·좌우는 A가 늘 0이라 정답이 늘 90°·270°, 늘 뒤집힌 ㄱ이었다(보기 값만 보고 3~5단계 27~33%, 우연 16.7%).
+       크기는 +1이면 s·m, −1이면 m·l, 개수는 +1이면 1~3, −1이면 2~4에서 고르므로 보기 값 묶음마다 정답이 큰 쪽·작은 쪽 반반이다. */
+    const STEP = {};
+    trans.forEach(function (t) {
+      if (t !== 'size' && t !== 'count') return;
+      const st = r.pick([1, -1]);
+      A[t] = r.pick(PROG_SEQ[t].filter(function (v) { return nextVal(t, v, st) !== v; }));
+      STEP[t] = st;
+    });
+    if (trans.indexOf('rot') >= 0) A.rot = r.pick(ROTS);
+    if (trans.indexOf('flip') >= 0) A.flip = r.int(0, 1);
     const noisePool = ['fill', 'shape', 'frame', 'size', 'count'].filter(function (a) { return trans.indexOf(a) < 0 && !(a === 'shape' && (trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0)); });
     const noise = r.sample(noisePool, Math.min(nN, noisePool.length));
     const C = Object.assign({}, A);
@@ -413,7 +511,9 @@
     const T = {};
     trans.forEach(function (t) {
       if (t === 'fill' || t === 'shape' || t === 'frame') T[t] = { to: r.pick(DOMAIN[t].filter(function (v) { return v !== A[t] && v !== C[t]; })) };
-      else if (t === 'size' || t === 'count') T[t] = { step: 1 };
+      /* 크기·개수는 커지기·작아지기를 반반으로 한다(2026-11-13). 늘 커지기만 해서 정답이 보기 값 중 가장 작은 적이 없었다.
+         방향(STEP)과 그 방향으로 갈 수 있는 A 값은 위에서 정했다(크기·개수가 변환이면 C는 A와 같은 값이고, B·D는 아래에서 계산한다). */
+      else if (t === 'size' || t === 'count') T[t] = { step: STEP[t] };
       else if (t === 'rot') T[t] = { step: r.pick([1, -1]) };
       else if (t === 'flip') T[t] = {};
       else {
@@ -439,21 +539,30 @@
     const varying = {};
     trans.forEach(function (t) {
       if (t === 'flip') varying.flip = [D.flip, C.flip];
-      else if (t === 'size' || t === 'count' || t === 'rot') varying[t] = fit3(t, [D[t], C[t], nextVal(t, D[t], T[t].step || 1)]);
+      /* 보기 값(2026-11-13): 크기·개수는 [정답, C 값] 둘, 방향은 정답과 나머지 세 방향 중 둘. 예전 [D, C, D 다음]은 방향의 정답이 늘
+         이어진 세 방향의 가운데였고, 크기·개수의 정답은 가장 작은 값인 적이 없었다(보기만 보고 26~37%, 우연 16.7%). */
+      else if (t === 'size' || t === 'count') varying[t] = [D[t], C[t]];
+      else if (t === 'rot') varying[t] = [D[t]].concat(r.sample(ROTS.filter(function (v) { return v !== D[t]; }), 2));
       else if (T[t].to) varying[t] = fit3(t, [D[t], C[t], r.pick(DOMAIN[t].filter(function (v) { return v !== D[t] && v !== C[t]; }))]);
-      else varying[t] = logicFoils(r, C[t], T[t].K, T[t].op, T[t].order, D[t], 3);
+      else varying[t] = sameSizeSets(r, D[t], T[t].order, 3);   // 원소 수가 정답과 같은 집합(sameSizeSets 주석)
     });
     const foilEx = function () { return Object.keys(varying).concat(trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0 ? ['shape'] : []); };
     if (Object.keys(varying).length === 1) { const f = pickFoil(r, D, foilEx()); varying[f.attr] = f.vals; }
     let dis = balancedDistractors(r, D, varying, 6);
-    if (!dis) { const f = pickFoil(r, D, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, D, varying, 6) || []; }
+    if (!dis) { const f = pickFoil(r, D, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, D, varying, 6); }
+    // 보기 수를 줄이지 않고 다시 만든다(2026-11-13, DIS_RETRY 주석)
+    if (!dis) {
+      if ((disTries || 0) < DIS_RETRY) return makeFigAnalogy(r, level, tries, (disTries || 0) + 1);
+      if (level > 1) return makeFigAnalogy(r, level - 1);
+      throw new Error('도형 유추 보기를 만들지 못함');
+    }
     const o = shuffleOptions(r, [D].concat(dis), 0);
-    if ((tries || 0) < RETRY && !legible([A, B, C].concat(o.options))) return makeFigAnalogy(r, level, (tries || 0) + 1);
+    if ((tries || 0) < RETRY && !legible([A, B, C].concat(o.options))) return makeFigAnalogy(r, level, (tries || 0) + 1, disTries);
     const explain = 'A에서 B로: ' + trans.map(function (t) {
       const p = T[t];
       if (p.to) return t === 'frame' && p.to === 'none' ? '틀이 없어짐' : U.josa(TRANS_KO[t], '이', '가') + ' ' + U.josa(VAL_KO[t][p.to], '으로', '로') + ' 바뀜';
-      if (t === 'size') return '크기가 한 단계 커짐';
-      if (t === 'count') return '개수가 하나 늘어남';
+      if (t === 'size') return '크기가 한 단계 ' + (p.step > 0 ? '커짐' : '작아짐');
+      if (t === 'count') return '개수가 하나 ' + (p.step > 0 ? '늘어남' : '줄어듦');
       if (t === 'rot') return (p.step > 0 ? '시계 방향' : '반시계 방향') + '으로 90° 돎';
       if (t === 'flip') return '좌우가 뒤집힘';
       return TRANS_KO[t] + ': ' + OPK_KO[p.op];
@@ -526,8 +635,16 @@
     /* 오답 무게(2026-11-12): 예전 다섯 묶음은 정답 무게가 늘 네 보기 중 가운데였다. 1~2단계는 보기가 가장 가벼운 도형만으로 되어 있어
        도형 개수가 곧 무게라서, 가장 적은 보기와 가장 많은 보기를 빼면 둘 중 하나였다(50%). 이제 정답이 무게 순서로 첫째·둘째·셋째·넷째인
        묶음을 똑같이 두고, 묶음을 먼저 고른 뒤 거기에 맞는 질문 저울을 찾는다(묶음까지 다시 뽑으면 가운데 묶음이 더 자주 통과한다).
-       무게 1인 보기는 내지 않는다(왼쪽에 도형이 둘 이상이라 정답 무게는 늘 2 이상이어서, 1은 보나 마나 오답이다). */
-    const offsetSets = r.shuffle([[1, 2, 3], [1, 2, 4], [-1, 1, 2], [-1, 1, 3], [-2, -1, 1], [-3, -1, 1], [-3, -2, -1], [-4, -2, -1]]);
+       무게 1인 보기는 내지 않는다(왼쪽에 도형이 둘 이상이라 정답 무게는 늘 2 이상이어서, 1은 보나 마나 오답이다).
+       2026-11-13: 정답이 몇째로 가벼운지를 먼저 고르고 그 순위의 두 묶음부터 해 본다. 예전처럼 여덟 묶음을 섞어 앞에서부터 해 보면
+       1~2단계에 무게 3짜리 도형이 있을 때 [1,2,4](정답이 가장 가벼움)는 원이 8개 넘게 필요해 늘 실패하고 다음 묶음으로 넘어가서,
+       정답이 가장 가벼운 보기인 경우가 9~14%뿐이었다. */
+    const RANK_SETS = [[[1, 2, 3], [1, 2, 4]], [[-1, 1, 2], [-1, 1, 3]], [[-2, -1, 1], [-3, -1, 1]], [[-3, -2, -1], [-4, -2, -1]]];
+    const rank0 = r.int(0, 3);
+    const offsetSets = r.shuffle(RANK_SETS[rank0]).concat(r.shuffle([].concat.apply([], RANK_SETS.filter(function (_, i) { return i !== rank0; }))));
+    /* 2026-11-13: 질문 왼쪽 접시의 일부만 담은 묶음(무게를 몰라도 더 가벼움)과 질문 접시를 통째로 담고 더 얹은 묶음(무게를 몰라도 더 무거움)은
+       저울을 안 보고도 지울 수 있어서 오답으로 쓰지 않는다. 예전에는 3~5단계 문항의 43~50%에 이런 보기가 있었다. */
+    const inside = function (a, b) { const q = b.slice(); return a.length < b.length && a.every(function (x) { const k = q.indexOf(x); if (k < 0) return false; q.splice(k, 1); return true; }); };
     let qLeft, cands;
     for (let oi = 0; oi < offsetSets.length && !cands; oi++) {
       const offsets = offsetSets[oi];
@@ -540,13 +657,20 @@
         const answerBags = bagsOfWeight(t, optShapes, w, 7).filter(function (b) { return bagKey(b) !== bagKey(qLeft); });
         if (!answerBags.length) continue;
         const dist = [];
-        offsets.forEach(function (d) { if (t + d < 2) return; const bs = bagsOfWeight(t + d, optShapes, w, 7); if (bs.length) dist.push(r.pick(bs)); });
+        offsets.forEach(function (d) { if (t + d < 2) return; const bs = bagsOfWeight(t + d, optShapes, w, 7).filter(function (b) { return !inside(b, qLeft) && !inside(qLeft, b); }); if (bs.length) dist.push(r.pick(bs)); });
         if (dist.length < 3) continue;
         cands = { t: t, answer: r.pick(answerBags), dist: dist };
         break;
       }
     }
-    if (!cands) { qLeft = [shapes[0], shapes[0]]; cands = { t: 2, answer: [shapes[0], shapes[0]], dist: [[shapes[0]], [shapes[0], shapes[0], shapes[0]], [shapes[0], shapes[0], shapes[0], shapes[0]]] }; }
+    /* 위에서 맞는 질문을 못 찾았을 때(지금 분포로는 생기지 않음). 2026-11-13: 예전 대체 문항은 질문 왼쪽과 정답 보기가 똑같은 [가벼운 도형 2개]이고
+       무게 1 보기가 섞여 보기만 봐도 풀렸다. 이제 왼쪽에 두 번째 도형과 가벼운 도형을 하나씩 두고, 정답은 가벼운 도형만으로 같은 무게를 맞춘 묶음,
+       오답은 가벼운 도형만으로 무게가 조금 다른 묶음(2개 이상, 7개 이하)으로 만든다. */
+    if (!cands) {
+      qLeft = [shapes[1], shapes[0]];
+      const t0 = w[shapes[1]] + 1, same = function (k) { const b = []; for (let j = 0; j < k; j++) b.push(shapes[0]); return b; };
+      cands = { t: t0, answer: same(t0), dist: r.shuffle([t0 - 2, t0 - 1, t0 + 1, t0 + 2, t0 + 3].filter(function (v) { return v >= 2 && v <= 7; })).slice(0, 3).map(same) };
+    }
     const o = shuffleOptions(r, [cands.answer].concat(cands.dist), 0);
     const names = shapes.map(function (s) { return VAL_KO.shape[s] + '=' + w[s]; }).join(', ');
     return {
@@ -559,14 +683,17 @@
   }
 
   /* ===== 2. 도형 계열 완성 (1~3단계) ===== */
-  function makeSeries(r, level, tries) {
+  function makeSeries(r, level, tries, disTries) {
     const active = r.sample(ATTRS, level);
     const base = {}; ATTRS.forEach(function (a) { base[a] = r.pick(DOMAIN[a]); });
     base.frame = 'none'; base.pos = 'c'; base.rot = 0; base.flip = 0; base.marks = ''; base.lines = ''; base.zoom = 1;
     if (base.count === 4) base.count = 3;
+    /* 2026-11-13: 2단계부터는 절반을 모든 속성 3칸 주기로 만든다. 3칸 주기와 2칸 주기가 섞이면 정답이 늘 앞 네 칸에 없는 새 그림이라,
+       "문제에 없는 그림 고르기"만으로 2단계가 100% 맞았다. 모두 3칸 주기면 정답이 둘째 칸과 같은 그림이 된다. */
+    const allThree = level >= 2 && r.next() < 0.5;
     const rules = {};
     active.forEach(function (a, idx) {
-      const n = idx === 0 ? 3 : 2;
+      const n = idx === 0 || allThree ? 3 : 2;
       rules[a] = { vals: r.sample(DOMAIN[a], n), start: r.int(0, n - 1) };
     });
     function cellAt(i) {
@@ -576,12 +703,28 @@
     }
     const cells = [0, 1, 2, 3, 4].map(cellAt);
     const answer = cells[4];
-    const varying = {};
-    active.forEach(function (a) { varying[a] = [answer[a], cells[3][a]]; });
-    if (active.length === 1) { const f = pickFoil(r, answer, active); varying[f.attr] = f.vals; }
-    const dis = balancedDistractors(r, answer, varying, 4);
+    /* 오답 셋 중 문제에 나온 그림의 수를 정답이 나온 그림이면 1개, 아니면 2개로 맞춘다(2026-11-13). 그러면 "나온 그림을 고르기"도
+       "새 그림을 고르기"도 우연(25%) 근처가 된다. 3칸 주기 속성의 오답 값은 넷째 칸 값과 셋째 칸 값 중에서 고른다. 1단계는 맞추지 않는다. */
+    const shown = cells.slice(0, 4).map(cellKey), seenN = function (list) { return list.filter(function (c) { return shown.indexOf(cellKey(c)) >= 0; }).length; };
+    const want = level >= 2 ? (seenN([answer]) ? 1 : 2) : -1;
+    let dis = null;
+    for (let t = 0; t < 60; t++) {
+      const varying = {};
+      active.forEach(function (a) { varying[a] = [answer[a], rules[a].vals.length === 3 && r.next() < 0.5 ? cells[2][a] : cells[3][a]]; });
+      if (active.length === 1) { const f = pickFoil(r, answer, active); varying[f.attr] = f.vals; }
+      const d = balancedDistractors(r, answer, varying, 4);
+      if (!d) continue;
+      dis = d;
+      if (want < 0 || seenN(d) === want) break;
+    }
+    // 보기 수를 줄이지 않고 다시 만든다(2026-11-13, DIS_RETRY 주석)
+    if (!dis) {
+      if ((disTries || 0) < DIS_RETRY) return makeSeries(r, level, tries, (disTries || 0) + 1);
+      if (level > 1) return makeSeries(r, level - 1);
+      throw new Error('도형 계열 보기를 만들지 못함');
+    }
     const o = shuffleOptions(r, [answer].concat(dis), 0);
-    if ((tries || 0) < RETRY && !legible(cells.concat(o.options))) return makeSeries(r, level, (tries || 0) + 1);
+    if ((tries || 0) < RETRY && !legible(cells.concat(o.options))) return makeSeries(r, level, (tries || 0) + 1, disTries);
     return {
       type: 'choice', part: 'series', scored: true, level: level, timeLimit: level >= 3 ? 50 : 40,
       prompt: '왼쪽에서 오른쪽으로 이어지는 변화를 찾아 다음 도형을 고르세요.',
@@ -592,7 +735,8 @@
   }
 
   /* ===== 3. 수열 (1~5단계) ===== */
-  const PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
+  // 2026-11-13: 4·5단계 소수 문항의 시작점을 넓히려고 97까지 둔다(실제로 나오는 정답은 67 이하)
+  const PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97];
   /* 앞 다섯 수에 맞는 단순 규칙들이 예측하는 여섯째 수 목록 (등차·등비·2차·피보나치·교대 등차·교대 차이·쌍 반복) */
   function altNext(s) {
     const out = [];
@@ -602,7 +746,7 @@
     const dd = [1, 2, 3].map(function (i) { return d[i] - d[i - 1]; });
     if (dd.every(function (x) { return x === dd[0]; })) out.push(s[4] + d[3] + dd[0]);
     if (s[2] === s[0] + s[1] && s[3] === s[1] + s[2] && s[4] === s[2] + s[3]) out.push(s[3] + s[4]);
-    if (s[2] - s[0] === s[4] - s[2] && (s[3] - s[1]) !== undefined) out.push(s[3] + (s[3] - s[1]));
+    if (s[2] - s[0] === s[4] - s[2]) out.push(s[3] + (s[3] - s[1]));
     if (d[0] === d[2] && d[1] === d[3]) out.push(s[4] + d[0]);
     if (s[0] === s[1] && s[2] === s[3]) out.push(s[4]);
     // 뒤쪽 세 차이가 같으면(예: 2, 5, 11, 17, 23) "계속 같은 만큼 더한다"로도 읽히므로 그 예측도 포함한다
@@ -615,26 +759,39 @@
     const gens = {
       arith: function () { const a = r.int(1, 20), d = r.int(2, 9); return { seq: six(function (i) { return a + d * i; }), explain: '앞의 수에 ' + U.josa(d, '을', '를') + ' 더해요.' }; },
       arithNeg: function () { const a = r.int(50, 95), d = r.int(3, 9); return { seq: six(function (i) { return a - d * i; }), explain: '앞의 수에서 ' + U.josa(d, '을', '를') + ' 빼요.' }; },
-      geo: function () { const a = r.int(1, 4), q = r.pick([2, 3]); return { seq: six(function (i) { return a * Math.pow(q, i); }), explain: '앞의 수에 ' + U.josa(q, '을', '를') + ' 곱해요.' }; },
+      // 2026-11-13: ×3이면 첫 수를 1~2로 둔다(4, 12, 36, 108, 324 → 972처럼 가장 쉬운 단계에 네 자리 보기가 나왔다)
+      geo: function () { const q = r.pick([2, 3]), a = q === 3 ? r.int(1, 2) : r.int(1, 4); return { seq: six(function (i) { return a * Math.pow(q, i); }), explain: '앞의 수에 ' + U.josa(q, '을', '를') + ' 곱해요.' }; },
       alt: function () { const a = r.int(1, 15), d1 = r.int(4, 9), d2 = r.int(1, 3); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += i % 2 === 0 ? d1 : -d2; } return { seq: s, explain: '+' + U.josa(d1, '과', '와') + ' −' + U.josa(d2, '이', '가') + ' 번갈아 적용돼요.' }; },
-      square: function () { const k = r.int(-3, 5), off = r.int(1, 3); return { seq: six(function (i) { return (i + off) * (i + off) + k; }), explain: '제곱수(' + off + '², ' + (off + 1) + '², ' + (off + 2) + '², …)' + (k === 0 ? '예요.' : k > 0 ? '에 ' + U.josa(k, '을', '를') + ' 더한 수예요.' : '에서 ' + U.josa(-k, '을', '를') + ' 뺀 수예요.') }; },
+      // 2026-11-13: 첫 수가 0이나 음수(−2, 1, 6, 13, 22)가 되지 않게 1²부터 시작할 때는 빼는 수를 두지 않는다
+      square: function () { const off = r.int(1, 3), k = r.int(off === 1 ? 0 : -3, 5); return { seq: six(function (i) { return (i + off) * (i + off) + k; }), explain: '제곱수(' + off + '², ' + (off + 1) + '², ' + (off + 2) + '², …)' + (k === 0 ? '예요.' : k > 0 ? '에 ' + U.josa(k, '을', '를') + ' 더한 수예요.' : '에서 ' + U.josa(-k, '을', '를') + ' 뺀 수예요.') }; },
       fib: function () { const a = r.int(1, 5), b = r.int(a + 1, 9); const s = [a, b]; while (s.length < 6) s.push(s[s.length - 1] + s[s.length - 2]); return { seq: s, explain: '앞의 두 수를 더한 값이 다음 수예요.' }; },
       inter: function () { const a = r.int(1, 9), d1 = r.int(1, 4), b = r.int(10, 40), d2 = r.int(3, 10); return { seq: six(function (i) { return i % 2 === 0 ? a + d1 * (i / 2) : b + d2 * ((i - 1) / 2); }), explain: '두 수열이 번갈아 나와요. ' + a + '부터 ' + d1 + '씩, ' + b + '부터 ' + d2 + '씩 커져요.' }; },
       second: function () { const a = r.int(1, 10), d = r.int(1, 4), inc = r.int(1, 3); let x = a, step = d; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += step; step += inc; } return { seq: s, explain: '이웃한 수의 차이가 ' + d + ', ' + (d + inc) + ', ' + (d + 2 * inc) + '…처럼 ' + inc + '씩 늘어나요.' }; },
       mulAdd: function () { const a = r.int(2, 5), k = r.pick([1, -1, 3]); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 + k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + (k > 0 ? U.josa(k, '을', '를') + ' 더해요.' : U.josa(-k, '을', '를') + ' 빼요.') }; },
       /* 4단계 */
-      mulSub: function () { const k = r.int(1, 3), a = r.int(Math.max(3, k + 1), 6); let x = a;   // a = k 이면 3, 3, 3, …처럼 같은 수만 나온다(2026-11-12 고침)
+      // 2026-11-13: 서로 다른 문항이 적어 다시 보면 외워서 풀 수 있었다. 첫 수를 6 → 8까지 넓힌다(가장 큰 정답 225).
+      mulSub: function () { const k = r.int(1, 3), a = r.int(Math.max(3, k + 1), 8); let x = a;   // a = k 이면 3, 3, 3, …처럼 같은 수만 나온다(2026-11-12 고침)
         const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = x * 2 - k; } return { seq: s, explain: '앞의 수를 2배 한 뒤 ' + U.josa(k, '을', '를') + ' 빼요.' }; },
-      alt2: function () { const a = r.int(2, 9), d = r.int(2, 5), b = r.int(2, 5); return { seq: six(function (i) { return i % 2 === 0 ? a + d * (i / 2) : b * Math.pow(2, (i - 1) / 2); }), explain: '두 수열이 번갈아 나와요. 홀수 번째는 ' + a + '부터 ' + d + '씩 커지고, 짝수 번째는 ' + b + '부터 2배씩 커져요.' }; },
-      primes: function () { const st = r.int(0, 5); return { seq: PRIMES.slice(st, st + 6), explain: '소수(1과 자기 자신으로만 나누어지는 수)가 작은 것부터 차례로 나와요.' }; },
-      sqPlusN: function () { const off = r.int(1, 3), sg = r.pick([1, -1]); return { seq: six(function (i) { const n = i + off; return n * n + sg * n; }), explain: 'n²' + (sg > 0 ? '+n' : '−n') + ' (n=' + off + ', ' + (off + 1) + ', …) 꼴이에요. 이웃한 수의 차이가 2씩 늘어나요.' }; },
+      /* 2026-11-13: 4단계에 있던 alt2(홀수 번째 등차, 짝수 번째 2배)는 지웠다. 짝수 번째가 화면에 두 개(b, 2b)뿐이라 "b씩 커진다"(3b)로도 읽혀서
+         altNext가 늘 모호하다고 걸러 한 번도 나오지 않았다. 두 줄 번갈아 문항에서 정답이 두 수만 보이는 줄에서 나오는 한 고칠 수 없다.
+         소수: 마지막 수와 정답 사이가 2뿐인 시작점(2·5·13·29…부터)은 정답보다 작은 오답 자리가 없어 정답이 가장 작거나 둘째로 작은 보기인 경우가 80%였다.
+         사이가 4 이상인 시작점만 쓰고, 정답이 67을 넘지 않게 한다. 11부터(11, 13, 17, 19, 23)는 차이가 2, 4로 번갈아 25로도 읽혀 altNext가 거르므로 뺐다. */
+      primes: function () { const st = r.pick([1, 3, 6, 7, 9, 10, 11, 13]); return { seq: PRIMES.slice(st, st + 6), explain: '소수(1과 자기 자신으로만 나누어지는 수)가 작은 것부터 차례로 나와요.' }; },
+      // 2026-11-13: n을 8까지 넓히고(서로 다른 문항 늘리기), n²−n은 n=2부터 시작해 첫 수가 0이 되지 않게 한다
+      sqPlusN: function () { const sg = r.pick([1, -1]), off = r.int(sg < 0 ? 2 : 1, 8); return { seq: six(function (i) { const n = i + off; return n * n + sg * n; }), explain: 'n²' + (sg > 0 ? '+n' : '−n') + ' (n=' + off + ', ' + (off + 1) + ', …) 꼴이에요. 이웃한 수의 차이가 2씩 늘어나요.' }; },
       /* 5단계 */
-      lookback3: function () { const a = r.int(1, 3), b = r.int(1, 3); const s = [a, b, a + b]; while (s.length < 6) s.push(s[s.length - 1] + s[s.length - 2] + s[s.length - 3]); return { seq: s, explain: '앞의 세 수를 더한 값이 다음 수예요.' }; },
-      altMulAdd: function () { const a = r.int(2, 5), k = r.int(2, 4); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = i % 2 === 0 ? x * 2 : x + k; } return { seq: s, explain: '×2와 ' + U.josa('+' + k, '이', '가') + ' 번갈아 적용돼요.' }; },
-      diffGeo: function () { const a = r.int(1, 5), d = r.pick([1, 2, 3]); let x = a, step = d; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += step; step *= 2; } return { seq: s, explain: '이웃한 수의 차이가 ' + d + ', ' + d * 2 + ', ' + d * 4 + '…처럼 2배씩 커져요.' }; },
-      primesSkip: function () { const st = r.int(0, 3); return { seq: [0, 1, 2, 3, 4, 5].map(function (i) { return PRIMES[st + 2 * i]; }), explain: '소수를 하나씩 건너뛰며 나열한 거예요.' }; }
+      /* 5단계(2026-11-13): 서로 다른 문항이 36개뿐이라 매개변수 범위를 넓혔다. 앞의 세 수 더하기는 첫 두 수가 같으면(1, 1, 2, 4, 7)
+         차이가 0, 1, 2, 3으로 늘어나는 수열로도 읽혀 altNext가 거르므로 처음부터 다르게 뽑는다. */
+      lookback3: function () { const a = r.int(1, 5); let b = r.int(1, 4); if (b >= a) b += 1; const s = [a, b, a + b]; while (s.length < 6) s.push(s[s.length - 1] + s[s.length - 2] + s[s.length - 3]); return { seq: s, explain: '앞의 세 수를 더한 값이 다음 수예요.' }; },
+      altMulAdd: function () { const a = r.int(2, 7), k = r.int(2, 6); let x = a; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x = i % 2 === 0 ? x * 2 : x + k; } return { seq: s, explain: '×2와 ' + U.josa('+' + k, '이', '가') + ' 번갈아 적용돼요.' }; },
+      /* 차이가 2배씩 커지는 수열 a, a+d, a+3d, …는 "앞의 수를 2배 하고 (d − a)를 더한다"와 같다. 2026-11-13: a = d 이면 1, 2, 4, 8, 16처럼 1단계 ×2 수열이
+         되고(연습 문항과 같은 문제도 나왔다), d − a 가 1·−1·3이면 3단계, −1·−2·−3이면 4단계의 "2배 하고 더하기/빼기" 문항과 똑같아져서 그런 짝은 다시 뽑는다.
+         남는 짝이 적어 a는 1~9, d는 1~4로 넓혔다(16가지, 가장 큰 정답 133). */
+      diffGeo: function () { let a, d; do { a = r.int(1, 9); d = r.int(1, 4); } while ([-3, -2, -1, 0, 1, 3].indexOf(d - a) >= 0); let x = a, step = d; const s = []; for (let i = 0; i < 6; i++) { s.push(x); x += step; step *= 2; } return { seq: s, explain: '이웃한 수의 차이가 ' + d + ', ' + d * 2 + ', ' + d * 4 + '…처럼 2배씩 커져요.' }; },
+      // 2026-11-13: 시작점을 3~19로 넓힌다(정답 61 이하). 2부터(2, 5, 11, 17, 23)는 뒤 세 차이가 같아 29로도 읽혀 altNext가 거르므로 뺐다.
+      primesSkip: function () { const st = r.int(1, 7); return { seq: [0, 1, 2, 3, 4, 5].map(function (i) { return PRIMES[st + 2 * i]; }), explain: '소수를 하나씩 건너뛰며 나열한 거예요.' }; }
     };
-    const pools = { 1: ['arith', 'arithNeg', 'geo'], 2: ['alt', 'square', 'fib', 'inter'], 3: ['second', 'mulAdd', 'inter', 'square'], 4: ['mulSub', 'alt2', 'primes', 'sqPlusN'], 5: ['lookback3', 'altMulAdd', 'diffGeo', 'primesSkip'] };
+    const pools = { 1: ['arith', 'arithNeg', 'geo'], 2: ['alt', 'square', 'fib', 'inter'], 3: ['second', 'mulAdd', 'inter', 'square'], 4: ['mulSub', 'primes', 'sqPlusN'], 5: ['lookback3', 'altMulAdd', 'diffGeo', 'primesSkip'] };
     // 앞 다섯 수가 다른 단순 규칙으로도 설명되면서 여섯째 수가 달라지는 경우(모호한 문항)는 버리고 다시 만든다
     let g = null;
     for (let t = 0; t < 40; t++) {
@@ -644,6 +801,8 @@
       if (alts.every(function (v) { return v === cand.seq[5]; })) { g = cand; break; }
       if (!g) g = cand;
     }
+    // 2026-11-13: 40번 모두 같은 수 반복으로 걸러지면 g가 비어 오류가 났다(지금 분포로는 생기지 않음). 그때는 늘 맞는 등차 수열을 낸다.
+    if (!g) g = gens.arith();
     const seq = g.seq, shown = seq.slice(0, 5), answer = seq[5];
     const d = seq[4] - seq[3];
     /* 오답 고르기(2026-11-12). 예전에는 정답 ±1·±2·±d 가운데 셋을 아무렇게나 뽑아서 정답이 네 보기 중 가운데 두 수일 때가 80%였다
@@ -660,8 +819,16 @@
     };
     const pool = [answer + d, answer - d, seq[4] * 2, answer + 2 * d, seq[4] + seq[3], seq[4] + d - 1, seq[4] + d + 1];
     for (let k = 1; k <= 6; k++) pool.push(answer + k, answer - k);
+    /* 2026-11-13: 여섯 수(정답 포함)가 모두 어떤 수 G(>1)의 배수이거나 홀짝이 같으면, 그 성질을 지키는 후보를 먼저 쓴다.
+       예전에는 4, 8, 12, 16, 20 → 24에 30 같은 보기가 섞여 "다섯 수의 공약수로 안 나누어지는 보기"나 "홀짝이 다른 보기"만 지워도
+       1·4·5단계에서 찍기(25%)보다 훨씬 잘 맞혔다(최대 41%). 정답 순위를 고르게 하는 방법은 그대로다. */
+    const gcd = function (a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { const t = a % b; a = b; b = t; } return a; };
+    const G = seq.reduce(gcd), P = seq.every(function (v) { return (v - seq[0]) % 2 === 0; }) ? ((seq[0] % 2) + 2) % 2 : -1;
+    const fits = function (v) { return (G < 2 || v % G === 0) && (P < 0 || ((v % 2) + 2) % 2 === P); };
+    const step = G > 1 ? G : P >= 0 ? 2 : 1;
+    for (let k = 1; k <= 4; k++) pool.push(answer + k * step, answer - k * step);
     const lows = [], highs = [];
-    r.shuffle(pool).forEach(function (v) { if (usable(v) && lows.indexOf(v) < 0 && highs.indexOf(v) < 0) (v < answer ? lows : highs).push(v); });
+    r.shuffle(pool).sort(function (a, b) { return fits(b) - fits(a); }).forEach(function (v) { if (usable(v) && lows.indexOf(v) < 0 && highs.indexOf(v) < 0) (v < answer ? lows : highs).push(v); });
     const bLo = Math.max(0, 3 - highs.length), bHi = Math.min(3, lows.length);
     const below = bLo <= bHi ? r.int(bLo, bHi) : bHi;
     const dist = lows.slice(0, below).concat(highs.slice(0, 3 - below));
@@ -706,15 +873,15 @@
     { prompt: '어둠 : 빛 = 고요 : ?', options: ['소리', '평화', '침묵', '밤'], answer: 0, level: 3, explain: '무엇이 없는 상태와 그 없는 것이에요. 어둠은 빛이 없는 상태이고, 고요는 소리가 없는 상태예요.' },
     { prompt: '탄생 : 죽음 = 개업 : ?', options: ['폐업', '창업', '휴업', '파업'], answer: 0, level: 2, explain: '시작과 끝의 짝이에요. 삶이 탄생으로 시작해 죽음으로 끝나듯, 가게는 개업으로 문을 열고 폐업으로 문을 닫아요. 휴업은 잠시 쉬는 거예요.' },
     { prompt: '항생제 : 세균 = 제초제 : ?', options: ['잡초', '해충', '곰팡이', '비료'], answer: 0, level: 2, explain: '약과 그 약이 없애는 대상이에요. 항생제는 세균을, 제초제는 잡초를 없애요. 해충을 없애는 건 살충제예요.' },
-    { prompt: '미소 : 폭소 = 이슬비 : ?', options: ['폭우', '안개', '이슬', '가랑비'], answer: 0, level: 2, explain: '같은 것의 약한 정도와 센 정도예요. 미소는 소리 없이 살짝 웃는 것이고 폭소는 크게 터지는 웃음이듯, 이슬비는 아주 가는 비이고 폭우는 세차게 쏟아지는 비예요.' },
+    { prompt: '미소 : 폭소 = 이슬비 : ?', options: ['장대비', '안개', '이슬', '가랑비'], answer: 0, level: 2, explain: '같은 것의 약한 정도와 센 정도예요. 미소는 소리 없이 살짝 웃는 것이고 폭소는 크게 터지는 웃음이듯, 이슬비는 아주 가는 비이고 장대비는 빗줄기가 굵고 거세게 쏟아지는 비예요. 가랑비는 이슬비보다 조금 굵을 뿐 여전히 가는 비예요.' },
     { prompt: '저자 : 독자 = 화자 : ?', options: ['청자', '작자', '관객', '필자'], answer: 0, level: 3, explain: '전하는 사람과 받는 사람이에요. 글은 저자가 쓰고 독자가 읽으며, 말은 화자가 하고 청자가 들어요. 작자·필자는 글을 쓴 사람이에요.' },
-    { prompt: '정밀하다 : 엉성하다 = 신속하다 : ?', options: ['굼뜨다', '날쌔다', '재빠르다', '서투르다'], answer: 0, level: 3, explain: '반대말 관계예요. 정밀하다의 반대가 엉성하다이듯 신속하다의 반대는 굼뜨다예요. 날쌔다·재빠르다는 신속하다와 비슷한 말이에요.' },
+    { prompt: '정밀하다 : 엉성하다 = 신속하다 : ?', options: ['굼뜨다', '정확하다', '재빠르다', '서투르다'], answer: 0, level: 3, explain: '반대말 관계예요. 정밀하다의 반대가 엉성하다이듯 신속하다의 반대는 굼뜨다예요. 재빠르다는 신속하다와 비슷한 말이고, 정확하다는 "신속하고 정확하게"처럼 오히려 함께 쓰는 말이에요.' },
     { prompt: '은유 : 비유 = 오각형 : ?', options: ['다각형', '정사각형', '꼭짓점', '원'], answer: 0, level: 3, explain: '좁은 개념과 그것을 품는 넓은 개념이에요. 은유는 비유의 한 방법이고, 오각형은 다각형의 한 종류예요. 정사각형은 오각형과 같은 층에 있는 다른 다각형이에요.' },
     { prompt: '청사진 : 건물 = 각본 : ?', options: ['연극', '배우', '무대', '관객'], answer: 0, level: 2, explain: '미리 짜 둔 계획과 그 계획대로 만들어지는 것이에요. 청사진(설계도)대로 건물을 짓고, 각본대로 연극을 올려요.' },
     { prompt: '천문학 : 별 = 지질학 : ?', options: ['암석', '날씨', '생물', '바다'], answer: 0, level: 2, explain: '학문과 그 학문이 연구하는 대상이에요. 천문학은 별과 우주를, 지질학은 암석과 땅의 구조를 연구해요. 날씨는 기상학이 다뤄요.' },
     { prompt: '분노 : 감정 = 귀납 : ?', options: ['추론', '연역', '결론', '가설'], answer: 0, level: 5, explain: '좁은 개념과 그것이 속한 넓은 개념이에요. 분노는 감정의 한 종류이고, 귀납은 추론의 한 방법이에요. 연역은 귀납과 나란한 다른 추론 방법이에요.' },
     { prompt: '퇴고 : 글 = 조율 : ?', options: ['악기', '음악', '노래', '무대'], answer: 0, level: 4, explain: '바르게 다듬는 일과 그 대상이에요. 퇴고는 글을 여러 번 고쳐 다듬는 일이고, 조율은 악기의 음을 바른 높이로 맞추는 일이에요.' },
-    { prompt: '탁월하다 : 뛰어나다 = 진부하다 : ?', options: ['케케묵다', '참신하다', '새롭다', '흔쾌하다'], answer: 0, level: 3, explain: '뜻이 비슷한 말의 짝이에요. 탁월하다는 뛰어나다와, 진부하다는 낡아서 새롭지 못하다는 뜻이라 케케묵다와 가까워요. 참신하다·새롭다는 반대말이에요.' },
+    { prompt: '탁월하다 : 뛰어나다 = 진부하다 : ?', options: ['케케묵다', '참신하다', '낯설다', '흔쾌하다'], answer: 0, level: 3, explain: '뜻이 비슷한 말의 짝이에요. 탁월하다는 뛰어나다와, 진부하다는 낡아서 새롭지 못하다는 뜻이라 케케묵다와 가까워요. 참신하다는 반대말이고, 낯설다는 처음 보아 익숙하지 않다는 뜻이라 오히려 새로운 쪽이에요.' },
     { prompt: '박식하다 : 지식 = 노련하다 : ?', options: ['경험', '나이', '재능', '체력'], answer: 0, level: 3, explain: '무엇이 많아서 갖춘 성질이에요. 박식하다는 아는 것이 많다는 뜻이고, 노련하다는 경험이 많아 익숙하고 능란하다는 뜻이에요. 나이가 많다는 뜻은 아니에요.' },
     { prompt: '구두 : 말 = 서면 : ?', options: ['글', '신발', '얼굴', '서명'], answer: 0, level: 2, explain: '뜻을 전하는 방식이에요. 구두는 입으로 하는 말로, 서면은 종이에 쓴 글로 전한다는 뜻이에요. 여기서 구두는 신발이 아니에요.' },
     { prompt: '다리 : 강 = 통역 : ?', options: ['언어', '번역', '통역사', '외국'], answer: 0, level: 4, explain: '다리가 강에 가로막힌 양쪽을 이어 주듯, 통역은 서로 다른 언어에 가로막힌 사람들을 이어 줘요. 번역도 언어를 옮기는 일이지만 통역과 나란한 다른 방식일 뿐, 통역이 건너게 해 주는 장벽이 아니에요.' },
@@ -734,23 +901,23 @@
     { prompt: '"빈번하다"와 뜻이 가장 가까운 말은?', options: ['잦다', '드물다', '급하다', '넓다'], answer: 0, level: 1, explain: '빈번하다는 일이 자주 일어나 잦다는 뜻이에요.' },
     { prompt: '"인색하다"의 반대말에 가장 가까운 것은?', options: ['후하다', '검소하다', '무심하다', '성실하다'], answer: 0, level: 2, explain: '인색은 베풀기를 아끼는 것이고, 반대는 "후하다"예요.' },
     { prompt: '"경솔하다"의 반대말에 가장 가까운 것은?', options: ['신중하다', '대담하다', '느리다', '겸손하다'], answer: 0, level: 2, explain: '경솔은 깊이 생각하지 않고 가볍게 행동하는 것이고, 반대는 신중이에요.' },
-    { prompt: '"유보하다"와 뜻이 가장 가까운 말은?', options: ['미루다', '결정하다', '거절하다', '보관하다'], answer: 0, level: 2, explain: '유보하다는 결정을 나중으로 미룬다는 뜻이에요.' },
+    { prompt: '"유보하다"와 뜻이 가장 가까운 말은?', options: ['미루다', '끝맺다', '거절하다', '보관하다'], answer: 0, level: 2, explain: '유보하다는 결정을 나중으로 미룬다는 뜻이에요. 끝맺다는 오히려 일을 마무리한다는 뜻이고, 거절하다는 받아들이지 않는다는 뜻이라 달라요.' },
     { prompt: '"미미하다"와 뜻이 가장 가까운 말은?', options: ['보잘것없다', '아름답다', '조용하다', '강하다'], answer: 0, level: 2, explain: '미미하다는 보잘것없이 아주 작다는 뜻이에요.' },
     { prompt: '"완곡하다"와 뜻이 가장 가까운 것은?', options: ['부드럽게 돌려 말하다', '직설적으로 말하다', '단호하게 말하다', '길게 늘여 말하다'], answer: 0, level: 3, explain: '완곡하다는 듣기 좋게 돌려서 부드럽게 말한다는 뜻이에요.' },
-    { prompt: '"고루하다"와 뜻이 가장 가까운 것은?', options: ['낡고 융통성이 없다', '고르고 균등하다', '외롭고 쓸쓸하다', '높고 귀하다'], answer: 0, level: 4, explain: '고루하다는 낡은 생각에 매여 융통성이 없다는 뜻이에요.' },
+    { prompt: '"고루하다"와 뜻이 가장 가까운 것은?', options: ['낡고 융통성이 없다', '고르고 치우침이 없다', '외롭고 쓸쓸하다', '높고 귀하다'], answer: 0, level: 4, explain: '고루하다는 낡은 생각에 매여 융통성이 없다는 뜻이에요. "고루 나누다"의 고루(고르게)와는 다른 말이에요.' },
     { prompt: '"서슴다"와 뜻이 가장 가까운 말은?', options: ['망설이다', '서두르다', '숨기다', '다투다'], answer: 0, level: 3, explain: '서슴다는 결정을 내리지 못하고 머뭇거린다는 뜻이에요. "서슴지 않고"라고 할 때의 그 말이에요.' },
-    { prompt: '"알음알음"의 뜻으로 가장 알맞은 것은?', options: ['서로 아는 관계를 통해', '아주 천천히 조금씩', '남몰래 은밀하게', '분명하고 뚜렷하게'], answer: 0, level: 3, explain: '알음알음은 서로 아는 관계나 친분을 통해서라는 뜻이에요.' },
+    { prompt: '"알음알음"의 뜻으로 가장 알맞은 것은?', options: ['서로 아는 관계를 통해', '아주 천천히 조금씩', '남몰래 은밀하게', '분명하고 뚜렷하게'], answer: 0, level: 3, explain: '알음알음은 서로 아는 관계라는 뜻이에요. 흔히 "알음알음으로 일자리를 구했다"처럼 써서 아는 사람을 통해서라는 뜻이 돼요.' },
     { prompt: '"미쁘다"와 뜻이 가장 가까운 말은?', options: ['믿음직하다', '미심쩍다', '어여쁘다', '변덕이 심하다'], answer: 0, level: 5, explain: '미쁘다는 믿음성이 있다, 곧 믿음직하다는 뜻이에요. 미심쩍다는 오히려 반대에 가까워요.' },
     { prompt: '"사위스럽다"와 뜻이 가장 가까운 것은?', options: ['어쩐지 불길하다', '사이가 서먹하다', '몹시 까다롭다', '몸가짐이 단정하다'], answer: 0, level: 5, explain: '사위스럽다는 마음에 불길한 느낌이 들고 꺼림칙하다는 뜻이에요.' },
     { prompt: '"부족하다"와 뜻이 가장 가까운 말은?', options: ['모자라다', '넘치다', '가볍다', '여유가 있다'], answer: 0, level: 1, explain: '부족하다는 필요한 만큼 넉넉하지 않다는 뜻이라 "모자라다"와 같아요.' },
-    { prompt: '"느긋하다"와 뜻이 가장 가까운 말은?', options: ['여유롭다', '조급하다', '부지런하다', '쓸쓸하다'], answer: 0, level: 1, explain: '느긋하다는 서두르지 않고 마음에 여유가 있다는 뜻이에요. 조급하다는 반대말이에요.' },
+    { prompt: '"느긋하다"와 뜻이 가장 가까운 말은?', options: ['여유롭다', '조급하다', '부지런하다', '외롭다'], answer: 0, level: 1, explain: '느긋하다는 서두르지 않고 마음에 여유가 있다는 뜻이에요. 조급하다는 반대말이에요.' },
     { prompt: '"게으르다"의 반대말에 가장 가까운 것은?', options: ['부지런하다', '꾸물꾸물하다', '나른하다', '한가하다'], answer: 0, level: 1, explain: '게으르다는 움직이거나 일하기를 싫어한다는 뜻이고, 반대는 부지런하다예요. 꾸물꾸물하다는 오히려 게으른 모습에 가까워요.' },
     { prompt: '"흔하다"의 반대말에 가장 가까운 것은?', options: ['드물다', '많다', '평범하다', '자주 있다'], answer: 0, level: 1, explain: '흔하다는 보기 쉽고 자주 있다는 뜻이고, 반대는 드물다예요.' },
     { prompt: '"정직하다"와 뜻이 가장 가까운 말은?', options: ['솔직하다', '영리하다', '친절하다', '용감하다'], answer: 0, level: 1, explain: '정직하다는 거짓이나 꾸밈이 없이 바르고 곧다는 뜻이라 "솔직하다"와 가까워요.' },
     { prompt: '"모호하다"와 뜻이 가장 가까운 말은?', options: ['애매하다', '분명하다', '명백하다', '엄격하다'], answer: 0, level: 1, explain: '모호하다는 말이나 태도가 흐릿해서 분명하지 않다는 뜻이라 "애매하다"와 가까워요. 분명하다·명백하다는 반대말이에요.' },
     { prompt: '"단념하다"와 뜻이 가장 가까운 말은?', options: ['포기하다', '결심하다', '기대하다', '집중하다'], answer: 0, level: 2, explain: '단념하다는 품었던 생각을 아주 끊어 버린다는 뜻이라 "포기하다"와 가까워요.' },
     { prompt: '"낙관하다"의 반대말에 가장 가까운 것은?', options: ['비관하다', '기대하다', '확신하다', '안심하다'], answer: 0, level: 1, explain: '낙관하다는 앞일을 밝고 희망적으로 본다는 뜻이고, 반대는 어둡게 보는 "비관하다"예요.' },
-    { prompt: '"만류하다"와 뜻이 가장 가까운 말은?', options: ['말리다', '권하다', '허락하다', '재촉하다'], answer: 0, level: 3, explain: '만류하다는 붙들고 못 하게 말린다는 뜻이에요. 권하다·재촉하다는 오히려 하라고 미는 쪽이에요.' },
+    { prompt: '"만류하다"와 뜻이 가장 가까운 말은?', options: ['말리다', '권하다', '나무라다', '재촉하다'], answer: 0, level: 3, explain: '만류하다는 붙들고 못 하게 말린다는 뜻이에요. 권하다·재촉하다는 오히려 하라고 미는 쪽이고, 나무라다는 잘못을 꾸짖는다는 뜻이에요.' },
     { prompt: '"간과하다"와 뜻이 가장 가까운 것은?', options: ['대충 보아 넘기다', '자세히 살펴보다', '간단히 정리하다', '사이를 띄워 두다'], answer: 0, level: 3, explain: '간과하다는 큰 관심 없이 대강 보아 넘긴다는 뜻이에요. "중요한 점을 간과했다"처럼 써요.' },
     { prompt: '"모름지기"의 뜻으로 가장 알맞은 것은?', options: ['마땅히', '아마도', '도무지', '어쩌다가'], answer: 0, level: 4, explain: '모름지기는 사리를 따져 보면 마땅히, 반드시라는 뜻이에요. "모른다"는 뜻으로 쓰는 말이 아니에요.' },
     { prompt: '"겸연쩍다"와 뜻이 가장 가까운 것은?', options: ['쑥스럽고 어색하다', '겸손하고 공손하다', '넉넉하고 여유롭다', '지루하고 따분하다'], answer: 0, level: 3, explain: '겸연쩍다는 쑥스럽거나 미안해서 어색하다는 뜻이에요. "겸손하다"와는 다른 말이에요.' },
@@ -765,17 +932,17 @@
     { prompt: '"천착하다"와 뜻이 가장 가까운 것은?', options: ['깊이 파고들어 연구하다', '겉만 대강 훑어보다', '천천히 자리를 잡다', '하늘 높이 힘차게 솟아오르다'], answer: 0, level: 5, explain: '천착하다는 원인이나 내용을 깊이 파고들어 알아내거나 연구한다는 뜻이에요. "한 주제에 천착하다"처럼 써요.' },
     { prompt: '"가없다"와 뜻이 가장 가까운 것은?', options: ['끝이 없다', '불쌍하다', '값어치가 없다', '가장자리가 있다'], answer: 0, level: 5, explain: '가없다는 끝이 없다는 뜻이에요. "가없는 사랑"처럼 써요. 불쌍하다는 뜻의 "가엾다"와 헷갈리기 쉬워요.' },
     { prompt: '"느껍다"와 뜻이 가장 가까운 것은?', options: ['느낌이 북받쳐 벅차다', '움직임이 몹시 느릿하다', '두껍고 무겁다', '싫증이 나다'], answer: 0, level: 5, explain: '느껍다는 어떤 느낌이 마음에 북받쳐서 벅차다는 뜻이에요. "느꺼운 마음"처럼 써요.' },
-    { prompt: '"과묵하다"의 반대말에 가장 가까운 것은?', options: ['수다스럽다', '묵묵하다', '과감하다', '무뚝뚝하다'], answer: 0, level: 2, explain: '\'과묵하다\'는 말이 적고 침착하다는 뜻이라, 쓸데없이 말수가 많은 \'수다스럽다\'가 반대말이에요. \'묵묵하다\'는 말없이 잠잠하다는 뜻이어서 반대말이 아니라 오히려 비슷한 말이에요.' },
+    { prompt: '"과묵하다"의 반대말에 가장 가까운 것은?', options: ['수다스럽다', '묵묵하다', '과감하다', '퉁명스럽다'], answer: 0, level: 2, explain: '\'과묵하다\'는 말이 적고 침착하다는 뜻이라, 쓸데없이 말수가 많은 \'수다스럽다\'가 반대말이에요. \'묵묵하다\'는 말없이 잠잠하다는 뜻이어서 반대말이 아니라 오히려 비슷한 말이에요. \'퉁명스럽다\'는 말투가 무뚝뚝하다는 뜻이라 말수와는 상관이 없어요.' },
     { prompt: '"흐드러지다"의 뜻으로 가장 알맞은 것은?', options: ['탐스럽고 한창 성하다', '흩어져서 몹시 어지럽다', '흐릿하고 희미하다', '힘없이 축 늘어지다'], answer: 0, level: 4, explain: '\'흐드러지다\'는 \'흐드러지게 핀 벚꽃\'처럼 매우 탐스럽거나 한창 성한 모양을 뜻해요. 소리가 비슷한 \'흐트러지다\'가 \'흩어져 어지럽다\'는 뜻이라 헷갈리기 쉽지만 다른 말이에요.' }
   ];
   /* 논리: 정답은 전제에서 "반드시" 따라 나오는 것 하나뿐이고, 오답은 거짓이거나 참일 수도 있을 뿐인 문장이다.
      전제에 "거짓말"이 들어가면 질문이 "거짓말을 하는 사람은 누구일까요?"로 바뀐다(choiceItems). */
   const LOGIC = [
-    { premise: '모든 고래는 포유류다. 모든 포유류는 폐로 숨 쉰다.', options: ['모든 고래는 폐로 숨 쉰다', '폐로 숨 쉬는 동물은 모두 고래다', '어떤 포유류는 고래가 아니다', '고래는 물고기다'], answer: 0, level: 1, explain: '고래 → 포유류 → 폐호흡이니까 모든 고래는 폐로 숨 쉬어요.' },
+    { premise: '모든 고래는 포유류다. 모든 포유류는 폐로 숨 쉰다.', options: ['모든 고래는 폐로 숨 쉰다', '폐로 숨 쉬는 동물은 모두 고래다', '어떤 고래는 포유류가 아니다', '고래는 물고기다'], answer: 0, level: 1, explain: '고래 → 포유류 → 폐호흡이니까 모든 고래는 폐로 숨 쉬어요.' },
     { premise: '민수는 지호보다 키가 크다. 지호는 수아보다 키가 크다.', options: ['민수는 수아보다 키가 크다', '수아는 민수보다 키가 크다', '지호가 가장 크다', '셋의 키는 같다'], answer: 0, level: 1, explain: '민수 > 지호 > 수아니까 민수 > 수아예요.' },
     { premise: '어떤 학생은 안경을 쓴다. 안경을 쓴 사람은 모두 시력이 나쁘다.', options: ['어떤 학생은 시력이 나쁘다', '모든 학생은 시력이 나쁘다', '시력이 나쁜 사람은 모두 학생이다', '안경을 안 쓴 학생은 시력이 좋다'], answer: 0, level: 2, explain: '안경 쓴 학생이 적어도 한 명 있고 그 사람은 시력이 나쁘니까 "어떤 학생은 시력이 나쁘다"만 반드시 참이에요.' },
     { premise: '이 상자의 공은 모두 빨갛거나 파랗다. 상자에서 꺼낸 공은 빨갛지 않다.', options: ['꺼낸 공은 파랗다', '꺼낸 공은 빨갛다', '상자에는 파란 공만 있다', '알 수 없다'], answer: 0, level: 2, explain: '빨강 아니면 파랑인데 빨강이 아니니까 파랑이에요.' },
-    { premise: '시험이 쉬웠다면 평균이 80점을 넘었을 것이다. 평균은 80점을 넘지 않았다.', options: ['시험은 쉽지 않았다', '시험은 쉬웠다', '평균은 정확히 80점이었다', '알 수 없다'], answer: 0, level: 3, explain: '"쉬우면 80점 초과"인데 80점을 넘지 않았으니까 쉽지 않았던 거예요 (후건 부정).' },
+    { premise: '시험이 쉬우면 평균이 80점을 넘는다. 이번 시험의 평균은 80점을 넘지 않았다.', options: ['이번 시험은 쉽지 않았다', '이번 시험은 쉬웠다', '이번 시험의 평균은 정확히 80점이었다', '알 수 없다'], answer: 0, level: 3, explain: '"쉬우면 80점 초과"인데 80점을 넘지 않았으니까 쉽지 않았던 거예요. 결과가 없으면 그 조건도 없었던 거예요.' },
     { premise: '비가 오면 땅이 젖는다. 지금 땅이 젖어 있다.', options: ['비가 왔는지는 알 수 없다', '비가 왔다', '비가 오지 않았다', '땅은 항상 젖어 있다'], answer: 0, level: 4, explain: '땅은 물을 뿌려도 젖어요. "비 → 젖음"에서 "젖음 → 비"는 따라 나오지 않아요.' },
     { premise: '어떤 A도 B가 아니다. 어떤 C는 A다.', options: ['어떤 C는 B가 아니다', '어떤 C도 B가 아니다', '어떤 B는 C다', '모든 B는 A다'], answer: 0, level: 5, explain: 'A인 C가 적어도 하나 있고, A는 하나도 B가 아니니까 그 C는 B가 아니에요. A가 아닌 C는 B일 수도 있어요.' },
     { premise: '어떤 새는 날지 못한다. 모든 새는 알을 낳는다.', options: ['알을 낳는 동물 중에 날지 못하는 것이 있다', '날지 못하는 동물은 모두 새다', '알을 낳지 않는 새가 있다', '모든 새는 날지 못한다'], answer: 0, level: 3, explain: '날지 못하는 새가 적어도 하나 있고 그 새도 알을 낳으니까, 알을 낳으면서 날지 못하는 동물이 있어요.' },
@@ -809,31 +976,31 @@
     { premise: '민재와 소희가 둘 다 모임에 오면 그날은 꼭 보드게임을 한다. 오늘 모임에서는 보드게임을 하지 않았다.', options: ['민재와 소희 중 적어도 한 명은 오지 않았다', '민재와 소희는 둘 다 오늘 모임에 오지 않았다', '민재는 왔지만 소희는 오늘 모임에 오지 않았다', '민재가 오지 않았다면 소희는 모임에 왔다'], answer: 0, level: 4, explain: '둘 다 왔다면 보드게임을 했어야 하니, 하지 않았다는 건 \'둘 다 온 것은 아니다\'라는 뜻이에요. 이 말은 한 명만 빠진 경우도 포함하므로 \'둘 다 오지 않았다\'까지는 알 수 없어요.' },
     { premise: '이 카페에서 얼음이 들어간 음료는 모두 차갑다. 이 카페의 단 음료가 모두 차가운 것은 아니다.', options: ['얼음이 안 들어간 단 음료가 있다', '단 음료에는 얼음이 들어가지 않는다', '차가운 음료에는 모두 얼음이 들어간다', '차가운 음료 중에 단 것은 없다'], answer: 0, level: 4, explain: '얼음이 들어간 음료는 모두 차가우니, 차갑지 않은 음료에는 얼음이 들어갈 수 없어요. 단 음료 중 차갑지 않은 것이 적어도 하나 있으니 그 음료가 바로 얼음이 안 들어간 단 음료예요. 그렇다고 단 음료 전부에 얼음이 없다고까지는 말할 수 없어요.' },
     { premise: '도서관 우수 이용자로 뽑힌 사람은 모두 이 동네 주민이다. 독서 동아리 회원 중에는 이 동네 주민이 아닌 사람이 있다.', options: ['독서 동아리 회원 중에는 우수 이용자가 아닌 사람이 있다', '우수 이용자 중에는 독서 동아리 회원이 아닌 사람이 있다', '독서 동아리 회원은 아무도 도서관 우수 이용자로 뽑히지 않았다', '이 동네 주민은 모두 도서관 우수 이용자로 뽑혔다'], answer: 0, level: 5, explain: '이 동네 주민이 아닌 그 회원은 우수 이용자일 수 없으니, 우수 이용자가 아닌 회원이 적어도 한 명은 있어요. 반면 우수 이용자가 모두 동아리 회원이어도 전제와 어긋나지 않으니, 순서를 뒤집은 \'우수 이용자 중 회원이 아닌 사람이 있다\'는 반드시 참은 아니에요.' },
-    { premise: '등산 모임에서는 도시락을 챙겨 오지 않으면 누구도 정상까지 오를 수 없었다. 그리고 모임 사람 중 정상까지 오른 사람이 한 명도 없는 것은 아니다.', options: ['도시락을 챙겨 온 사람이 적어도 한 명 있다', '정상까지 오르지 못한 사람이 적어도 한 명 있다', '도시락을 챙겨 온 사람은 모두 정상까지 올랐다', '도시락을 챙겨 오지 않은 사람이 적어도 한 명 있다'], answer: 0, level: 5, explain: '\'오른 사람이 한 명도 없는 것은 아니다\'는 정상에 오른 사람이 적어도 한 명 있다는 뜻이에요. 그 사람은 도시락을 챙겨 왔을 수밖에 없어요. 하지만 모두 도시락을 챙겨 와서 모두 정상에 올랐을 수도 있으니 \'도시락을 안 챙겨 온 사람이 있다\'와 \'못 오른 사람이 있다\'는 반드시 참은 아니에요. 도시락을 챙겨 오고도 못 올랐을 수 있으니 \'챙겨 온 사람은 모두 올랐다\'도 알 수 없어요.' },
+    { premise: '등산 모임 사람 가운데 도시락 없이 정상까지 오른 사람은 아무도 없었다. 그리고 모임 사람 중 정상까지 오른 사람이 한 명도 없는 것은 아니다.', options: ['도시락을 챙겨 온 사람이 적어도 한 명 있다', '정상까지 오르지 못한 사람이 적어도 한 명 있다', '도시락을 챙겨 온 사람은 모두 정상까지 올랐다', '도시락을 챙겨 오지 않은 사람이 적어도 한 명 있다'], answer: 0, level: 5, explain: '\'오른 사람이 한 명도 없는 것은 아니다\'는 정상에 오른 사람이 적어도 한 명 있다는 뜻이에요. 도시락 없이 오른 사람은 없으니 그 사람은 도시락을 챙겨 왔어요. 하지만 모두 도시락을 챙겨 와서 모두 정상에 올랐을 수도 있으니 \'도시락을 안 챙겨 온 사람이 있다\'와 \'못 오른 사람이 있다\'는 반드시 참은 아니에요. 도시락을 챙겨 오고도 못 올랐을 수 있으니 \'챙겨 온 사람은 모두 올랐다\'도 알 수 없어요.' },
     { premise: '지수, 민호, 서윤, 태현, 유나 다섯 명이 한 줄로 나란히 앉았다. 서윤이는 지수 바로 오른쪽에 앉았다. 태현이는 양쪽 맨 끝자리 중 하나에 앉았다. 유나는 지수와도 서윤이와도 이웃하지 않았다. 민호는 가운데 자리에 앉지 않았다.', options: ['민호와 유나는 이웃해 앉았다', '지수는 가운데 자리에 앉았다', '태현이는 지수와 이웃해 앉았다', '유나는 태현이와 이웃해 앉았다'], answer: 0, level: 5, explain: '조건을 모두 만족하는 자리는 \'태현 지수 서윤 민호 유나\'와 \'유나 민호 지수 서윤 태현\' 두 가지뿐이에요. 두 경우 모두 민호와 유나가 붙어 있고, 지수가 가운데에 앉는 건 두 번째 경우뿐이라 반드시 참은 아니에요.' }
   ];
   /* 공통점 찾기: 두 낱말의 본질적 공통점(범주·기능)을 고른다. 오답은 한쪽에만 맞거나 둘 다에 틀린 것이고, 보기 길이는 정답과 무관하게 섞었다. */
   const SIMILAR = [
     { pair: ['사과', '바나나'], options: ['둘 다 과일이다', '둘 다 노란색이다', '둘 다 껍질째 먹는다', '둘 다 씨가 하나도 없다'], answer: 0, level: 1, explain: '둘을 묶는 범주는 "과일"이에요. 노란색과 껍질째 먹는 것은 한쪽에만 해당하고, 사과에는 씨가 있어요.' },
-    { pair: ['개', '고양이'], options: ['네 발 달린 포유류다', '사람을 보면 짖는다', '주인을 따라다닌다', '주로 밤에 활동한다'], answer: 0, level: 1, explain: '둘 다 포유류예요. 나머지는 한쪽에만 해당해요.' },
-    { pair: ['시계', '달력'], options: ['시간을 재는 도구다', '바늘이 돌아간다', '한 해가 지나면 새것으로 바꾼다', '전기가 있어야 움직인다'], answer: 0, level: 1, explain: '둘 다 시간을 재고 알려 주는 도구예요. 바늘은 시계에만, 해마다 바꾸는 것은 달력에만 해당해요.' },
-    { pair: ['연필', '붓'], options: ['그리거나 쓰는 도구다', '글씨를 쓰는 데만 쓴다', '잉크를 묻혀 쓴다', '지우개로 지울 수 있다'], answer: 0, level: 1, explain: '하는 일(그리기·쓰기)이 본질적인 공통점이에요. 나머지는 한쪽에만 해당해요.' },
+    { pair: ['개', '고양이'], options: ['네 발 달린 포유류다', '사람을 보면 짖는 동물이다', '주인을 따라다닌다', '주로 밤에 활동한다'], answer: 0, level: 1, explain: '둘 다 포유류예요. 나머지는 한쪽에만 해당해요.' },
+    { pair: ['시계', '달력'], options: ['시간을 알려 주는 도구다', '바늘이 돌아가는 기계다', '한 해가 지나면 새것으로 바꾼다', '전기가 있어야 움직인다'], answer: 0, level: 1, explain: '둘 다 시간을 알려 주는 도구예요. 시계는 시각을, 달력은 날짜를 알려 줘요. 바늘은 시계에만, 해마다 바꾸는 것은 달력에만 해당해요.' },
+    { pair: ['연필', '붓'], options: ['그리거나 쓰는 도구다', '글씨를 쓰는 데만 쓴다', '털을 묶어 만든 물건이다', '지우개로 지울 수 있다'], answer: 0, level: 1, explain: '하는 일(그리기·쓰기)이 본질적인 공통점이에요. 털로 만든 것은 붓, 지우개로 지우는 것은 연필이고, 글씨만 쓰는 것은 둘 다 아니에요.' },
     { pair: ['증기', '얼음'], options: ['물의 다른 상태다', '만지면 차갑다', '사람이 만들어 낸 것이다', '하늘 위에 떠 있다'], answer: 0, level: 2, explain: '둘 다 물이 상태만 바뀐 거예요.' },
     { pair: ['칭찬', '벌'], options: ['행동을 바꾸는 수단이다', '받으면 기분이 좋다', '아이에게만 쓰는 것이다', '말로만 할 수 있다'], answer: 0, level: 2, explain: '정반대로 보이지만 둘 다 행동을 바꾸려고 쓰는 수단이에요.' },
     { pair: ['지도', '설명서'], options: ['모르는 것을 안내한다', '길을 찾을 때만 쓴다', '한 번 보면 다시 볼 일이 없다', '반드시 전문가가 만든다'], answer: 0, level: 2, explain: '둘 다 모르는 것을 찾아가게 돕는 안내 도구예요. 나머지는 한쪽에만 맞거나 사실이 아니에요.' },
     { pair: ['뿌리', '기초'], options: ['전체를 떠받치는 바탕이다', '위로 갈수록 두꺼워진다', '시간이 지나면 저절로 사라진다', '식물에게만 있는 것이다'], answer: 0, level: 2, explain: '보이지 않는 곳에서 전체를 받친다는 점이 핵심이에요.' },
     { pair: ['민주주의', '독재'], options: ['사회를 다스리는 방식이다', '국민이 직접 투표한다', '권력이 한 사람에게 있다', '현대에 와서 생긴 제도다'], answer: 0, level: 2, explain: '정반대의 체제지만 둘 다 "나라를 다스리는 방식"이라는 범주에 속해요.' },
     { pair: ['희망', '두려움'], options: ['앞일에 대한 감정이다', '마음이 편해지는 감정이다', '주로 밤에 생기는 감정이다', '남에게 숨기는 감정이다'], answer: 0, level: 2, explain: '둘 다 아직 오지 않은 일을 향한 감정이에요.' },
-    { pair: ['소문', '뉴스'], options: ['사람들에게 퍼지는 정보다', '언제나 사실에 근거한다', '신문과 방송에만 실린다', '며칠 지나면 모두 잊힌다'], answer: 0, level: 2, explain: '사실인지와 퍼지는 경로는 다르지만 둘 다 사람들 사이에 퍼지는 정보예요.' },
-    { pair: ['셔츠', '바지'], options: ['몸에 입는 옷이다', '다리를 넣어 입는다', '단추가 꼭 달려 있다', '추운 겨울에만 입는다'], answer: 0, level: 1, explain: '둘 다 몸에 입는 옷이에요. 다리를 넣어 입는 것은 바지뿐이고, 단추나 계절과는 상관없어요.' },
-    { pair: ['피아노', '기타'], options: ['소리를 내는 악기다', '줄을 손가락으로 튕긴다', '건반을 눌러 연주한다', '전기가 있어야 소리가 난다'], answer: 0, level: 1, explain: '둘 다 연주해서 소리를 내는 악기예요. 줄을 튕기는 것은 기타, 건반을 누르는 것은 피아노예요.' },
-    { pair: ['버스', '기차'], options: ['사람이 타는 탈것이다', '도로로만 다닌다', '철길로만 달린다', '하늘을 난다'], answer: 0, level: 1, explain: '둘 다 사람을 태워 나르는 탈것이에요. 도로로 다니는 것은 버스, 철길로 다니는 것은 기차예요.' },
-    { pair: ['숟가락', '젓가락'], options: ['밥 먹을 때 쓰는 도구다', '국물을 떠먹기에 알맞다', '두 짝이 모여야 한 벌이 된다', '반드시 나무로만 만든다'], answer: 0, level: 1, explain: '둘 다 밥을 먹을 때 쓰는 도구예요. 국물을 뜨는 것은 숟가락, 두 짝이 한 벌인 것은 젓가락이에요.' },
-    { pair: ['비', '눈'], options: ['하늘에서 내리는 물이다', '얼음 알갱이로 되어 있다', '여름에 많이 내린다', '땅에서 솟아오른다'], answer: 0, level: 1, explain: '둘 다 구름에서 땅으로 떨어지는 물이에요. 눈은 얼어서, 비는 물방울로 내린다는 것만 달라요.' },
+    { pair: ['소문', '뉴스'], options: ['사람들에게 퍼지는 정보다', '언제나 사실에 근거한다', '신문과 방송에만 실린다', '기자가 취재해서 쓴 기사다'], answer: 0, level: 2, explain: '사실인지와 퍼지는 경로는 다르지만 둘 다 사람들 사이에 퍼지는 정보예요. 기자가 취재해 쓴 기사는 뉴스뿐이에요.' },
+    { pair: ['셔츠', '바지'], options: ['몸에 입는 옷이다', '다리를 넣어 입는 하의다', '단추가 꼭 달려 있다', '추운 겨울에만 입는다'], answer: 0, level: 1, explain: '둘 다 몸에 입는 옷이에요. 다리를 넣어 입는 하의는 바지뿐이고, 단추나 계절과는 상관없어요.' },
+    { pair: ['피아노', '기타'], options: ['소리를 내는 악기다', '줄을 손가락으로 튕긴다', '건반을 눌러 연주하는 악기다', '전기가 있어야 소리가 난다'], answer: 0, level: 1, explain: '둘 다 연주해서 소리를 내는 악기예요. 줄을 튕기는 것은 기타, 건반을 누르는 것은 피아노예요.' },
+    { pair: ['버스', '기차'], options: ['사람이 타는 탈것이다', '도로로만 다닌다', '철길 위를 달리는 열차다', '하늘을 난다'], answer: 0, level: 1, explain: '둘 다 사람을 태워 나르는 탈것이에요. 도로로 다니는 것은 버스, 철길로 다니는 것은 기차예요.' },
+    { pair: ['숟가락', '젓가락'], options: ['밥 먹을 때 쓰는 도구다', '국물을 떠먹기에 알맞다', '두 짝이 모여야 한 벌이 되는 물건이다', '반드시 나무로만 만든다'], answer: 0, level: 1, explain: '둘 다 밥을 먹을 때 쓰는 도구예요. 국물을 뜨는 것은 숟가락, 두 짝이 한 벌인 것은 젓가락이에요.' },
+    { pair: ['비', '눈'], options: ['하늘에서 내리는 물이다', '얼음 알갱이로 된 것이다', '여름에 많이 내린다', '땅에서 솟아오른다'], answer: 0, level: 1, explain: '둘 다 구름에서 땅으로 떨어지는 물이에요. 눈은 얼어서, 비는 물방울로 내린다는 것만 달라요.' },
     { pair: ['간장', '식초'], options: ['음식에 맛을 내는 재료다', '짠맛이 강하게 난다', '신맛이 강하게 난다', '과일을 그대로 짜서 만든 즙이다'], answer: 0, level: 1, explain: '둘 다 음식의 맛을 내는 조미료예요. 짠맛은 간장, 신맛은 식초에만 해당해요.' },
-    { pair: ['의자', '침대'], options: ['몸을 쉬게 하는 가구다', '누워서 잠을 잔다', '등받이가 꼭 있다', '바퀴가 달려 있다'], answer: 0, level: 1, explain: '둘 다 몸을 올려 쉬게 하는 가구예요. 누워 자는 것은 침대의 쓰임이고, 등받이가 없는 의자도 있어요.' },
-    { pair: ['꿀벌', '나비'], options: ['꽃가루를 옮기는 곤충이다', '꿀을 모아 저장한다', '꽁무니의 침으로 쏜다', '날개에 화려한 무늬가 있다'], answer: 0, level: 1, explain: '둘 다 꽃을 찾아다니며 꽃가루를 옮기는 곤충이에요. 꿀을 모으고 침이 있는 것은 꿀벌, 화려한 날개는 나비의 특징이에요.' },
-    { pair: ['항구', '공항'], options: ['탈것이 드나드는 곳이다', '배가 닻을 내린다', '비행기가 하늘로 뜨고 내린다', '바닷가에만 있다'], answer: 0, level: 1, explain: '둘 다 탈것이 사람과 짐을 싣고 드나드는 곳이에요. 배는 항구로, 비행기는 공항으로 드나들어요.' },
+    { pair: ['의자', '침대'], options: ['몸을 쉬게 하는 가구다', '누워서 잠을 자는 가구다', '등받이가 꼭 있다', '바퀴가 달려 있다'], answer: 0, level: 1, explain: '둘 다 몸을 올려 쉬게 하는 가구예요. 누워 자는 것은 침대의 쓰임이고, 등받이가 없는 의자도 있어요.' },
+    { pair: ['꿀벌', '나비'], options: ['꽃가루를 옮기는 곤충이다', '꿀을 모아 저장한다', '꽁무니의 침으로 쏘는 곤충이다', '날개에 화려한 무늬가 있다'], answer: 0, level: 1, explain: '둘 다 꽃을 찾아다니며 꽃가루를 옮기는 곤충이에요. 꿀을 모으고 침이 있는 것은 꿀벌, 화려한 날개는 나비의 특징이에요.' },
+    { pair: ['항구', '공항'], options: ['탈것이 드나드는 곳이다', '배가 닻을 내린다', '비행기가 하늘로 뜨고 내리는 곳이다', '바닷가에만 있다'], answer: 0, level: 1, explain: '둘 다 탈것이 사람과 짐을 싣고 드나드는 곳이에요. 배는 항구로, 비행기는 공항으로 드나들어요.' },
     { pair: ['소방관', '경찰관'], options: ['사람들의 안전을 지킨다', '불이 나면 출동해 불을 끈다', '범인을 쫓아가 붙잡는다', '밤에는 일하지 않는다'], answer: 0, level: 1, explain: '둘 다 사람들의 안전을 지키는 일을 해요. 불을 끄는 것은 소방관, 범인을 잡는 것은 경찰관의 일이에요.' },
     { pair: ['물', '공기'], options: ['생물이 사는 데 꼭 필요하다', '눈에 전혀 보이지 않는다', '목마를 때 마신다', '불을 붙이면 잘 탄다'], answer: 0, level: 1, explain: '둘 다 생물이 살아가는 데 꼭 있어야 해요. 눈에 안 보이는 것은 공기, 마시는 것은 물이에요.' },
     { pair: ['고래', '박쥐'], options: ['새끼를 낳아 젖을 먹인다', '물속에서 헤엄쳐 다닌다', '날개를 펴고 밤하늘을 날아다닌다', '알을 낳아 품는다'], answer: 0, level: 2, explain: '사는 곳은 바다와 하늘로 다르지만, 둘 다 새끼를 낳아 젖을 먹이는 포유류예요.' },
@@ -847,20 +1014,28 @@
     { pair: ['시험', '체온계'], options: ['상태를 재서 알려 준다', '정해진 시간에 문제를 푼다', '열이 나는지 알려 준다', '숫자가 높을수록 좋다'], answer: 0, level: 2, explain: '둘 다 눈에 안 보이는 상태를 재서 알려 줘요. 시험은 실력을, 체온계는 몸의 열을 재요.' },
     { pair: ['사막', '남극'], options: ['비나 눈이 아주 적게 내린다', '낮이면 숨이 막힐 만큼 덥다', '온통 두꺼운 얼음으로 덮여 있다', '사람이 많이 모여 산다'], answer: 0, level: 3, explain: '하나는 덥고 하나는 춥지만, 둘 다 비나 눈이 아주 적게 내리는 메마른 곳이에요. 그래서 남극을 추운 사막이라고도 해요.' },
     { pair: ['문', '눈꺼풀'], options: ['열고 닫아 안쪽을 지킨다', '손잡이를 돌려 연다', '깜빡여 눈물을 고루 퍼뜨린다', '잠잘 때도 늘 열려 있다'], answer: 0, level: 2, explain: '둘 다 열었다 닫았다 하며 안쪽을 지켜요. 문은 집 안을, 눈꺼풀은 눈을 보호해요.' },
-    { pair: ['화폐', '언어'], options: ['사람들이 함께 정한 약속이다', '물건을 사고팔 때 주고받는다', '입으로 소리 내어 뜻을 전한다', '어느 나라에서나 다 똑같다'], answer: 0, level: 3, explain: '종이돈이 값을 갖고 낱말이 뜻을 갖는 것은 사람들이 그렇게 쓰자고 약속했기 때문이에요. 둘 다 그 약속 위에서 주고받는 수단이에요.' },
+    { pair: ['화폐', '언어'], options: ['사람들이 함께 정한 약속이다', '물건을 사고팔 때 주고받는다', '입으로 소리 내어 뜻을 전한다', '나라에서 법으로 정해 찍어 내는 것이다'], answer: 0, level: 3, explain: '종이돈이 값을 갖고 낱말이 뜻을 갖는 것은 사람들이 그렇게 쓰자고 약속했기 때문이에요. 둘 다 그 약속 위에서 주고받는 수단이에요. 나라에서 찍어 내는 것은 화폐뿐이에요.' },
     { pair: ['미끼', '광고'], options: ['상대를 끌어들이려고 쓴다', '물고기를 잡을 때 쓴다', '텔레비전이나 신문에 실려 나온다', '늘 사실만을 알려 준다'], answer: 0, level: 2, explain: '둘 다 상대의 관심을 끌어 다가오게 만드는 수단이에요. 물고기를 낚는 것은 미끼, 매체에 실리는 것은 광고예요.' },
     { pair: ['그림자', '메아리'], options: ['가로막는 것이 있어야 생긴다', '빛이 되돌아와서 생긴다', '소리가 산에 부딪혀 되돌아온다', '해가 떠 있는 낮에만 생긴다'], answer: 0, level: 3, explain: '그림자는 빛을 가로막는 물체가 있어야 생기고, 메아리는 소리를 막아 되돌려 보내는 산이나 벽이 있어야 생겨요. \'빛이 되돌아와서 생긴다\'는 그럴듯하지만, 그림자는 빛이 닿지 못한 자리이고 메아리는 빛이 아니라 소리예요.' },
     { pair: ['둑', '눈썹'], options: ['흘러드는 물을 막아 준다', '물을 가두었다가 전기를 만든다', '표정을 짓는 데 쓰인다', '흙과 돌을 높이 쌓아 만든다'], answer: 0, level: 3, explain: '둑은 강물이 마을로 넘쳐 들어오지 않게 막고, 눈썹은 이마의 땀이나 빗물이 눈으로 흘러들지 않게 막아 줘요. 둑을 댐과 헷갈려 \'전기를 만든다\'를 고르기 쉽지만, 둑도 눈썹도 전기를 만들지 않아요.' },
     { pair: ['진주', '굳은살'], options: ['거슬리는 자극에 맞서 생겨난다', '바닷속 조개의 몸 안에서 자란다', '손바닥이나 발바닥에 두툼하게 생긴다', '물로 씻으면 금세 없어진다'], answer: 0, level: 3, explain: '진주는 조개 속에 파고든 작은 기생충 같은 이물질이나 상처 때문에, 굳은살은 자꾸 쓸리는 마찰을 견디려고 몸이 만들어 낸 것이에요. 조개 몸 안에서 자라는 것은 진주에만 해당하니 공통점이 아니에요.' },
     { pair: ['산호', '말미잘'], options: ['촉수로 먹이를 잡는 동물이다', '바위에 붙어 자라는 식물이다', '죽고 나면 단단한 뼈대가 남는다', '물살을 따라 이리저리 떠다닌다'], answer: 0, level: 3, explain: '산호와 말미잘은 꽃이나 풀처럼 보이지만 촉수로 먹이를 잡아먹는 동물이에요. \'바위에 붙어 자라는 식물\'은 겉모습만 보고 고르기 쉬운 오답이고, 죽은 뒤 단단한 뼈대가 남는 것은 산호뿐이에요.' },
-    { pair: ['구름', '입김'], options: ['수증기가 식어서 맺힌 물방울이다', '물이 기체로 바뀐 수증기 그 자체다', '추운 날 입에서 하얗게 나온다', '하늘 높이 떠서 바람에 흘러간다'], answer: 0, level: 4, explain: '구름과 입김은 모두 공기 속 수증기가 차갑게 식어 작은 물방울로 맺힌 거예요. 수증기는 눈에 보이지 않는 기체라서, 하얗게 보인다면 이미 물방울로 바뀐 뒤예요. 그래서 수증기 그 자체라는 보기는 틀려요.' },
+    { pair: ['구름', '입김'], options: ['수증기가 식어서 맺힌 물방울이다', '물이 기체로 바뀐 수증기 그 자체다', '추운 날 입에서 하얗게 나온다', '하늘 높이 떠서 바람에 흘러간다'], answer: 0, level: 4, explain: '구름과 입김은 모두 공기 속 수증기가 차갑게 식어 작은 물방울로 맺힌 거예요(아주 높이 뜬 구름은 얼음 알갱이로 맺히기도 해요). 수증기는 눈에 보이지 않는 기체라서, 하얗게 보인다면 이미 물방울이나 얼음으로 바뀐 뒤예요. 그래서 수증기 그 자체라는 보기는 틀려요.' },
     { pair: ['쇠붙이', '대리석'], options: ['열을 빨리 빼앗아 차게 느껴진다', '같은 방 안에서도 온도가 더 낮다', '오래 두면 붉은 녹이 슨다', '돌을 캐서 매끈하게 갈아 쓴다'], answer: 0, level: 4, explain: '쇠붙이와 대리석은 열을 잘 전해서 손의 열을 빠르게 빼앗아 가기 때문에 차갑게 느껴져요. 같은 방에 오래 둔 물건은 나무든 쇠든 온도가 같아서, 실제로 온도가 더 낮다는 보기는 틀려요.' },
-    { pair: ['낙타의 혹', '선인장 줄기'], options: ['모자랄 때를 대비해 쌓아 둔다', '속에 물을 가득 채워 저장해 둔다', '날카로운 가시로 몸을 지켜 준다', '걸을 때 몸의 균형을 잡아 준다'], answer: 0, level: 4, explain: '낙타의 혹과 선인장 줄기는 모두 먹이나 물이 모자랄 때를 대비해 쌓아 두는 곳이에요. 낙타의 혹에는 물이 아니라 지방이 들어 있어서 \'물을 채워 저장한다\'는 선인장에만 맞아요.' },
+    { pair: ['낙타의 혹', '선인장 줄기'], options: ['모자랄 때를 대비해 쌓아 둔다', '물을 넉넉히 머금으면 부풀어 오른다', '날카로운 가시로 몸을 지켜 준다', '걸을 때 몸의 균형을 잡아 준다'], answer: 0, level: 4, explain: '낙타의 혹과 선인장 줄기는 모두 먹이나 물이 모자랄 때를 대비해 쌓아 두는 곳이에요. 낙타의 혹에는 물이 아니라 지방이 들어 있어서 물을 마신다고 혹이 부풀지는 않아요. 물을 머금고 부푸는 것은 선인장 줄기뿐이에요.' },
     { pair: ['눈송이', '설탕'], options: ['투명한 결정이 모여 희게 보인다', '본래부터 하얀 빛깔을 띤 물질이다', '혀에 닿으면 단맛이 퍼진다', '겨울 하늘에서 흩날려 내린다'], answer: 0, level: 4, explain: '눈송이는 얼음 결정, 설탕은 설탕 결정이 잔뜩 모여 빛을 사방으로 흩뜨리기 때문에 하얗게 보여요. 알갱이 하나하나는 유리처럼 투명해서, 본래 하얀 물질이라는 보기는 틀려요.' },
     { pair: ['깁스', '거푸집'], options: ['제 모양이 잡힐 때까지만 붙든다', '석고 가루를 물에 개어 굳힌 것이다', '콘크리트를 부어 모양을 만든다', '부서진 것을 다시 이어 붙여 준다'], answer: 0, level: 4, explain: '깁스는 뼈가 붙을 때까지, 거푸집은 콘크리트가 굳을 때까지만 모양을 잡아 주고 나중에 떼어 내요. 부러진 뼈가 붙도록 돕는 것은 깁스뿐이고, 거푸집은 무언가를 이어 붙이지 않고 틀 노릇만 해요.' },
-    { pair: ['감자', '고구마'], options: ['땅속에서 자란 부분을 먹는다', '땅속으로 뻗은 뿌리 부분을 먹는다', '싹이 돋으면 독이 생긴다', '줄기를 나물로 무쳐 먹는다'], answer: 0, level: 4, explain: '감자와 고구마는 모두 땅속에서 자라 굵어진 부분을 캐서 먹어요. 하지만 고구마는 뿌리가, 감자는 땅속줄기가 부푼 것이라서 둘 다 뿌리라는 보기는 틀려요.' },
+    { pair: ['감자', '고구마'], options: ['양분을 모아 두어 굵어진 부분을 먹는다', '땅속으로 뻗은 뿌리 부분을 먹는다', '싹이 돋으면 독이 생긴다', '줄기를 나물로 무쳐 먹는다'], answer: 0, level: 4, explain: '감자와 고구마는 모두 땅속에서 양분을 모아 두어 굵어진 부분을 캐서 먹어요. 하지만 고구마는 뿌리가, 감자는 땅속줄기가 굵어진 것이라서 둘 다 뿌리라는 보기는 틀려요.' },
     { pair: ['추위', '어둠'], options: ['무언가가 모자라서 생기는 상태다', '해가 지고 나면 반드시 찾아온다', '몸속까지 스며드는 차가운 기운이다', '무언가가 빛을 가로막아서 생긴다'], answer: 0, level: 5, explain: '추위는 열이, 어둠은 빛이 모자라서 생기는 상태예요. \'차가운 기운이 스며든다\'는 추위에만 그럴듯하고, 해가 진다고 늘 추워지는 것도 아니니 그 보기도 틀려요.' },
-    { pair: ['공룡 화석', '밤하늘의 별빛'], options: ['먼 옛날의 모습을 지금 보여 준다', '이미 사라져 버린 것이 남긴 모습이다', '땅을 깊이 파야만 찾아낼 수 있다', '어두운 밤이 되어야만 볼 수 있다'], answer: 0, level: 5, explain: '별빛은 아주 오래전에 별을 떠나 이제야 닿은 빛이라, 화석처럼 먼 옛날의 모습을 지금 보여 줘요. 그 별들은 대부분 지금도 빛나고 있으니 \'이미 사라진 것\'은 화석에만 맞아요.' }
+    { pair: ['공룡 화석', '밤하늘의 별빛'], options: ['지나간 때의 모습을 지금 보여 준다', '이미 사라져 버린 것이 남긴 모습이다', '땅을 깊이 파야만 찾아낼 수 있다', '어두운 밤이 되어야만 볼 수 있다'], answer: 0, level: 5, explain: '별빛은 짧게는 몇 해, 길게는 수천 해 전에 별을 떠나 이제야 닿은 빛이라, 화석처럼 지나간 때의 모습을 지금 보여 줘요. 별은 수백만 해 넘게 빛나는데 눈에 보이는 별빛은 길어야 수천 해 전 것이라, 그 별들은 대부분 지금도 빛나고 있어요. 그래서 \'이미 사라진 것\'은 화석에만 맞아요.' },
+    /* 2026-11-13 덧붙임: 흔한 통념을 오답으로 둔 3·4단계 문항 (눈가림 풀이 두 차례를 거쳐 고친 것) */
+    { pair: ['감기', '독감'], options: ['바이러스가 몸에 들어와서 걸린다', '항생제를 먹으면 더 빨리 낫는다', '몸이 추위에 떨면 그 때문에 걸린다', '해마다 새로 예방 주사를 맞아 막는다'], answer: 0, level: 3, explain: '감기와 독감은 모두 바이러스가 옮겨서 걸리는 병이에요. 항생제는 세균을 잡는 약이라 바이러스에는 듣지 않고, 추운 날씨 자체가 병을 일으키는 것도 아니에요. 해마다 맞는 예방 주사는 독감을 막는 주사예요.' },
+    { pair: ['거미', '진드기'], options: ['다리가 여덟 개이고 더듬이가 없다', '몸이 머리·가슴·배로 나뉜 곤충이다', '꽁무니에서 실을 뽑아 그물을 친다', '동물의 살갗에 붙어 피를 빨기도 한다'], answer: 0, level: 3, explain: '거미와 진드기는 다리가 여덟 개이고 더듬이가 없는 거미 무리예요. 곤충은 다리가 여섯 개이고 더듬이가 있어서 둘 다 곤충이 아니에요. 그물을 치는 것은 거미이고, 동물의 피를 빨기도 하는 것은 진드기예요.' },
+    { pair: ['무지개', '신기루'], options: ['빛이 꺾이면서 눈에 보이게 되는 현상이다', '둘레에 물이 있을 때 생기는 현상이다', '비가 그친 뒤 해의 반대쪽 하늘에 뜬다', '뜨겁게 달궈진 사막이나 도로에서 보인다'], answer: 0, level: 3, explain: '무지개는 빛이 공기 속 물방울을 지나며, 신기루는 빛이 온도가 다른 공기층을 지나며 꺾여서 보이는 현상이에요. 신기루는 물이 없는 사막이나 도로에서도 생겨요. 비 온 뒤에 뜨는 것은 무지개, 사막이나 달궈진 도로에서 보이는 것은 신기루예요.' },
+    { pair: ['계절의 변화', '낮 길이의 변화'], options: ['지구의 자전축이 기울어 있어서 생긴다', '지구가 태양에 가까워졌다 멀어져서 생긴다', '지구가 하루에 한 바퀴씩 돌아서 생긴다', '달이 지구 둘레를 돌면서 햇빛을 가려 생긴다'], answer: 0, level: 4, explain: '계절이 바뀌는 것과 낮의 길이가 달라지는 것은 모두 지구의 자전축이 기울어진 채 태양 둘레를 돌기 때문이에요. 지구와 태양의 거리는 크게 변하지 않고, 북반구가 겨울일 때 오히려 태양과 조금 더 가까워요. 하루에 한 바퀴 도는 것은 낮과 밤이 바뀌는 까닭이에요.' },
+    { pair: ['대나무', '바나나 나무'], options: ['줄기에 나이테가 생기지 않는다', '해마다 나이테가 한 겹씩 늘어난다', '줄기에 마디가 있고 속이 비어 있다', '달콤한 열매를 얻으려고 기른다'], answer: 0, level: 4, explain: '대나무와 바나나 나무는 나무처럼 크게 자라지만, 줄기가 해마다 굵어지며 나이테를 만드는 나무와 달라요. 대나무는 처음 돋은 굵기 그대로 자라고, 바나나의 줄기는 잎이 겹겹이 말린 것이에요. 마디가 있고 속이 빈 것은 대나무, 열매를 얻으려고 기르는 것은 바나나예요.' },
+    { pair: ['고추의 매운맛', '박하의 시원함'], options: ['맛이 아니라 아픔과 온도의 감각이다', '혀의 맛봉오리로 느끼는 맛의 한 가지다', '입안의 온도를 실제로 올리거나 내린다', '먹으면 얼굴이 달아오르고 땀이 난다'], answer: 0, level: 4, explain: '매운맛은 뜨거움과 아픔을 느끼는 감각을, 박하의 시원함은 차가움을 느끼는 감각을 건드려서 생겨요. 둘 다 단맛이나 짠맛처럼 맛봉오리로 느끼는 맛이 아니고, 입안의 온도가 실제로 바뀌는 것도 아니에요. 땀이 나는 것은 매운맛 쪽이에요.' },
+    { pair: ['온도계 속 액체', '여름철 전깃줄'], options: ['따뜻해지면 알갱이 사이가 벌어져 늘어난다', '따뜻해지면 알갱이 하나하나가 커져 늘어난다', '가는 유리관 속에서 눈금을 가리킨다', '전봇대 사이에 걸려 전기를 실어 나른다'], answer: 0, level: 4, explain: '온도계 속 액체와 전깃줄은 모두 따뜻해지면 늘어나요. 물질을 이루는 알갱이들이 더 활발히 움직여 서로 사이가 벌어지기 때문이에요. 알갱이 하나하나의 크기는 그대로예요. 그래서 온도계의 액체는 관을 따라 올라가고, 여름철 전깃줄은 길어져서 더 처져요.' }
   ].map(function (it) { it.prompt = U.josa('"' + it.pair[0] + '"', '과', '와') + ' "' + it.pair[1] + '"의 공통점으로 가장 알맞은 것은?'; return it; });
   /* 연습 문제로 쓰는 문항 번호(모두 1단계). 연습에서 정답과 해설을 보여 주므로 점수 문항으로는 다시 내지 않는다. */
   const PRACTICE_ITEM = { analogy: 0, logic: 1, similar: 0 };
@@ -877,7 +1052,7 @@
       return {
         type: 'choice', part: part, scored: true, level: v.level, timeLimit: tl,
         scenario: withPremise ? v.premise : undefined,
-        prompt: withPremise ? (v.options.length && v.premise.indexOf('거짓말') >= 0 ? '거짓말을 하는 사람은 누구일까요?' : '다음 문장이 모두 참일 때, 반드시 참인 것은?') : v.prompt,
+        prompt: withPremise ? (v.options.length && v.premise.indexOf('거짓말') >= 0 ? '거짓말을 하는 사람은 누구일까요?' : '위 내용이 참이라고 할 때, 반드시 참인 것은?') : v.prompt,
         options: o.options, answer: o.answer, optionCols: cols, explain: v.explain,
         pid: POOL[part] ? POOL[part].indexOf(v) : undefined   // 고정 문항 풀의 번호 (익명 통계에 문항 내용 대신 보낸다)
       };
@@ -949,36 +1124,67 @@
       return '<rect x="' + (c[0] + ox) + '" y="' + (c[1] + oy) + '" width="1" height="1" fill="currentColor" stroke="var(--surface)" stroke-width="0.08"/>';
     }).join('') + '</svg>';
   }
+  /* 보기 그림에서 칸이 그려지는 자리('x,y' 목록). polySVG와 같은 가운데 맞춤이라, 보기와 문제 도형이 화면에서 몇 칸 겹치는지 셀 때 쓴다(2026-11-13) */
+  function polyDrawn(cells) {
+    const n = normalize(cells);
+    const w = Math.max.apply(null, n.map(function (c) { return c[0]; })) + 1;
+    const h = Math.max.apply(null, n.map(function (c) { return c[1]; })) + 1;
+    const g = Math.max(5, w, h), ox = (g - w) / 2, oy = (g - h) / 2;
+    return n.map(function (c) { return (c[0] + ox) + ',' + (c[1] + oy); });
+  }
   function makeRotation(r, level) {
     const size = ROT_SIZE[level] || 5;
-    let shape, rots, mirs, guard = 0;
-    while (guard++ < 300) {
-      shape = makePolyomino(r, size);
-      if (shape.length < size) continue;
-      rots = rotations(shape);
-      const keys = rots.map(polyKey);
-      if (keys.length !== new Set(keys).size) continue;
-      mirs = rotations(mirror(shape));
-      const mkeys = mirs.map(polyKey);
-      if (mkeys.some(function (k) { return keys.indexOf(k) >= 0; })) continue;
-      if (mkeys.length !== new Set(mkeys).size) continue;
-      break;
-    }
-    // 오답 셋: 거울에 비춘 모양을 네 방향 중 서로 다른 세 방향으로 돌린 것. 위에서 네 방향이 서로 다르고 정답의 어떤 회전과도 다름을 확인했다.
+    // 오답 셋: 거울에 비춘 모양을 네 방향 중 서로 다른 세 방향으로 돌린 것. 아래에서 네 방향이 서로 다르고 정답의 어떤 회전과도 다름을 확인한다.
     // 보기 넷 중 바깥 크기(가로×세로)가 문제 도형과 같은 방향인 것(0°·180° 돌림)과 뒤바뀐 것(90°·270°)이 늘 둘씩이 되게 고르고, 정답은 두 쪽에서 반반으로 낸다.
     // 아무렇게나 고르면 방향이 몇 개씩 나뉘는지만 보고(3:1이면 혼자인 쪽을 지우고, 2:2면 뒤바뀐 쪽) 고르는 요령이 32%로 우연(25%)보다 잘 맞았다(2026-10-18).
     // mirs[0]·mirs[2]는 문제 도형과 같은 방향, mirs[1]·mirs[3]은 뒤바뀐 방향이다(거울에 비춰도 바깥 크기는 그대로). 바깥 크기가 정사각형이면 방향이 없다.
-    const nb = normalize(shape);
-    const square = Math.max.apply(null, nb.map(function (c) { return c[0]; })) === Math.max.apply(null, nb.map(function (c) { return c[1]; }));
-    const k = square ? r.int(1, 3) : r.next() < 0.5 ? 2 : r.pick([1, 3]);
-    const dis = square ? r.sample(mirs, 3) : k === 2 ? [r.pick([mirs[0], mirs[2]]), mirs[1], mirs[3]] : [mirs[0], mirs[2], r.pick([mirs[1], mirs[3]])];
+    // 2026-11-13: 거울상은 한 줄의 칸이 제자리에 남고 90°·180° 돌림은 가운데 점 하나만 남아서, 그려진 자리에서 문제 도형과 겹치는 칸이 정답은 적고
+    // 오답은 많았다. 그래서 가장 덜 겹치는 보기를 고르면 2단계에서 41%가 맞았다. 이제 정답 종류(비정사각형이면 180°인지)와 '문제와 겹치는 칸 수'로 본
+    // 정답 순위(0 = 가장 덜 겹침, 동점은 무작위)를 먼저 정하고, 도형마다 쓸 수 있는 (돌림 수, 오답 셋) 묶음 중 그 순위가 나오는 것만 쓴다.
+    // 맞는 묶음이 없으면 다음 도형으로 넘어가고, 300번 안에 못 찾으면 마지막으로 만든 쓸 수 있는 도형에서 예전 방식으로 고른다(문항이 비지 않게.
+    // 단계당 3000문항에서 3단계 1.3%, 1단계 0.1%, 나머지 0%). 가장 덜 겹치는 보기 고르기는 41% → 1단계 31%, 2단계 32~33%, 3~5단계 25~29%가 됐다(단계당 1000~3000문항).
+    // 1·2단계는 겹치는 칸 수가 같은 보기가 많아, 동점 속 정답이 순위 1·2로 뽑혀도 '가장 덜 겹침' 묶음에 들어가므로 30% 안팎이 남는다.
+    // 문제를 그린 그대로 좌우·상하로 뒤집은 보기(mirs[0]·mirs[2])를 알아보고 지우는 요령(약 42%)은 오답 구성을 바꿔야 해서 이번에는 그대로 둔다.
+    const half = r.next() < 0.5, wantRank = r.int(0, 3);
+    let shape = null, rots, mirs, square = false, pick = null;
+    // 2026-11-13: 예전에는 300번이 다 지나면 대칭이거나 칸이 모자란 도형이 검사 없이 쓰였다. 이제 검사를 통과한 도형만 shape에 남기고, 하나도 없으면 다시 만든다.
+    for (let guard = 0; guard < 300 && !pick; guard++) {
+      const s = makePolyomino(r, size);
+      if (s.length < size) continue;
+      const rs = rotations(s), keys = rs.map(polyKey);
+      if (keys.length !== new Set(keys).size) continue;
+      const ms = rotations(mirror(s)), mkeys = ms.map(polyKey);
+      if (mkeys.some(function (k) { return keys.indexOf(k) >= 0; })) continue;
+      if (mkeys.length !== new Set(mkeys).size) continue;
+      const nb = normalize(s);
+      shape = s; rots = rs; mirs = ms;
+      square = Math.max.apply(null, nb.map(function (c) { return c[0]; })) === Math.max.apply(null, nb.map(function (c) { return c[1]; }));
+      const combos = [];
+      if (square) [1, 2, 3].forEach(function (kk) { [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]].forEach(function (ix) { combos.push({ k: kk, dis: ix.map(function (i) { return ms[i]; }) }); }); });
+      else if (half) combos.push({ k: 2, dis: [ms[0], ms[1], ms[3]] }, { k: 2, dis: [ms[2], ms[1], ms[3]] });
+      else [1, 3].forEach(function (kk) { combos.push({ k: kk, dis: [ms[0], ms[2], ms[1]] }, { k: kk, dis: [ms[0], ms[2], ms[3]] }); });
+      const P0 = polyDrawn(s), ov = function (cs) { return polyDrawn(cs).filter(function (q) { return P0.indexOf(q) >= 0; }).length; };
+      const fit = r.shuffle(combos).filter(function (c) {
+        const v = [rs[c.k]].concat(c.dis).map(ov);
+        return r.shuffle([0, 1, 2, 3]).sort(function (a, b) { return v[a] - v[b]; }).indexOf(0) === wantRank;
+      });
+      if (fit.length) pick = fit[0];
+    }
+    if (!shape) return makeRotation(r, level);
+    if (!pick) {
+      const kk = square ? r.int(1, 3) : half ? 2 : r.pick([1, 3]);
+      pick = { k: kk, dis: square ? r.sample(mirs, 3) : kk === 2 ? [r.pick([mirs[0], mirs[2]]), mirs[1], mirs[3]] : [mirs[0], mirs[2], r.pick([mirs[1], mirs[3]])] };
+    }
+    const k = pick.k, dis = pick.dis;
     const o = shuffleOptions(r, [rots[k]].concat(dis), 0);
     return {
       type: 'choice', part: 'rotation', scored: true, level: level, timeLimit: ROT_TIME[level] || 40,
       prompt: '이 도형을 돌리기만 해서 만들 수 있는 것은? (뒤집으면 안 돼요)',
       promptHtml: '<div class="poly-prompt">' + polySVG(shape) + '</div>',
       optionsHtml: o.options.map(polySVG), answer: o.answer, optionCols: 4,
-      explain: '정답은 원래 도형을 ' + (k * 90) + '° 돌린 모양이에요. 나머지 셋은 모두 원래 도형을 거울에 비춘 모양을 돌린 것이라, 칸 수와 크기는 같아도 돌리기만 해서는 만들 수 없어요.'
+      // 2026-11-13: 각도만 적으면 방향을 몰라 270°를 반시계로 돌려 보면 다른 모양이 나왔다. rotate는 화면(y 아래)에서 시계 방향이라 k = 1이 시계 방향 90°다.
+      // 오답 중 mirs[0]은 돌리지 않은 단순 좌우 뒤집기라 '뒤집은 모양이거나 그것을 돌린 것'으로 적는다.
+      explain: '정답은 원래 도형을 ' + (k === 2 ? '반 바퀴(180°)' : k === 1 ? '시계 방향으로 90°' : '시계 반대 방향으로 90°') + ' 돌린 모양이에요. 나머지 셋은 모두 원래 도형을 거울에 비춰 뒤집은 모양이거나 그것을 돌린 것이라, 칸 수와 크기는 같아도 돌리기만 해서는 만들 수 없어요.'
     };
   }
 
@@ -1121,6 +1327,10 @@
   /* 1~2단계는 1-4-1 꼴 6가지, 3단계는 2-3-1 꼴까지, 4단계는 11가지 모두, 5단계는 1-4-1이 아닌 5가지 */
   const FOLD_NET_POOL = { 1: [0, 1, 2, 3, 4, 5], 2: [0, 1, 2, 3, 4, 5], 3: [0, 1, 2, 3, 4, 5, 6, 7, 8], 4: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5: [6, 7, 8, 9, 10] };
   function makeFold(r, level) {
+    /* 2026-11-13: 1단계는 정답·오답 모두 '보이는 면이 전개도에서도 붙어 있는' 모습에서 출발하고 오답은 모두 맞은편 면으로 바꾼 것이라, 정답의 무늬 이름이
+       다른 보기들과 더 많이 겹쳤다(전개도를 안 보고 보기끼리 무늬 이름이 가장 많이 겹치는 보기를 고르면 33%). 그래서 '다른 보기와 겹치는 무늬 이름 수'로 본
+       정답 순위(0 = 가장 많이 겹침, 동점은 무작위)를 먼저 정하고 그 순위가 나오는 보기 묶음만 쓴다. 모든 단계에 걸어도 다른 요령·정답 유일성에 해가 없었다. */
+    const wantRank = r.int(0, 3);
     for (let guard = 0; guard < 200; guard++) {
       // 전개도 모양은 돌리거나 뒤집어 놓임 하나를 고르되, 폰 한 화면에 문항이 다 들어가게 늘 가로로 눕힌다(8가지 놓임 중 가로로 긴 4가지)
       let cells = netCells(FOLD_NETS[r.pick(FOLD_NET_POOL[level])]);
@@ -1170,6 +1380,9 @@
         return false;
       };
       if (!FOLD_KINDS[level].every(wrong)) continue;
+      const nameSets = opts.map(function (s) { return s.f.map(function (x) { return pats[x.i]; }); });
+      const shareN = nameSets.map(function (a, i) { let n = 0; nameSets.forEach(function (b, j) { if (i !== j) n += a.filter(function (x) { return b.indexOf(x) >= 0; }).length; }); return n; });
+      if (r.shuffle([0, 1, 2, 3]).sort(function (a, b) { return shareN[b] - shareN[a]; }).indexOf(0) !== wantRank) continue;
       const pairs = [];
       opp.forEach(function (j, i) { if (i < j) pairs.push([FOLD_PAT[pats[i]].ko, FOLD_PAT[pats[j]].ko]); });
       const faceKo = ans.f.map(function (x) { return FOLD_PAT[pats[x.i]].ko; });
@@ -1197,7 +1410,10 @@
      가려진 기둥을 모두 옮기는 검사(단계마다 1000문항)에서 모두 한 덩어리가 아니었다(2026-10-18).
      h[a][b]: a는 오른쪽 앞(+x), b는 왼쪽 앞(−y)으로 갈수록 커진다.
      보기는 정답이 들어간 연속한 네 수이고 정답 자리는 고르게 정한다(2026-10-18 전에는 정답 ±1~3을 따로 뽑아, 보기 간격 모양만 보고도
-     정답 자리를 짐작할 수 있었다). 가려진 블록 수가 정답보다 작은 보기 수 이하이면 보이는 블록만 센 수가 저절로 오답에 들어간다. */
+     정답 자리를 짐작할 수 있었다). 가려진 블록 수가 정답보다 작은 보기 수 이하이면 보이는 블록만 센 수가 저절로 오답에 들어간다.
+     모든 단계에 가려진 블록이 1개 이상 있다(2026-11-13 확인, 단계마다 1000문항에서 0개인 문항 없음): 뒤 구석 기둥은 두 층 이상이고 바닥 칸을 양쪽 끝까지
+     쓰므로 그 옆 두 칸이 차 있어서 뒤 구석 맨 아래 블록이 늘 가려진다. 그래서 1단계의 hid: 0은 하한일 뿐 실제로는 1~2개(대부분 1)이고, 연습 문항(1단계)부터
+     가려진 블록을 세어야 한다. 해설의 '모든 블록이 겉에서 보여요' 분기는 지금 쓰이지 않지만 사양을 바꿀 때를 위해 둔다. */
   const BLK_SPEC = {
     1: { a: [2, 3], b: [2, 2], h: 2, n: [4, 8], hid: 0, t: 30 },
     2: { a: [2, 3], b: [3, 3], h: 3, n: [7, 13], hid: 1, t: 40 },
@@ -1226,24 +1442,29 @@
   }
   function makeBlocks(r, level) {
     const sp = BLK_SPEC[level];
-    let h, A, B, total, hidden;
-    for (let guard = 0; guard < 500; guard++) {
-      A = r.int(sp.a[0], sp.a[1]); B = r.int(sp.b[0], sp.b[1]);
-      if (r.next() < 0.5) { const t = A; A = B; B = t; }
-      h = [];
-      for (let a = 0; a < A; a++) {
-        h.push([]);
-        for (let b = 0; b < B; b++) h[a].push(Math.max(0, Math.min(a ? h[a - 1][b] : sp.h, b ? h[a][b - 1] : sp.h) - r.pick([0, 0, 0, 1, 1, 2])));
+    /* 2026-11-13: 예전에는 h·A·B·total·hidden을 루프 밖 변수에 바로 써서, 500번째 시도가 '바닥 칸 양쪽 끝' 검사에서 끝나면 그림은 새 시도인데
+       정답·해설은 이전 시도의 개수가 되고, 조건을 다 못 채워도 마지막 쌓기가 그대로 나갔다(지금 분포에서는 성공이 늦어도 34번째라 드러나지 않았다).
+       이제 시도마다 따로 계산해 조건을 모두 맞을 때만 넘기고, 500번 안에 못 찾으면 한 단계 낮춰 만든다(makeFold와 같은 대비책). */
+    let h = null, A = 0, B = 0, total = 0, hidden = 0;
+    for (let guard = 0; guard < 500 && !h; guard++) {
+      let AA = r.int(sp.a[0], sp.a[1]), BB = r.int(sp.b[0], sp.b[1]);
+      if (r.next() < 0.5) { const t = AA; AA = BB; BB = t; }
+      const hh = [];
+      for (let a = 0; a < AA; a++) {
+        hh.push([]);
+        for (let b = 0; b < BB; b++) hh[a].push(Math.max(0, Math.min(a ? hh[a - 1][b] : sp.h, b ? hh[a][b - 1] : sp.h) - r.pick([0, 0, 0, 1, 1, 2])));
       }
-      if (!h[A - 1][0] || !h[0][B - 1]) continue;   // 바닥 칸을 양쪽 끝까지 쓴다
-      total = 0; hidden = 0;
-      for (let a = 0; a < A; a++) for (let b = 0; b < B; b++) {
-        total += h[a][b];
+      if (!hh[AA - 1][0] || !hh[0][BB - 1]) continue;   // 바닥 칸을 양쪽 끝까지 쓴다
+      let tot = 0, hid = 0;
+      for (let a = 0; a < AA; a++) for (let b = 0; b < BB; b++) {
+        tot += hh[a][b];
         // 가려진 블록: 기둥 맨 위가 아니고, 오른쪽 앞·왼쪽 앞 이웃 기둥이 그 높이까지 차 있다
-        for (let z = 0; z < h[a][b] - 1; z++) if ((a + 1 < A ? h[a + 1][b] : 0) > z && (b + 1 < B ? h[a][b + 1] : 0) > z) hidden++;
+        for (let z = 0; z < hh[a][b] - 1; z++) if ((a + 1 < AA ? hh[a + 1][b] : 0) > z && (b + 1 < BB ? hh[a][b + 1] : 0) > z) hid++;
       }
-      if (h[0][0] >= 2 && total >= sp.n[0] && total <= sp.n[1] && hidden >= sp.hid) break;   // 뒤 구석(가장 높은 기둥)은 두 층 이상
+      // 뒤 구석(가장 높은 기둥)은 두 층 이상
+      if (hh[0][0] >= 2 && tot >= sp.n[0] && tot <= sp.n[1] && hid >= sp.hid) { h = hh; A = AA; B = BB; total = tot; hidden = hid; }
     }
+    if (!h) return makeBlocks(r, Math.max(1, level - 1));
     const below = r.int(0, 3);   // 정답보다 작은 보기 수 = 정답 자리(0~3, 고르게)
     const vals = [0, 1, 2, 3].map(function (d) { return total - below + d; });   // 정답이 들어간 연속한 네 수. total ≥ 4라 가장 작은 수도 1 이상
     const layers = [];
@@ -1253,8 +1474,10 @@
       if (!c) break;
       layers.push((z + 1) + '층 ' + c + '개');
     }
+    const hKey = h.map(function (row) { return row.join(''); }).join('/');
+    const hMirror = h[0].map(function (_, b) { return h.map(function (row) { return row[b]; }).join(''); }).join('/');
     return {
-      type: 'choice', part: 'blocks', scored: true, level: level, timeLimit: sp.t,
+      type: 'choice', part: 'blocks', scored: true, level: level, timeLimit: sp.t, dedupKey: 'blk:' + (hKey < hMirror ? hKey : hMirror),
       prompt: '블록은 모두 몇 개일까요?',
       promptHtml: '<div class="blk-prompt">' + blocksSVG(h, A, B) + '<p class="blk-rule">블록은 모두 바닥이나 다른 블록 위에 놓여 있고, 옆 블록과 면이 맞닿아 한 덩어리로 붙어 있어요. 위에 블록이 있으면 그 아래에도 블록이 있고, 그 밖에 숨은 블록은 없어요.</p></div>',
       options: vals.map(function (v) { return v + '개'; }), answer: vals.indexOf(total), optionCols: 2,
@@ -1322,8 +1545,10 @@
      블록: 보기가 연속한 네 수라 정확히 세어야 한다. 셈 오차 모형(정확히 못 세면 ±1~3 어긋나고, 센 수가 보기에 없으면 가장 가까운 보기를 고름)으로 같은 사람의
      정답률을 옛 보기와 새 보기에서 견주면 3·4·5단계가 .05·.08·.09 내려간다(.91/.79/.61/.38/.25). 평가자 어림(.88/.76/.62/.44/.30)과 모형 값을 평균한 정답률로
      위와 같이 매겼다 → .89/.75/.56/.35/.19(바꾸기 전 .90/.76/.60/.38/.21).
-     이 세 과제는 평가자 1명이 한 번 어림한 임시값이라, 실제 응시 자료가 쌓이면(tools/norms-from-stats.cjs. 이 과제들은 ai-est-2026-10-18b 이후 행만 쓴다)
-     그 값으로 바꾸고 NORMS_VERSION도 올린다. 나머지 9과제(규칙 찾기 5·언어 4)는 이번 고침에서 생성기와 문항 풀이 그대로라 값을 그대로 둔다. */
+     이 세 과제는 평가자 1명이 한 번 어림한 임시값이라, 실제 응시 자료가 쌓이면(tools/norms-from-stats.cjs. 이 과제들은 ai-est-2026-10-18b 이후 행만 쓰고,
+     회전·전개도는 2026-11-13에 정답 순위 고르기를 넣어 ai-est-2026-11-13 이후 행만 쓴다)
+     그 값으로 바꾸고 NORMS_VERSION도 올린다. 나머지 9과제(규칙 찾기 5·언어 4)는 2026-10-18 고침에서는 생성기와 문항 풀이 그대로라 값을 그대로 뒀다
+     (2026-11-13에 규칙 찾기 5과제의 생성기와 언어 27문항의 글이 바뀌었지만 LEVEL_P는 그대로 두었다. NORMS_VERSION 설명 참고). */
   const LEVEL_P = {
     default: { 1: 0.92, 2: 0.80, 3: 0.62, 4: 0.42, 5: 0.25, 6: 0.12 },
     analogy: { 1: 0.94, 2: 0.77, 3: 0.60, 4: 0.38, 5: 0.25 },
@@ -1366,8 +1591,13 @@
      부분 점수, 반응 과제 절차·실수 감점, OBS·TASK_REL. 회전·전개도·블록, 기억 폭 4과제, 반응 3과제는 이 버전부터 문항·절차가 달라서
      tools/norms-from-stats.cjs 가 원자료(/export)에서 그 전 버전(design-2026-10-18·ai-est-2026-10-18) 행을 뺀다.
      ai-est-2026-11-12 = 수열·저울 추론의 오답 만드는 법을 바꾼 버전(보기만 보고 찍으면 46~50%가 맞던 것을 25%로). 기준값(LEVEL_P·NORMS·OBS)은 그대로다.
-     두 과제의 그 전 버전 행은 찍어서 맞힌 몫이 더 커서, 같은 도구가 원자료에서 뺀다. */
-  const NORMS_VERSION = 'ai-est-2026-11-12';
+     두 과제의 그 전 버전 행은 찍어서 맞힌 몫이 더 커서, 같은 도구가 원자료에서 뺀다.
+     ai-est-2026-11-13 = 2026-11-13 전체 점검 고침을 담은 버전: 도형 행렬·도형 유추·도형 계열·수열·저울 추론·도형 회전·전개도 접기의 문항이나 오답 만드는 법이
+     바뀌었다(보기만 보고 찍는 요령 줄이기, 수열 4·5단계 문항 구성, 회전·전개도 정답 순위 고르게 등). 기준값(LEVEL_P·NORMS·OBS)은 그대로 두고, 실제 자료가
+     쌓이면 다시 매긴다. 이 일곱 과제는 같은 도구가 원자료에서 ai-est-2026-11-12 까지의 행을 뺀다(블록 세기는 재시도 한도 고침과 거울상 문항 거르기뿐이라 문항이 같다).
+     언어 4과제는 같은 날 27문항(유추 24·26·32, 어휘 4·7·13·20·35, 논리 0·4·38, 공통점 1·2·3·10~15·17~19·33·41·44·46)의 보기·문장을 번호는 그대로 두고 고쳤고,
+     공통점 47~53번을 덧붙였다. 도구는 그 27문항의 ai-est-2026-11-12 까지 응답을 문항별 정답률에서 뺀다(POOL_CHANGED). */
+  const NORMS_VERSION = 'ai-est-2026-11-13';
   /* 폭 과제 부분 점수(spanScore의 part)의 기준값(2026-10-18): NORMS의 최장 폭 평균·sd에서 바꿔 쓴다. part = 최장 폭 − 0.5 × (두 번째 시도에서만 맞힌 길이 수)라
      평균은 shift만큼 낮고 퍼짐은 scale배다. 시행 단위 모형(한 시행의 정답 확률 σ((μ − 길이)/τ), μ = a + b·θ, a·b는 지금 진행 규칙과 새 최대 길이로 푼 최장 폭이
      NORMS 평균·sd와 같아지게 맞춤, 4만 명)에서 τ = 0.55일 때 네 과제 모두 shift 0.24~0.25, scale 0.96~0.97이었다(τ 0.4면 0.18~0.19·0.97~0.98, 0.7이면 0.29~0.30·0.94).
@@ -1394,7 +1624,12 @@
     return { mode: best, sd: Math.sqrt(Math.max(0, m2 / w - m * m)) };
   }
   function iqOf(z) { return Math.round(U.clamp(100 + 15 * z, IQ_RANGE[0], IQ_RANGE[1])); }
-  function topPct(z) { return Math.max(1, Math.round((1 - U.normCdf(z)) * 100)); }
+  /* 눈금에서의 위치 글(2026-11-13). 예전에는 늘 '상위 n%'라 평균보다 낮으면 '상위 84%'처럼 거꾸로 읽혔고, IQ 61 이하는 '상위 100%'가 됐다.
+     평균 이상이면 '상위 1~50%', 평균보다 낮으면 '하위 1~49%'로 쓴다 */
+  function rankText(z) {
+    const p = Math.round((1 - U.normCdf(z)) * 100);
+    return p > 50 ? '하위 ' + U.clamp(100 - p, 1, 49) + '%' : '상위 ' + U.clamp(p, 1, 50) + '%';
+  }
   /* 영역·종합 점수 규준화 (2026-10-18). 과제 점수(z)에는 측정 오차가 섞여 있어 과제끼리의 상관이 참 능력끼리보다 훨씬 낮다.
      예전에는 참 능력 사이 상관(영역 안 0.6, 영역 사이 0.5)을 가정한 합성 공식으로 합쳐서, 종합 점수의 표준편차가 15가 아니라
      11~12로 줄고 참값이 높은 사람(122.5 이상)은 7점 안팎 낮게, 낮은 사람(77.5 미만)은 8~10점 높게 나왔다. 그래서 과제 점수를 더한 뒤, 같은 과제를 푼
@@ -1466,8 +1701,10 @@
     if (NORMS[k].kind !== 'prop') return domainSem(TASKS[k].domain, 1);
     return typeof st.sd === 'number' && isFinite(st.sd) && st.sd > 0 ? 15 * st.sd * SINGLE_SEM.post : 15 * Math.sqrt(1 - SINGLE_SEM.old);
   }
+  /* 점수 범위 이름(2026-11-13): 예전 '경계선'·'낮음'은 임상 분류('경계선 지능')처럼 읽혀서, 평균을 기준으로 한 쉬운 말로 바꿨다.
+     배지·공유 이미지·공유 글에 그대로 나간다 */
   function band(iq) {
-    return iq >= 130 ? '매우 우수' : iq >= 120 ? '우수' : iq >= 110 ? '평균 상' : iq >= 90 ? '평균' : iq >= 80 ? '평균 하' : iq >= 70 ? '경계선' : '낮음';
+    return iq >= 130 ? '매우 높음' : iq >= 120 ? '높음' : iq >= 110 ? '평균보다 높음' : iq >= 90 ? '평균' : iq >= 80 ? '평균보다 낮음' : '평균보다 많이 낮음';
   }
 
   /* 과제별 문항 구성: 쉬운 단계부터 어려운 단계로 */
@@ -1487,21 +1724,43 @@
     similar: { full: [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5] }
   };
   const byLevel = function (list) { return list.slice().sort(function (a, b) { return a.level - b.level; }); };
+  /* 한 세션 안에서 같은 생성 문항 다시 내지 않기(2026-11-13). 생성 과제는 문항을 그때그때 새로 만들 뿐 낸 문항을 기억하지 않아서,
+     서로 다른 문항이 적은 단계(수열 4·5단계, 저울 1·2단계)를 여러 번 받는 사람에게 똑같은 문제가 다시 나왔고(적응형 다 맞힘 수열 22%),
+     풀고 나면 정답과 해설을 보여 주는 연습 문항도 점수 문항으로 다시 나왔다. 문제 그림(promptHtml)의 짧은 해시를 남기고 같은 해시면 다시 만든다.
+     도형 칸 빗금의 clipPath 번호(clip12)는 만들 때마다 달라지므로 빼고 잰다. 적응형은 스텁 상태 seen에 남는다(seen이 없는 옛 세션은 빈 목록으로 시작). */
+  function itemHash(it) {
+    // 블록 세기는 좌우 거울상(기둥 배열을 뒤집은 것, 개수가 같다)도 같은 문항으로 본다(it.dedupKey). 연습에서 개수를 본 그림의 거울상이 점수 문항으로 나오지 않게 한다
+    const t = it.dedupKey ? String(it.dedupKey) : String(it.promptHtml || it.prompt || '').replace(/clip\d+/g, '');
+    let h = 5381;
+    for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+  function freshItem(r, gen, level, seen) {
+    let it;
+    for (let t = 0; t < 30; t++) { it = gen(r, level); if (seen.indexOf(itemHash(it)) < 0) break; }
+    seen.push(itemHash(it));
+    return it;
+  }
+  // 정밀 검사의 단계표대로 만들기. seen0 = 이미 낸 문항(연습 문항) 해시
+  function uniqueGen(r, gen, levels, seen0) {
+    const seen = (seen0 || []).slice();
+    return levels.map(function (l) { return freshItem(r, gen, l, seen); });
+  }
   const BUILD = {
-    matrix: function (r, full) { return (full ? LEVELS.matrix.full : LEVELS.matrix.quick).map(function (l) { return makeMatrix(r, l); }); },
-    figAnalogy: function (r) { return LEVELS.figAnalogy.full.map(function (l) { return makeFigAnalogy(r, l); }); },
-    weights: function (r) { return LEVELS.weights.full.map(function (l) { return makeWeights(r, l); }); },
+    matrix: function (r, full, seen) { return uniqueGen(r, makeMatrix, full ? LEVELS.matrix.full : LEVELS.matrix.quick, seen); },
+    figAnalogy: function (r, full, seen) { return uniqueGen(r, makeFigAnalogy, LEVELS.figAnalogy.full, seen); },
+    weights: function (r, full, seen) { return uniqueGen(r, makeWeights, LEVELS.weights.full, seen); },
     similar: function (r) { return choiceItems(r, byLevel(drawPool(r, 'similar', LEVELS.similar.full)), 'similar', 35, 1); },
     lns: function () { return [{ type: 'seqspan', part: 'lns', scored: true, start: 2, max: 9, title: '숫자-문자 순서', desc: TASKS.lns.desc }]; },
     symbol: function () { return [{ type: 'symsearch', part: 'symbol', scored: true, seconds: 60, title: '기호 찾기', desc: TASKS.symbol.desc }]; },
-    series: function (r) { return LEVELS.series.full.map(function (l) { return makeSeries(r, l); }); },
-    sequence: function (r, full) { return (full ? LEVELS.sequence.full : LEVELS.sequence.quick).map(function (l) { return makeSequence(r, l); }); },
+    series: function (r, full, seen) { return uniqueGen(r, makeSeries, LEVELS.series.full, seen); },
+    sequence: function (r, full, seen) { return uniqueGen(r, makeSequence, full ? LEVELS.sequence.full : LEVELS.sequence.quick, seen); },
     analogy: function (r, full) { return choiceItems(r, byLevel(drawPool(r, 'analogy', full ? LEVELS.analogy.full : LEVELS.analogy.quick)), 'analogy', function (l) { return l >= 4 ? 45 : 40; }, 2); },
     vocab: function (r) { return choiceItems(r, byLevel(drawPool(r, 'vocab', LEVELS.vocab.full)), 'vocab', 35, 1); },
     logic: function (r) { return choiceItems(r, byLevel(drawPool(r, 'logic', LEVELS.logic.full)), 'logic', function (l) { return l >= 4 ? 75 : 60; }, 1, true); },
-    rotation: function (r, full) { return (full ? LEVELS.rotation.full : LEVELS.rotation.quick).map(function (l) { return makeRotation(r, l); }); },
-    fold: function (r) { return LEVELS.fold.full.map(function (l) { return makeFold(r, l); }); },
-    blocks: function (r) { return LEVELS.blocks.full.map(function (l) { return makeBlocks(r, l); }); },
+    rotation: function (r, full, seen) { return uniqueGen(r, makeRotation, full ? LEVELS.rotation.full : LEVELS.rotation.quick, seen); },
+    fold: function (r, full, seen) { return uniqueGen(r, makeFold, LEVELS.fold.full, seen); },
+    blocks: function (r, full, seen) { return uniqueGen(r, makeBlocks, LEVELS.blocks.full, seen); },
     /* 기억 폭 과제 최대 길이(2026-10-18): 끝까지 맞혀도 숫자 앞으로 127(9자리)·거꾸로 135(8자리)·숫자-문자 137(8개)에서 막혀서 늘렸다.
        잘하는 사람만 가는 길이라 평균 시간은 거의 그대로다. 위치 기억은 칸을 다시 쓰지 않아 9칸이 끝이다. */
     digitF: function () { return [{ type: 'digitspan', part: 'digitF', scored: true, mode: 'forward', start: 3, max: 10, title: '숫자 앞으로 외우기', desc: TASKS.digitF.desc }]; },
@@ -1552,7 +1811,8 @@
   /* 처음 보는 과제 앞에 붙는 연습 문제 (시간 제한 없음, 점수 없음, 풀고 나면 정답과 규칙을 보여 준다) */
   const PRACTICE = {
     matrix: function (r) { return makeMatrix(r, 1); },
-    figAnalogy: function (r) { return makeFigAnalogy(r, 1); },
+    // 2026-11-13: 1단계는 C가 A와 같아 정답이 B와 같은 그림이라, 연습으로 "변화를 다른 도형에 옮기기"를 익힐 수 없다. 연습만 2단계(C가 A와 하나 다름)로.
+    figAnalogy: function (r) { return makeFigAnalogy(r, 2); },
     weights: function (r) { return makeWeights(r, 1); },
     similar: function (r) { return choiceItems(r, [SIMILAR[PRACTICE_ITEM.similar]], 'similar', 0, 1)[0]; },
     series: function (r) { return makeSeries(r, 1); },
@@ -1572,8 +1832,10 @@
   function taskItems(r, key, full, withPractice) {
     const items = [];
     if (COUNT_KO[key]) items.push({ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' 쉬운 것부터 나오고 뒤로 갈수록 어려워져요.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 볼게요. 연습은 점수에 안 들어가요.' : ''), where: TASKS[key].where, count: COUNT_KO[key](full) });
-    if (withPractice && PRACTICE[key]) items.push(practiceItem(r, key));
-    return items.concat(BUILD[key](r, full).map(function (it) { return taskPractice(it, key, withPractice); }));
+    const pi = withPractice && PRACTICE[key] ? practiceItem(r, key) : null;
+    if (pi) items.push(pi);
+    // 2026-11-13: 생성 과제는 연습 문항(정답·해설을 보여 줌)과 같은 문제를 점수 문항으로 다시 내지 않는다
+    return items.concat(BUILD[key](r, full, pi && GEN[key] ? [itemHash(pi)] : []).map(function (it) { return taskPractice(it, key, withPractice); }));
   }
   /* 반응·기호 찾기 과제의 연습(2026-10-18, 점수에 안 들어감): 렌더러가 it.practiceTrials 번을 먼저 해 보게 한다. 처음 하는 과제만.
      단순 반응은 해 본 사람도 첫 1번을 몸풀기로 빼고 잰다(처음 몇 번이 느린 몸풀기 효과). 예전 세션의 문항에는 이 값이 없어 연습 없이 진행한다. */
@@ -1613,7 +1875,7 @@
     if (st.done >= stub.count) return null;
     const r = U.rng();
     let item;
-    if (GEN[key]) item = GEN[key](r, st.level);
+    if (GEN[key]) { st.seen = st.seen || []; item = freshItem(r, GEN[key], st.level, st.seen); }
     else {
       const pool = POOL[key];
       const i = pickFromPool(r, pool, st.level, st.used, stub.noHistory ? null : recentSeen(key));
@@ -1635,8 +1897,13 @@
   function taskItemsAdaptive(r, key, withPractice) {
     const a = ADAPT[key];
     const items = [{ type: 'section', sub: true, title: TASKS[key].label, desc: TASKS[key].desc + ' ' + a.start + '단계에서 시작해서 맞히면 한 단계 올라가고 틀리면 내려가요.' + (withPractice && PRACTICE[key] ? ' 먼저 연습 문제를 하나 풀어 볼게요. 연습은 점수에 안 들어가요.' : ''), where: TASKS[key].where, count: a.n + '문항 · 적응형 · 1~' + a.max + '단계' }];
-    if (withPractice && PRACTICE[key]) items.push(practiceItem(r, key));
-    items.push(adaptStub(key));
+    const stub = adaptStub(key);
+    if (withPractice && PRACTICE[key]) {
+      const pi = practiceItem(r, key);
+      items.push(pi);
+      if (GEN[key]) stub.state.seen = [itemHash(pi)];   // 2026-11-13: 연습과 같은 문제를 점수 문항으로 다시 내지 않는다
+    }
+    items.push(stub);
     return items;
   }
   function parseMode(mode) {
@@ -1864,7 +2131,9 @@
     const levels = {};
     Object.keys(lv).forEach(function (l) { if (l !== '0') levels[l] = { n: lv[l].n, c: lv[l].c }; });
     const items = rows.map(function (x) {
-      return [typeof x.it.pid === 'number' && x.it.pid >= 0 ? x.it.pid : -1, x.it.level || 0, x.a == null ? -1 : x.a === x.it.answer ? 1 : 0, typeof x.t === 'number' ? Math.round(x.t / 100) : null];
+      // 2026-11-13: 응답 시간은 화면을 벗어나 멈춘 시간까지 섞이고 시간 무제한이면 상한이 없는데, 서버는 문항 시간이 6000(600초)을 넘으면 결과 전체를 거절한다.
+      // 그러면 그 결과의 다른 과제 자료까지 사라지므로 600초에서 자른다
+      return [typeof x.it.pid === 'number' && x.it.pid >= 0 ? x.it.pid : -1, x.it.level || 0, x.a == null ? -1 : x.a === x.it.answer ? 1 : 0, typeof x.t === 'number' ? Math.max(0, Math.min(6000, Math.round(x.t / 100))) : null];   // 기기 시계가 뒤로 맞춰져 음수가 되어도 서버가 받게 0에서 자른다
     });
     const o = { n: n, c: c, levels: levels, adaptive: adaptive, items: items };
     if (avg != null) o.rtAvg = avg;
@@ -1899,14 +2168,14 @@
       groups.push({ keys: keys, z: z });
       domSem[d.key] = domainSem(d.key, keys.length);
       const iq = iqOf(z);
-      scales.push({ key: d.key, label: d.label, value: iq, range: IQ_RANGE, raw: '상위 ' + topPct(z) + '%',
+      scales.push({ key: d.key, label: d.label, value: iq, range: IQ_RANGE, raw: rankText(z),
         children: keys.map(function (k) { return { key: k, label: TASKS[k].label, value: iqOf(tasks[k].z), range: IQ_RANGE, raw: tasks[k].raw }; }) });
       sections.push({ title: d.label + ' · 추정 IQ ' + iq, body: '과제별 결과: ' + keys.map(function (k) { return TASKS[k].label + ' ' + tasks[k].raw + (tasks[k].detail ? ' (' + tasks[k].detail + ')' : '') + (tasks[k].meanP ? ' · 기준 정답률 ' + tasks[k].meanP + '%' : ''); }).join(', ') + '.' });
     });
     const keys = Object.keys(tasks);
     const single = keys.length === 1 ? keys[0] : null;
     const z = single ? tasks[single].z : overallZ(groups);
-    const iq = iqOf(z), pct = topPct(z), bd = band(iq);
+    const iq = iqOf(z), rank = rankText(z), bd = band(iq);
     /* ±(SEM) = √(측정 오차² + 덜 푼 몫²). 측정 오차는 과제 하나의 몫을 0.3으로 보고 과제 수 n만큼 합친 신뢰도 n·0.3/(1+(n−1)·0.3)로
        15·√(1−신뢰도)(스피어먼-브라운). 덜 푼 몫은 전체 K과제 중 n개, 다섯 영역 중 m개만 풀어 종합 IQ를 덜 대표하는 만큼으로
        6²·(1−n/K) + 4²·(1−m/5)를 더한다. 규준화 뒤 참값을 아는 가상 응시자로 돌려 보면 ± 안에 실제 값이 빠른 검사(±9) 75%,
@@ -1916,13 +2185,12 @@
     const meas = 15 * Math.sqrt(1 - n * q / (1 + (n - 1) * q));
     const sem = Math.round(single ? singleSem(single, tasks[single]) : Math.sqrt(meas * meas + 36 * (1 - n / TASK_KEYS.length) + 16 * (1 - groups.length / DOMAINS.length)));
     const bandText = {
-      '매우 우수': '같은 기준으로 100명 중 두세 명 안에 드는 결과예요.',
-      '우수': '대부분의 사람보다 빠르고 정확했어요.',
-      '평균 상': '평균보다 조금 높은 범위예요.',
+      '매우 높음': '같은 기준으로 100명 중 두세 명 안에 드는 결과예요.',
+      '높음': '대부분의 사람보다 빠르고 정확했어요.',
+      '평균보다 높음': '평균보다 조금 높은 범위예요.',
       '평균': '보통 성인의 평균 범위 안에 있어요.',
-      '평균 하': '평균보다 조금 낮은 범위예요. 문제 형식에 익숙해지면 오르는 경우가 많아요.',
-      '경계선': '시간에 쫓겼거나 주변 환경의 영향이 컸을 수 있어요. 조용한 곳에서 다시 해 보길 권해요.',
-      '낮음': '집중하기 어려운 환경이었거나 문제 형식이 낯설었을 수 있어요. 조용한 곳에서 다시 해 보길 권해요.'
+      '평균보다 낮음': '평균보다 조금 낮은 범위예요. 문제 형식에 익숙해지면 오르는 경우가 많아요.',
+      '평균보다 많이 낮음': '시간에 쫓겼거나 집중하기 어려운 환경이었을 수 있고, 문제 형식이 낯설었을 수도 있어요. 조용한 곳에서 다시 해 보길 권해요.'
     }[bd];
     let summary, headline;
     if (single) {
@@ -1935,7 +2203,10 @@
       const spread = sorted[0].value - weak.value;
       // 차이가 두 영역 오차를 합친 값보다 작으면 어느 영역이 약하다고 하지 않는다(위 TASK_REL 설명)
       const noise = sorted.length < 2 ? 0 : Math.sqrt(Math.pow(domSem[sorted[0].key], 2) + Math.pow(domSem[weak.key], 2));
-      summary = bandText + (sorted.length < 2 ? '' : spread < 8
+      // 2026-11-13: 영역 점수가 모두 같으면(전부 맞힘·전부 틀림 등) '55~55 사이로'가 되지 않게 따로 적는다
+      summary = bandText + (sorted.length < 2 ? '' : spread === 0
+          ? ' 영역별 점수가 모두 ' + U.josa(weak.value, '으로', '로') + ' 같게 나왔어요.'
+          : spread < 8
           ? ' 영역별 점수가 ' + weak.value + '~' + sorted[0].value + ' 사이로 고르게 나왔어요.'
           : spread < noise
           ? ' 영역별 점수는 ' + weak.value + '~' + sorted[0].value + ' 사이예요. 이 정도 차이는 오차 범위 안이라 어느 영역이 특별히 약하다고 보기는 어려워요.'
@@ -1950,9 +2221,29 @@
     sections.push({ title: '점수 읽는 법', body: '추정 IQ는 평균이 100, 표준편차가 15인 IQ 눈금으로 바꾼 점수예요. 열 명 중 일곱 명쯤이 85~115 사이에 들어가요. ' +
       (single ? '과제 하나만으로 낸 점수는 문항이 적어서, 실력이 아주 높거나 낮으면 실제보다 100에 가깝게 나오기 쉬워요. '
         : '여러 과제를 합친 영역·종합 점수는 실력을 미리 정해 둔 가상 응시자 수천 명에게 같은 문제를 풀게 해 보고, 점수가 이 눈금대로 퍼지도록 맞췄어요. ') +
-      '"상위 %"는 그 눈금에서 내 위치고, ±' + U.josa(sem, '은', '는') + ' 오차 범위예요. 실제 값이 그 안에 있을 확률이 70% 정도고, 과제를 많이 풀수록' + (single ? '' : ', 다섯 영역을 고루 풀수록') + ' 범위가 좁아져요. ' +
-      (single ? '' : '아주 높거나 낮은 점수에는 그날의 운도 섞이기 쉬워서, 다시 하면 100 쪽으로 조금 돌아오는 경우가 많아요. ') + '점수는 몇 개를 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 각 단계의 난이도는 실제 응시 자료 없이, 설계할 때 정한 값과 AI가 문제를 보고 보통 성인의 정답률을 어림한 값으로 정했어요. 그래서 실제 응시 데이터로 보정하기 전까지는 공인 지능검사의 IQ와 같다고 볼 수 없어요. 같은 과제를 여러 번 하면 익숙해져서 점수가 올라요.' });
-    return { headline: headline, value: iq, sem: sem, label: bd + ' · 상위 ' + pct + '% · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: allTasks, invalidTasks: bad.length ? bad : undefined, z: z, norms: NORMS_VERSION };
+      '"상위 %"와 "하위 %"는 그 눈금에서 내 위치예요. 평균보다 높으면 위에서부터, 낮으면 아래에서부터 센 비율이에요. ±' + U.josa(sem, '은', '는') + ' 오차 범위예요. 실제 값이 그 안에 있을 확률이 70% 정도고, 과제를 많이 풀수록' + (single ? '' : ', 다섯 영역을 고루 풀수록') + ' 범위가 좁아져요. ' +
+      (single ? '' : '아주 높거나 낮은 점수에는 그날의 운도 섞이기 쉬워서, 다시 하면 100 쪽으로 조금 돌아오는 경우가 많아요. ') + // 채점 방법 설명은 결과에 든 과제 종류에 맞춘다(2026-11-13): 기억·속도 과제만 푼 결과에도 '어느 단계 문제를 맞혔는지'라고 나왔다
+      (keys.some(function (k) { return NORMS[k].kind === 'prop'; }) ? '규칙 찾기·언어·공간 문제의 점수는 몇 개를 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 각 단계의 난이도는 실제 응시 자료 없이, 설계할 때 정한 값과 AI가 문제를 보고 보통 성인의 정답률을 어림한 값으로 정했어요. ' : '') +
+      (keys.some(function (k) { return NORMS[k].kind !== 'prop'; }) ? '기억은 외운 길이, 속도는 빠르기와 정확도를 보통 성인의 어림값과 견줘서 점수로 바꿔요. ' : '') +
+      '이 기준값들은 실제 응시 데이터로 보정하기 전이라 공인 지능검사의 IQ와 같다고 볼 수 없어요. 같은 과제를 여러 번 하면 익숙해져서 점수가 올라요.' });
+    return { headline: headline, value: iq, sem: sem, label: bd + ' · ' + rank + ' · ±' + sem, summary: summary, scales: single ? scales[0].children : scales, sections: sections, tasks: allTasks, invalidTasks: bad.length ? bad : undefined, z: z, norms: NORMS_VERSION };
+  }
+
+  /* 저장된 옛 결과를 보여 줄 때 등급·위치 글만 지금 표기로 다시 만든 사본을 돌려준다(2026-11-13). 점수(value·z·sem)와 저장된 값은 건드리지 않는다.
+     예전 판이 저장한 '경계선'·'평균 하'·'상위 84%' 같은 글이 내 기록과 공유 이미지에 그대로 남지 않게 한다. 지금 표기로 저장된 결과는 그대로 돌려준다. */
+  function relabel(r) {
+    if (!r || typeof r.value !== 'number' || typeof r.z !== 'number' || typeof r.sem !== 'number') return r;
+    const label = band(r.value) + ' · ' + rankText(r.z) + ' · ±' + r.sem;
+    /* 영역 막대(과제 막대를 거느린 줄)의 위치 글은 옛 표기(평균보다 낮은데 '상위 51~100%')만 고친다. 이미 맞는 글은 z 로 만든 원래 숫자를 그대로 둔다
+       (반올림한 점수로 다시 만들면 1~2%p 달라진다). 종합 글이 옛 판과 같아도(평균 100~109) 영역 글은 옛 표기일 수 있어서 따로 본다. 과제 막대의 '6/8 정답' 같은 글은 그대로다. */
+    const OLD_RAW = /^상위 (5[1-9]|[6-9]\d|100)%$/;
+    let changed = r.label !== label;
+    const scales = Array.isArray(r.scales) ? r.scales.map(function (s) {
+      if (!s || !Array.isArray(s.children) || typeof s.value !== 'number' || !OLD_RAW.test(String(s.raw))) return s;
+      changed = true;
+      return Object.assign({}, s, { raw: rankText((s.value - 100) / 15) });
+    }) : r.scales;
+    return changed ? Object.assign({}, r, { label: label, scales: scales }) : r;
   }
 
   function score(answers, items, meta) {
@@ -2035,13 +2326,21 @@
     intro: [
       '결과는 IQ 점수로 나와요. 보통 사람 평균이 100이고, 열 명 중 일곱 명쯤이 85에서 115 사이에 들어가요. 병원이나 기관에서 받는 공인 검사의 IQ는 아니고 참고용 추정치예요.',
       '문제는 쉬운 것부터 시작해서 점점 어려워져요. 뒤쪽 단계는 실제 지능검사에서 어려운 문제로 나오는 유형이에요.',
-      '도형과 숫자 문제는 할 때마다 새로 만들어져서 같은 문제가 두 번 나오지 않아요.',
+      '도형과 숫자 문제는 할 때마다 새로 만들어요. 한 번 푸는 동안에는 같은 문제가 다시 나오지 않아요.',
       '한 번에 다 풀어도 되고, 오늘은 기억력만, 내일은 수열만 이렇게 따로 풀어도 돼요. 따로 푼 결과는 알아서 하나로 합쳐져요.',
-      '점수는 몇 개 맞혔는지가 아니라 어느 단계까지 맞혔는지로 계산해요. 어려운 문제를 맞히면 더 크게 올라가요.'
+      '규칙 찾기·언어·공간 문제의 점수는 몇 개 맞혔는지가 아니라 어느 단계 문제를 맞혔는지로 계산해요. 어려운 문제를 맞히면 더 크게 올라가요. 기억은 외운 길이, 속도는 빠르기와 정확도로 재요.'
     ],
     build: build,
     score: score,
     merge: merge,
+    relabel: relabel,
+    /* 과제 키 → 가장 높은 단계(2026-11-13). 문항 위 단계 점(●○)을 과제마다 맞게 그리는 데 쓴다(도형 행렬 6, 도형 계열 3, 나머지 객관식 5).
+       적응형 최고 단계와 정밀 검사 단계표 중 큰 값이라, 단계 구성을 바꾸면 저절로 따라간다 */
+    maxLevel: (function () {
+      const o = {};
+      Object.keys(ADAPT).forEach(function (k) { o[k] = Math.max.apply(null, [ADAPT[k].max].concat(LEVELS[k] ? LEVELS[k].full : [])); });
+      return o;
+    })(),
     normsVersion: NORMS_VERSION
   };
 })();
