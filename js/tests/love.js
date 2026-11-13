@@ -94,7 +94,7 @@
     ['mania', '연인이 다른 사람과 가깝게 지내면 질투가 크게 난다.', false],
     ['mania', '연애에 빠지면 공부나 일이 손에 잘 안 잡힌다.', false],
     ['mania', '연애 중에도 내 생활의 리듬은 크게 흔들리지 않는다.', true],
-    ['mania', '연인이 다른 사람과 친하게 지내도 질투가 별로 나지 않는다.', true],
+    ['mania', '연인이 나 없이 친구들과 여행을 가도 마음이 편하다.', true],
     ['mania', '연인의 반응 때문에 기분이 크게 오르내리는 일은 드물다.', true],
     ['mania', '연애를 해도 친구나 취미에 쓰는 시간은 그대로 지키는 편이다.', true],
     ['agape', '연인이 행복하다면 내가 조금 손해를 봐도 괜찮다.', false],
@@ -148,8 +148,10 @@
     // 같은 점수의 스타일은 모두 이어 쓴다: "열정형과 친구형", "열정형, 놀이형, 친구형"
     const tied = function (val) { return STYLES.filter(function (s) { return v[s.key] === val; }); };
     const list = function (arr) { const xs = arr.map(function (s) { return s.name; }); return xs.length === 2 ? U.josa(xs[0], '과', '와') + ' ' + xs[1] : xs.join(', '); };
-    // 60점을 넘는 스타일이 없거나 여섯 점수가 10점 안에 모여 있으면 한쪽으로 기울지 않은 것으로 본다
-    const flat = v[top.key] < 60 || v[top.key] - v[low.key] < 10;
+    // 여섯 점수가 10점 안에 모여 있으면 균형형(even). 점수는 벌어져 있어도 60점을 넘는 스타일이 없으면 한 스타일을 고르지 않되,
+    // "고루 섞였다"고 하지는 않는다(2026-11-13: 최고 55점·최저 5점이어도 균형형이라고 나오던 것을 고침).
+    const even = v[top.key] - v[low.key] < 10;
+    const flat = even || v[top.key] < 60;
     // 둘째가 60점 이상이고 첫째와 8점 안이면 두 스타일을 함께 보여 준다 (기본 검사에서 한 칸 차이가 6~7점)
     const pair = !flat && v[second.key] >= 60 && v[top.key] - v[second.key] < 8;
     const sections = [];
@@ -161,15 +163,16 @@
     let headline, label, summary;
     if (flat) {
       const same = v[top.key] === v[low.key];
-      headline = '균형형';
-      label = '여러 스타일이 고루 섞임';
-      summary = '뚜렷하게 높은 스타일 없이 여러 스타일이 고루 섞여 있어요. ' + (same ? '여섯 스타일이 모두 ' + v[top.key] + '점이에요.' : '그중에서는 ' + U.josa(list(tied(v[top.key])), '이', '가') + ' ' + v[top.key] + '점으로 가장 높아요.');
-      sections.push({ title: '고루 섞인 스타일', body: '상대와 상황에 따라 설렘을 따르기도, 천천히 친해지기도, 현실을 따져 보기도 하는 유연한 모습일 수 있어요. 답을 "보통이다"로 많이 골랐다면 조금 더 마음이 가는 쪽으로 골라 다시 해 보면 차이가 더 잘 보여요.' });
+      headline = even ? '균형형' : '두드러진 스타일 없음';
+      label = even ? '여러 스타일이 고루 섞임' : '60점을 넘는 스타일이 없음';
+      summary = (even ? '뚜렷하게 높은 스타일 없이 여러 스타일이 고루 섞여 있어요. ' : '60점을 넘는 스타일이 없어서 한 스타일을 고르지 않았어요. ') + (same ? '여섯 스타일이 모두 ' + v[top.key] + '점이에요.' : '그중에서는 ' + U.josa(list(tied(v[top.key])), '이', '가') + ' ' + v[top.key] + '점으로 가장 높아요.');
+      if (!even) sections.push({ title: '두드러진 스타일이 없을 때', body: '여섯 스타일 모두 "나와 가깝다"고 할 만큼 높게 나오지 않았어요. 문장들이 내 이야기처럼 와닿지 않아 "보통이다"나 "아니다" 쪽을 많이 골랐을 때 이렇게 나와요. 점수 막대에서 상대적으로 높은 쪽과 낮은 쪽을 함께 봐 주세요.' });
+      else sections.push({ title: '고루 섞인 스타일', body: '상대와 상황에 따라 설렘을 따르기도, 천천히 친해지기도, 현실을 따져 보기도 하는 유연한 모습일 수 있어요. 답을 "보통이다"로 많이 골랐다면 조금 더 마음이 가는 쪽으로 골라 다시 해 보면 차이가 더 잘 보여요.' });
       if (!same && v[top.key] > v[second.key]) sections.push({ title: '그중 가장 가까운 스타일 · ' + top.name, body: top.desc + ' ' + top.example });
     } else if (pair) {
       headline = top.name + ' · ' + second.name;
       label = top.orig + ' · ' + second.orig;
-      summary = U.josa(pts(top), '과', '와') + ' ' + U.josa(pts(second), '이', '가') + ' 함께 높아요. ' + U.josa(top.tag, '과', '와') + ' ' + U.josa(second.tag, '을', '를') + ' 둘 다 닮았어요.';
+      summary = U.josa(pts(top), '과', '와') + ' ' + U.josa(pts(second), '이', '가') + ' 함께 높아요. ' + U.josa(top.tag, '과', '와') + ' ' + U.josa(second.tag, '을', '를') + ' 둘 다 닮았어요.' + (v[sorted[2].key] === v[second.key] ? ' ' + sorted[2].name + '도 ' + v[second.key] + '점으로 같은 점수예요.' : '');
       describe(top, true);
       describe(second, true);
     } else {
@@ -178,7 +181,7 @@
       summary = '가장 높은 스타일은 ' + top.name + '(' + top.orig + ') ' + v[top.key] + '점이에요. ' + top.desc;
       describe(top, false);
     }
-    if (!flat && v[low.key] <= 40) {
+    if (!even && v[low.key] <= 40) {
       const lows = tied(v[low.key]);
       sections.push({ title: '가장 낮은 스타일', body: U.josa(list(lows), '이', '가') + ' ' + v[low.key] + '점으로 가장 낮아요.' + (lows.length <= 2 ? ' ' + lows.map(function (s) { return s.lo; }).join(' ') : '') });
     }

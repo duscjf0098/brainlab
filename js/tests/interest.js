@@ -6,7 +6,7 @@
    모든 문항이 같은 방향이고 유형마다 문항 수가 같아서, 같은 답만 고르면 여섯 유형이 똑같이 나와 "고르게 높음·보통·낮음"이 된다. */
 (function () {
   const U = BL.util;
-  // 홀랜드 육각형의 둘레 순서. 이웃할수록 비슷한 흥미이고, 점수가 같으면 이 순서로 정한다.
+  // 홀랜드 육각형의 둘레 순서. 이웃할수록 비슷한 흥미이고, 점수가 같으면 채점할 때 무작위로 정한다.
   const ORDER = ['R', 'I', 'A', 'S', 'E', 'C'];
 
   const TYPES = {
@@ -94,11 +94,11 @@
     ['perform', '연극 무대에서 배역을 맡아 연기하기'],
     ['perform', '직접 곡을 만들고 가사 붙이기'],
     ['perform', '음악에 맞춰 춤 동작 짜기'],
-    ['perform', '짧은 영상을 찍어 이야기가 있게 편집하기'],
+    ['perform', '짧은 영상의 줄거리를 짜고 대본 쓰기'],
     ['teach', '친구에게 어려운 내용을 쉽게 설명해 주기'],
     ['teach', '아이들에게 글자나 숫자 가르치기'],
     ['teach', '수업 계획을 짜서 학생들 가르치기'],
-    ['teach', '처음 온 동료에게 일하는 방법 알려 주기'],
+    ['teach', '새로 온 사람에게 일하는 방법 알려 주기'],
     ['teach', '외국인에게 우리말 가르쳐 주기'],
     ['teach', '어르신께 스마트폰 쓰는 법 알려 드리기'],
     ['care', '고민이 있는 사람의 이야기 들어 주기'],
@@ -230,8 +230,9 @@
     FACETS.forEach(function (fc) { const m = counts[fc.key] ? sums[fc.key] / counts[fc.key] : 3; fv[fc.key] = Math.round((m - 1) / 4 * 100); });
     const tv = {};
     ORDER.forEach(function (k) { tv[k] = Math.round(U.mean(facetsOf(k).map(function (fc) { return fv[fc.key]; }))); });
-    // 점수 순으로 막대를 그리고, 같은 점수는 육각형 순서로 둔다
-    const sorted = ORDER.slice().sort(function (a, b) { return tv[b] - tv[a] || ORDER.indexOf(a) - ORDER.indexOf(b); });
+    // 점수 순으로 막대를 그리고, 같은 점수는 무작위로 둔다(늘 앞 순서인 현실형·탐구형이 조합 제목에 들어가는 쏠림을 막는다). 결과는 채점할 때 한 번 저장된다.
+    const rr = U.rng(); const tie = {}; ORDER.forEach(function (k) { tie[k] = rr.next(); });
+    const sorted = ORDER.slice().sort(function (a, b) { return tv[b] - tv[a] || tie[a] - tie[b]; });
     const scales = sorted.map(function (k) {
       return { key: k, label: TYPES[k].label, value: tv[k], children: facetsOf(k).map(function (fc) { return { key: fc.key, label: fc.label, value: fv[fc.key] }; }) };
     });
@@ -273,7 +274,7 @@
         : '세부로는 ' + a.label + ' ' + fv[a.key] + '점이 ' + b.label + ' ' + fv[b.key] + '점보다 높아요. ' + a.hi);
     };
     const notes = [];
-    if (top === tv[second]) notes.push(U.josa(TYPES[first].label, '과', '와') + ' ' + U.josa(TYPES[second].label, '이', '가') + ' 같은 점수라서 순서는 육각형 순서(현실·탐구·예술·사회·진취·관습)로 정했어요.');
+    if (top === tv[second]) notes.push(U.josa(TYPES[first].label, '과', '와') + ' ' + U.josa(TYPES[second].label, '이', '가') + ' 같은 점수라서 어느 쪽을 첫째로 봐도 괜찮아요.');
     if (tv[second] - tv[third] < CLOSE) notes.push('둘째인 ' + U.josa(pts(second), '과', '와') + ' 셋째인 ' + pts(third) + '의 차이가 작아서 ' + U.josa("'" + TYPES[first].short + '·' + TYPES[third].label + "'", '으로', '로') + ' 봐도 돼요.');
     if (top - tv[second] >= DOMINANT) notes.push(U.josa(TYPES[first].label, '이', '가') + ' 둘째보다 ' + (top - tv[second]) + '점 높아서, 조합보다 ' + TYPES[first].label + ' 하나를 중심으로 봐도 좋아요.');
     if (top < 50) notes.push('가장 높은 유형도 50점보다 낮아서 전체적으로 끌림이 약하게 나왔어요. 아직 해 보지 않은 활동이 많으면 이렇게 나오기도 하니, 몇 가지를 직접 해 본 뒤 다시 검사해 보세요.');
@@ -287,7 +288,7 @@
       { title: '두 유형의 거리', body: '여섯 유형은 현실·탐구·예술·사회·진취·관습 순서로 육각형에 둘러앉아 있고, 가까울수록 비슷한 흥미예요. ' + HEX[hexDist(first, second)] }
     ];
     if (notes.length) sections.push({ title: '참고할 점', body: notes.join(' ') });
-    if (lows.length <= 2) sections.push({ title: '가장 덜 끌리는 쪽 · ' + lows.map(function (k) { return TYPES[k].label; }).join('·'),
+    if (lows.length <= 2 && bottom < 60) sections.push({ title: '가장 덜 끌리는 쪽 · ' + lows.map(function (k) { return TYPES[k].label; }).join('·'),
       body: lows.map(function (k) { return TYPES[k].low; }).join(' ') + ' 이런 일을 맡게 되면 짧게 나눠 하거나, 잘 맞는 사람과 나눠 맡으면 한결 수월해요. 덜 끌린다고 못하는 건 아니에요.' });
     sections.push(Object.assign({}, NOTE));
     return Object.assign(base, {
