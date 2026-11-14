@@ -464,108 +464,96 @@
     };
   }
 
-  /* ===== 1b. 도형 유추 (A → B 와 같은 변환을 C에 적용) ===== */
-  function fit3(a, set) {
-    const out = set.filter(function (x, i, arr) { return x != null && arr.indexOf(x) === i; });
-    if (out.length >= 3) return out.slice(0, 3);
-    const extra = (DOMAIN[a] || PROG_SEQ[a] || []).filter(function (v) { return out.indexOf(v) < 0; });
-    while (out.length < 3 && extra.length) out.push(extra.shift());
-    return out.length >= 3 ? out : out.slice(0, 2);
-  }
+  /* ===== 1b. 도형 유추 (A → B 와 같은 변환을 C에 적용) =====
+     2026-11-14 다시 짬: C와 보기를 먼저 만들고, 정답은 그 뒤에 "C와 변환 수만큼 다른 보기" 중에서 고른 다음 A·B를 거꾸로 만든다.
+     예전에는 변환 속성의 보기 값이 늘 [정답, C 값](+하나)이고 변환하지 않는 가짜 속성은 값 둘이라, A·B를 안 보고 C와 보기만 봐도
+     "바뀌는 속성(값 셋, 크기·개수·방향 등)은 C와 다른 값, 나머지는 C와 같은 값"으로 1·2단계 70%, 3·4단계 41~49%, 5단계 55~67%가 맞았다(우연 16.7%).
+     지금은 보기에서 달라지는 속성(변환 수 + 1개)마다 값 묶음이 [C 값, 같은 방식으로 고른 다른 값 둘]이라, 그 속성이 바뀌는 속성인지 보기와 C만으로는 알 수 없다.
+     크기·개수·방향은 한 단계 이웃만이 아니라 다른 값 아무것으로나 바뀔 수 있다(작게 → 크게는 "두 단계", 방향은 반 바퀴도 있음). 반대 방향 값도 보기에 들어간다.
+     보기 틀(AN_TPL)은 속성마다 값이 고르게(값 셋이면 둘씩, 둘이면 셋씩) 나오면서 "C와 변환 수만큼 다른 보기"가 가장 많게 짰다:
+     1·2단계 4개(나머지 둘은 두 곳이 다름, C 자체는 보기에 없음), 3·4단계 6개 모두(좌우가 끼면 5개), 5단계 5개. 정답은 그중 하나를 고르게 고르므로
+     C와 보기만 보는 요령은 1/4(1·2단계), 1/6~1/5(3~5단계)가 바닥이다. 변환 속성에서는 늘 C = A라(A와 C가 다른 속성은 변환하지 않는 속성뿐)
+     "바뀐 값으로 바꿈"과 "같은 만큼 바꿈"이 같은 답을 내서 정답이 하나다. */
   const TRANS_KO = { fill: '채움', shape: '모양', frame: '틀', size: '크기', count: '개수', rot: '방향', flip: '좌우', marks: '모서리 점', lines: '선' };
+  const AN_POOL12 = ['fill', 'shape', 'size', 'count', 'frame'], AN_POOL3 = ['fill', 'shape', 'frame', 'size', 'count', 'rot', 'flip', 'marks', 'lines'];
+  /* 보기 틀: 보기마다 속성별 값 번호(0 = C의 값, 1·2 = 다른 값). 'f'는 마지막 열이 좌우(값 둘)인 틀이다. */
+  const AN_TPL = {
+    1: [[0, 1], [0, 2], [1, 0], [2, 0], [1, 2], [2, 1]],
+    2: [[0, 1, 1], [0, 2, 2], [1, 0, 2], [2, 0, 1], [1, 2, 0], [2, 1, 0]],
+    '2f': [[0, 0, 1], [0, 2, 1], [1, 0, 1], [1, 1, 0], [2, 2, 0], [2, 1, 0]],
+    3: [[0, 0, 0, 1], [0, 1, 2, 1], [1, 0, 1, 2], [2, 2, 0, 2], [1, 2, 1, 0], [2, 1, 2, 0]],
+    '3f': [[0, 0, 0, 0], [0, 1, 2, 1], [1, 0, 1, 1], [2, 2, 0, 1], [1, 2, 1, 0], [2, 1, 2, 0]]
+  };
+  /* 모서리 점·선 값: 넷 다 있는 것만 빼고 모든 묶음(빈 것 포함). C의 값도 다른 값도 같은 묶음에서 고르게 고른다. */
+  const AN_SETS = { marks: allSubsets('abcd').filter(function (s) { return s.length < 4; }).concat(['']), lines: allSubsets('hvde').filter(function (s) { return s.length < 4; }).concat(['']) };
+  function anDomain(a) { return AN_SETS[a] || (a === 'rot' ? ROTS : a === 'flip' ? [0, 1] : DOMAIN[a]); }
+  /* 집합 변환의 연산: 더해지기만 했으면 더하기, 빠지기만 했으면 빼기, 둘 다면 뒤집기(더하기·빼기로 될 때도 반은 뒤집기로 적는다. 모두 맞는 설명이다) */
+  function anSetOp(r, from, to) {
+    const f = setOf(from), g = setOf(to);
+    const ops = [];
+    if (f.every(function (k) { return g.indexOf(k) >= 0; })) ops.push('union');
+    if (g.every(function (k) { return f.indexOf(k) >= 0; })) ops.push('sub');
+    if (!ops.length || r.next() < 0.5) return 'xor';
+    return ops[0];
+  }
   function makeFigAnalogy(r, level, tries, disTries) {
     const nT = [1, 1, 2, 2, 3][level - 1], nN = [0, 1, 1, 2, 2][level - 1];
-    const pool = level <= 2 ? ['fill', 'shape', 'size', 'count', 'frame'] : ['fill', 'shape', 'frame', 'size', 'count', 'rot', 'flip', 'marks', 'lines'];
-    /* 서로 막는 변환(방향·좌우는 함께 못 쓰고, 모양을 바꾸면 방향·좌우가 안 보인다)은 고를 때 건너뛰어 변환 수 nT를 지킨다(2026-11-13).
-       예전에는 뽑은 뒤 빼기만 해서 3·4단계의 6~7%가 변환 1개, 5단계의 20%가 2개 이하라 한 단계 아래 문항과 같았다. */
-    const trans = [];
-    r.shuffle(pool).forEach(function (t) {
-      if (trans.length >= nT) return;
-      const ori = trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0;
-      if ((t === 'rot' || t === 'flip') && (ori || trans.indexOf('shape') >= 0)) return;
+    /* 1) 보기에서 달라질 속성 W(변환 수 + 1개). 서로 막는 속성(방향·좌우는 함께 못 쓰고, 모양이 바뀌면 방향·좌우가 안 보임)은 건너뛴다.
+          W의 어느 둘(셋)을 골라도 변환으로 쓸 수 있어야, 정답을 나중에 골라도 늘 맞는 변환이 된다. */
+    const W = [];
+    r.shuffle(level <= 2 ? AN_POOL12 : AN_POOL3).forEach(function (t) {
+      if (W.length > nT) return;
+      const ori = W.indexOf('rot') >= 0 || W.indexOf('flip') >= 0;
+      if ((t === 'rot' || t === 'flip') && (ori || W.indexOf('shape') >= 0)) return;
       if (t === 'shape' && ori) return;
-      trans.push(t);
+      W.push(t);
     });
-    const A = { frame: r.pick(FRAMES), shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.int(1, 3), size: r.pick(['s', 'm']), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
-    if (trans.indexOf('rot') >= 0) A.shape = r.pick(['triangle', 'arrow']);
-    if (trans.indexOf('flip') >= 0) A.shape = 'lshape';
-    if (trans.indexOf('marks') >= 0) A.marks = r.next() < 0.5 ? '' : randomSet(r, 'abcd', 1, 2);
-    if (trans.indexOf('lines') >= 0) A.lines = r.next() < 0.5 ? '' : randomSet(r, 'hvde', 1, 1);
-    /* 변환 속성의 A 값은 변환 방향을 먼저 정하고 그 방향으로 갈 수 있는 값 전체에서 고른다(2026-11-13). C는 아래에서 A를 복사하므로 그 전에 정한다.
-       예전에는 크기 s·m, 개수 1~3에서만 고르고 끝값이면 반대쪽으로 옮겨서 보기 크기가 {m,l}이면 정답은 늘 l, 개수가 {3,4}면 늘 4였고,
-       방향·좌우는 A가 늘 0이라 정답이 늘 90°·270°, 늘 뒤집힌 ㄱ이었다(보기 값만 보고 3~5단계 27~33%, 우연 16.7%).
-       크기는 +1이면 s·m, −1이면 m·l, 개수는 +1이면 1~3, −1이면 2~4에서 고르므로 보기 값 묶음마다 정답이 큰 쪽·작은 쪽 반반이다. */
-    const STEP = {};
-    trans.forEach(function (t) {
-      if (t !== 'size' && t !== 'count') return;
-      const st = r.pick([1, -1]);
-      A[t] = r.pick(PROG_SEQ[t].filter(function (v) { return nextVal(t, v, st) !== v; }));
-      STEP[t] = st;
+    const hasFlip = W.indexOf('flip') >= 0;
+    if (hasFlip) { W.splice(W.indexOf('flip'), 1); W.push('flip'); }   // 좌우(값 둘)는 틀의 마지막 열
+    const tpl = AN_TPL[nT + (hasFlip ? 'f' : '')];
+    // 2) C: 속성마다 고르게. 방향이 있으면 삼각형·화살표, 좌우가 있으면 ㄱ자(모양은 W에 없다)
+    const C = { frame: r.pick(FRAMES), shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.pick(COUNTS), size: r.pick(SIZES), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
+    if (W.indexOf('rot') >= 0) C.shape = r.pick(['triangle', 'arrow']);
+    if (hasFlip) C.shape = 'lshape';
+    W.forEach(function (a) { C[a] = r.pick(anDomain(a)); });
+    // 3) 속성마다 값 묶음 [C 값, 다른 값 둘(좌우는 하나)]. 바뀌는 속성이든 아니든 같은 방식이다.
+    const vals = W.map(function (a, j) {
+      const k = Math.max.apply(null, tpl.map(function (row) { return row[j]; }));
+      return [C[a]].concat(r.sample(anDomain(a).filter(function (v) { return v !== C[a]; }), k));
     });
-    if (trans.indexOf('rot') >= 0) A.rot = r.pick(ROTS);
-    if (trans.indexOf('flip') >= 0) A.flip = r.int(0, 1);
-    const noisePool = ['fill', 'shape', 'frame', 'size', 'count'].filter(function (a) { return trans.indexOf(a) < 0 && !(a === 'shape' && (trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0)); });
-    const noise = r.sample(noisePool, Math.min(nN, noisePool.length));
-    const C = Object.assign({}, A);
-    noise.forEach(function (a) { C[a] = r.pick(DOMAIN[a].filter(function (v) { return v !== A[a] && !(a === 'size' && v === 'l') && !(a === 'count' && v === 4); })); });
-    const T = {};
-    trans.forEach(function (t) {
-      if (t === 'fill' || t === 'shape' || t === 'frame') T[t] = { to: r.pick(DOMAIN[t].filter(function (v) { return v !== A[t] && v !== C[t]; })) };
-      /* 크기·개수는 커지기·작아지기를 반반으로 한다(2026-11-13). 늘 커지기만 해서 정답이 보기 값 중 가장 작은 적이 없었다.
-         방향(STEP)과 그 방향으로 갈 수 있는 A 값은 위에서 정했다(크기·개수가 변환이면 C는 A와 같은 값이고, B·D는 아래에서 계산한다). */
-      else if (t === 'size' || t === 'count') T[t] = { step: STEP[t] };
-      else if (t === 'rot') T[t] = { step: r.pick([1, -1]) };
-      else if (t === 'flip') T[t] = {};
-      else {
-        const order = t === 'marks' ? 'abcd' : 'hvde';
-        const op = r.pick(['union', 'xor']);
-        let K = order.slice(0, 1);
-        for (let g = 0; g < 40; g++) { const k = randomSet(r, order, 1, 2); if (OPS[op](A[t], k, order) !== A[t] && OPS[op](C[t], k, order) !== C[t]) { K = k; break; } }
-        T[t] = { op: op, K: K, order: order };
-      }
+    // 4) 보기
+    const opts = tpl.map(function (row) { const o = Object.assign({}, C); W.forEach(function (a, j) { o[a] = vals[j][row[j]]; }); return o; });
+    const shaped = opts.filter(function (o) { return W.filter(function (a) { return o[a] !== C[a]; }).length === nT; });
+    /* 5) A와 C가 다른 속성(noise)은 정답을 고르기 전에, 보기에서 달라지지 않는 속성에서 고른다(그런 속성은 변환 속성이 될 수 없다).
+          5단계에서 W가 채움·틀·크기·개수와 방향(또는 좌우)이면 남는 속성이 하나뿐이라, 그때만 정답을 먼저 고르고 정답이 C 값을 두는 W 속성도 쓴다(드묾). */
+    const ori = W.indexOf('rot') >= 0 || hasFlip;
+    const noise = r.sample(['fill', 'shape', 'frame', 'size', 'count'].filter(function (a) { return W.indexOf(a) < 0 && !(a === 'shape' && ori); }), nN);
+    const D = r.pick(shaped);
+    if (noise.length < nN) noise.push.apply(noise, r.sample(W.filter(function (a) { return D[a] === C[a]; }), nN - noise.length));
+    const A = Object.assign({}, C);
+    noise.forEach(function (a) { A[a] = r.pick(anDomain(a).filter(function (v) { return v !== C[a]; })); });
+    /* 6) 눈으로 가리기: 보기 값 묶음의 모든 조합(× A의 다른 값)이 다 또렷해야 쓴다. C·보기·A·B가 모두 이 안에 들고, 정답이 어느 것이든 같은 판정이라
+          다시 만들기가 정답과 엮이지 않는다(2026-11-14: C와 보기만 따로 보면 C 자리의 조합만 늘 또렷해서, 보기만 보고도 C를 조금 짐작할 수 있었다). */
+    let grid = [Object.assign({}, C)];
+    W.forEach(function (a, j) {
+      const list = vals[j].concat(noise.indexOf(a) >= 0 && vals[j].indexOf(A[a]) < 0 ? [A[a]] : []), next = [];
+      grid.forEach(function (c) { list.forEach(function (v) { const d = Object.assign({}, c); d[a] = v; next.push(d); }); });
+      grid = next;
     });
-    function apply(cell) {
-      const out = Object.assign({}, cell);
-      trans.forEach(function (t) {
-        const p = T[t];
-        if (p.to) out[t] = p.to;
-        else if (t === 'size' || t === 'count' || t === 'rot') out[t] = nextVal(t, cell[t], p.step);
-        else if (t === 'flip') out.flip = cell.flip ? 0 : 1;
-        else out[t] = OPS[p.op](cell[t], p.K, p.order);
-      });
-      return out;
-    }
-    const B = apply(A), D = apply(C);
-    const varying = {};
-    trans.forEach(function (t) {
-      if (t === 'flip') varying.flip = [D.flip, C.flip];
-      /* 보기 값(2026-11-13): 크기·개수는 [정답, C 값] 둘, 방향은 정답과 나머지 세 방향 중 둘. 예전 [D, C, D 다음]은 방향의 정답이 늘
-         이어진 세 방향의 가운데였고, 크기·개수의 정답은 가장 작은 값인 적이 없었다(보기만 보고 26~37%, 우연 16.7%). */
-      else if (t === 'size' || t === 'count') varying[t] = [D[t], C[t]];
-      else if (t === 'rot') varying[t] = [D[t]].concat(r.sample(ROTS.filter(function (v) { return v !== D[t]; }), 2));
-      else if (T[t].to) varying[t] = fit3(t, [D[t], C[t], r.pick(DOMAIN[t].filter(function (v) { return v !== D[t] && v !== C[t]; }))]);
-      else varying[t] = sameSizeSets(r, D[t], T[t].order, 3);   // 원소 수가 정답과 같은 집합(sameSizeSets 주석)
-    });
-    const foilEx = function () { return Object.keys(varying).concat(trans.indexOf('rot') >= 0 || trans.indexOf('flip') >= 0 ? ['shape'] : []); };
-    if (Object.keys(varying).length === 1) { const f = pickFoil(r, D, foilEx()); varying[f.attr] = f.vals; }
-    let dis = balancedDistractors(r, D, varying, 6);
-    if (!dis) { const f = pickFoil(r, D, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, D, varying, 6); }
-    // 보기 수를 줄이지 않고 다시 만든다(2026-11-13, DIS_RETRY 주석)
-    if (!dis) {
-      if ((disTries || 0) < DIS_RETRY) return makeFigAnalogy(r, level, tries, (disTries || 0) + 1);
-      if (level > 1) return makeFigAnalogy(r, level - 1);
-      throw new Error('도형 유추 보기를 만들지 못함');
-    }
-    const o = shuffleOptions(r, [D].concat(dis), 0);
-    if ((tries || 0) < RETRY && !legible([A, B, C].concat(o.options))) return makeFigAnalogy(r, level, (tries || 0) + 1, disTries);
+    noise.filter(function (a) { return W.indexOf(a) < 0; }).forEach(function (a) { grid = grid.concat(grid.map(function (c) { const d = Object.assign({}, c); d[a] = A[a]; return d; })); });
+    if ((tries || 0) < RETRY && !legible(grid)) return makeFigAnalogy(r, level, (tries || 0) + 1, disTries);
+    // 7) 변환 속성 = 정답이 C와 다른 곳. B = A에 변환을 적용한 것(변환 속성은 A = C라 B의 값이 곧 정답의 값)
+    const trans = W.filter(function (a) { return D[a] !== C[a]; });
+    const B = Object.assign({}, A);
+    trans.forEach(function (a) { B[a] = D[a]; });
+    const o = shuffleOptions(r, [D].concat(opts.filter(function (x) { return x !== D; })), 0);
     const explain = 'A에서 B로: ' + trans.map(function (t) {
-      const p = T[t];
-      if (p.to) return t === 'frame' && p.to === 'none' ? '틀이 없어짐' : U.josa(TRANS_KO[t], '이', '가') + ' ' + U.josa(VAL_KO[t][p.to], '으로', '로') + ' 바뀜';
-      if (t === 'size') return '크기가 한 단계 ' + (p.step > 0 ? '커짐' : '작아짐');
-      if (t === 'count') return '개수가 하나 ' + (p.step > 0 ? '늘어남' : '줄어듦');
-      if (t === 'rot') return (p.step > 0 ? '시계 방향' : '반시계 방향') + '으로 90° 돎';
+      if (t === 'fill' || t === 'shape' || t === 'frame') return t === 'frame' && D[t] === 'none' ? '틀이 없어짐' : U.josa(TRANS_KO[t], '이', '가') + ' ' + U.josa(VAL_KO[t][D[t]], '으로', '로') + ' 바뀜';
+      if (t === 'size') { const d = SIZES.indexOf(D.size) - SIZES.indexOf(C.size); return '크기가 ' + (Math.abs(d) === 1 ? '한' : '두') + ' 단계 ' + (d > 0 ? '커짐' : '작아짐'); }
+      if (t === 'count') { const d = D.count - C.count; return '개수가 ' + ['', '하나', '둘', '셋'][Math.abs(d)] + ' ' + (d > 0 ? '늘어남' : '줄어듦'); }
+      if (t === 'rot') { const d = ((D.rot - C.rot) % 360 + 360) % 360; return d === 180 ? '반 바퀴(180°) 돎' : (d === 90 ? '시계 방향' : '반시계 방향') + '으로 90° 돎'; }
       if (t === 'flip') return '좌우가 뒤집힘';
-      return TRANS_KO[t] + ': ' + OPK_KO[p.op];
+      return TRANS_KO[t] + ': ' + OPK_KO[anSetOp(r, C[t], D[t])];
     }).join(', ') + '. 같은 변화를 C에 적용한 게 정답이에요.' + (noise.length ? ' C는 A와 ' + U.josa(noise.map(function (a) { return TRANS_KO[a]; }).join('·'), '이', '가') + ' 다르지만 바뀌는 규칙은 같아요.' : '');
     return {
       type: 'choice', part: 'figAnalogy', scored: true, level: level, timeLimit: level >= 4 ? 60 : 45,
@@ -1088,10 +1076,35 @@
   }
 
   /* ===== 5. 도형 회전 (1~5단계) =====
-     단계마다 칸 수가 하나씩 늘어난다(5·6·7·8·9칸, 5×5 격자 안). 오답 셋은 모두 원래 도형을 거울에 비춘 모양을 서로 다른 방향으로
-     돌린 것이라 칸 수·줄마다 칸 수·바깥 크기가 정답과 같다. 칸만 세어서는 거를 수 없고, 돌려 보고 왼쪽·오른쪽 방향까지 가려야 풀린다.
-     (2026-10-18 전에는 오답 둘이 칸 하나를 옮긴 모양이라 칸 수만 비교해도 둘이 지워졌고, 1·2단계와 4·5단계가 같은 조건으로 만들어졌다.) */
+     단계마다 칸 수가 하나씩 늘어난다(5·6·7·8·9칸, 5×5 격자 안). 오답은 원래 도형을 거울에 비춘 모양을 돌린 것(거울상)과,
+     칸 수·바깥 크기·줄·열 칸 수·끝/곧은/꺾인/갈래 칸 수·2×2 덩어리·가장 긴 줄·구멍이 모두 같지만 합동이 아닌 다른 도형(쌍둥이)이다.
+     칸만 세거나 겉모양을 견주어서는 거를 수 없고, 돌려 봐야 풀린다.
+     (2026-10-18 전에는 오답 둘이 칸 하나를 옮긴 모양이라 칸 수만 비교해도 둘이 지워졌고, 1·2단계와 4·5단계가 같은 조건으로 만들어졌다.)
+     2026-11-14 다시 짬: 예전 오답은 늘 거울상 셋이었는데, 그중 문제를 그린 그대로 좌우·상하로 뒤집은 것(좌우·상하 거울)은 돌리지 않고도 알아볼 수 있었고,
+     대각선 거울상은 90° 돌린 정답을 그대로 좌우·상하로 뒤집은 것이라 보기끼리 견주면 정답과 짝이 드러났다. 그래서 "문제 뒤집기 지우기" 41~42%,
+     "보기끼리 뒤집기 짝 고르기" 43~48%, 그 둘과 바깥 크기 방향을 함께 쓰면 75~85%가 맞았다(우연 25%).
+     이제 2~5단계는 두 가지를 반씩 낸다. 가: 정답이 반 바퀴(180°) 돌린 것이고 오답은 대각선 거울상 둘 + 쌍둥이 하나(반 바퀴 정답의 뒤집기 짝은 좌우·상하 거울뿐이라
+     대각선 거울상과는 짝이 되지 않는다). 나: 정답이 90° 돌린 것이고 오답은 쌍둥이 셋(90° 정답에는 짝이 안 되는 거울상이 없다).
+     두 가지 모두 바깥 크기 방향이 문제와 같은 보기 둘, 뒤바뀐 보기 둘이고, 정답은 가에서는 같은 쪽, 나에서는 뒤바뀐 쪽이라 방향으로는 고를 수 없다.
+     5칸(1단계)은 쌍둥이가 하나도 없어서(tools/rotation-twins.cjs로 셈) 오답이 거울상뿐이고, 정답 90° + 좌우·상하 거울 + 대각선 거울상 하나로만 낸다.
+     이 짜임은 뒤집기 짝·방향 요령이 50%로 남지만(정답과 대각선 거울상이 짝), 다른 짜임은 그 요령이 75~100%라 이것이 가장 낮다. */
   const ROT_SIZE = { 1: 5, 2: 6, 3: 7, 4: 8, 5: 9 }, ROT_TIME = { 1: 40, 2: 40, 3: 45, 4: 50, 5: 55 };
+  /* 쌍둥이 표(tools/rotation-twins.cjs가 만듦, --check로 확인): n칸마다 겉모양이 같은 자유 도형(돌리고 뒤집어 같은 것은 하나) 묶음.
+     도형은 8자세 중 25칸 비트 값(비트 y*5+x = (x, y) 칸)이 가장 작은 것을 36진수로 적었다. */
+  const ROT_TWINS = {"6":"2n,4f;vb,yr;15t,1n3;1ny,1xf;15u,15w;vi,z0","7":"5b,8v;vj,15v,1nz;10v,2en;xb,161,1u7,2fj,4sv;z1,1v2,1xn;2j2,2py;2pv,2q2,4tq;15y,1yk;162,1yh;1k1,1nj,3a7;1oe,2bn;1k2,1k4,1k8;2ck,2co;vy,16g;1yw,344;2jg,2qg;qg2,qg4,116q,118k;q5q,q98,ux8;s02,v44","8":"an,cf;z3,15z,1xr;1rj,1yf,1ym;12n,163,165,1v3;2qx,4tr;2j3,2qt;2i7,4vj;2jx,4x9;2pz,44u;vz,1k3,1of;18f,2f3;1r3,3bz;2cm,3xi;xr,11b,1kh,21r,2fz,3b3,4tb,4v3;1k5,1k9,1un;2cy,3xh;2br,3cu;1ry,3jw;1y3,29a;zh,3ct,3r0;16h,22m,28f,2c3;5lq,5ni;1vi,2bv;2ji,346;2n2,343,34i,4u6;4xo,5p8;458,5fr;1k6,1kc,2d4,350;1ki,1kk,2cx,3xt;1ka,2cl,2cp,2d0,3xl;zi,16k;1rx,264;132,16i,1yx,3jt;q5r,qg3;q7j,qg9,wrl,115v;qg5,tlt;1giy,1mua;q99,v4x,116r,1gfi;qg6,s14,11fo,1gj0;s10,11aa,11ac,1hae;qga,tm0,wrm,wro,116u,118m,118s,11du,1gix,1h72;tlu,1git,1hai,1muc;s03,v54,ybm,zqa;tf0,uxa;rta,s06,uz0,1hak;s0a,v46;qu9,1g7z,2wf3;1gwy,2x2c;1g8u,1gw3,1h0e,22bn;2who,2ysc;qua,quc,qug,1dtu,1dvo,1dzc;1gx0,1gx4,235w;q66,qgo,rq6,11co;sea,11qg,1gjc,1qmw,266c,2rno;1hok,1hoo;q9o,uxo;vic,1gcc,1k7w;25lo,25so,28po;1h3w,1haw,29ac;sec,seg;rto,s0o,v4o","9":"2jz,2qv,4xb;4a7,7e7;44v,5ov;2q7,5wp;43j,7cv;4xq,5hj;7qn,8ym;7i1,872;zj,1k7,3cv;1rz,2cn,3xj;14v,1a7,1kj,1kp,22n,28v;2cu,3j3,3xq;133,1kb,1kd,1vj,25b,3i7;2cr,2d2,2d6,3xp;1bz,3pb;5nj,b4v;5lr,b6n;16j,1gv,29b,29q,2cb;1z2,3jy;16l,2c7,3r2;266,3jx;1dp,3r1;35d,4u7;2jj,351,355,527;356,4py,4q4,5iq;2m7,2u7,57j,59b;2in,4vz;2n3,4q9,7w1;2v2,31a;2qm,34e;2kd,4xp,5bw;2ny,2rd,2xq,34m,34q,5hv;2zz,chd;347,45a,5fz,5um,6aa;2qj,7se;4jg,5g7,695;30v,34j,58e,7em;5zy,61q,b5q;34b,4c9,7i2,8ah;5vd,bcp;1ke,2d8;1km,1kq,2d5,3xv;2ct,3xn;35g,5ip;4qa,7w2,8oh;2rg,34s;q9b,qg7,117n;s0z,1giv,1gj2;qcv,qgb,qgd,zxd,1gfj;tdb,115z,11d5;wrt,119h;tlx,1mui;v6q,v6s,11b6,1pt2;yco,11eq,11gk;tk7,uxb,118n,1mr2,1nim;tf1,v51,zqd,116v,1pwq;v6w,11he;zxe,1gj1;yck,1nms;s15,tlv;1hbe,1mue;rvz,11cz,250p;tm1,wrp,1h73;rsf,119f;1qo3,25t6;11ae,1ham;s12,1jos;zqb,1h7y,1pwj;wpz,1h67;rtb,11ab,1nly;117q,1hbd,1muk;s16,tly;rwv,v55,11dv,1qn7,250q,25sb;rzb,v4z;11d8,11e2,1qnd;1jol,1kga;1haj,1nlv;1jla,1pwm;wru,119o,1muh,1ppq;s18,1hbg;wrq,11fq,25t8;11ak,1jop;1qng,2c3n;11dy,11e4;tm2,1mud,1qjw;ru6,v5y;rxq,v58,zqe;woe,y8e;s07,v5v,1kem;s0b,ybn;v47,zqk,1pwp;ybu,1kef;ybq,ybw,1kfg;q67,qub,1g8v;qin,24ov;sf5,1gbj,2wgv;1gx2,1hpe,2x2e;q7z,qbj,qup,rpb,13hd,1dsz,1gm7,25i7,2wfz,49cv,4azj;1k2q,2yn8;qud,quh,u01,x5t,1gf3,1h0f,1jdr,2xzz;1gxe,1tk2,2343,2346,2x2d,2xus,3hqe;1gx6,1n8i;qpb,qsn;1gw7,2whq;1gce,2wos;1gij,1gtq;q9p,qgp,vj5,11r5,1gn2,1gsv,1gwj,2whp,2wvw;4yn2,509q;1kua,2zes;1gfy,1gwb,1ubm,2zdw;1gje,1r2a;22br,2yse;1k66,353w;1h1a,22cj,25lq,266e;1h3y,1hom,1k1v,22f7;1hem,1tj7,22pv,25j2,25pa,266b,266q,28ny,2rly,49dq,4a5a;1h7i,1hoj,1hoy,1jem,1n7n,22cm,22ir,266i;4dcs,50gs;2y2k,2yu4,2yzg,2zd8;1hla,1q9v,1zgj,25sq;2xa4,2yt8,2z6k,3o2k,4b24,4bk7,4txj,50bg;2ykn,2zd2,2zdg;rq7,1dtv,1jfj,2337,2xy7;1k2s,237o;235y,3hom;1dwk,1e08;u04,x60;19ew,22dj,2yqm;11rc,1k7y,1zhk,357g;seb,28pq,2rnq,2xz2;ws8,11dk;1k07,1px4,49h8,4yqk;tfg,uyk;1ksm,1nmg;29ae,4a8s;que,quk,sfk,1edk,1gxk,2sg4;sf8,sfc,1dxe,1dxg,1e2s,1e2w,1gx8,1hpg,1hpk;quq,qus,u0g,x68,13he,13hg,13hk,1dty,1dvq,1dvw,1dzg,1dzs,1e82,1e9w,1gxd,23h4,25es,2x2p;1k2w,23d0;qui,u02,u08,x5u,x5w,1e0y,1e14,1gx1,1gx5,1gxg,1tk4,1tk8,2364,236s,239o,23a0,23k4,2678,2x2h;1n8k,2x2i;q9q,qgs;vk2,11tw,1gjg;vk4,11u0;1ayq,1ayw,2wnv;vjk,185g,1cde,1gcd,1gqk;qda,qgq,11rk,11s2,151e,19eq,19es,1gjd,2wop;uvy,uxq,1198,11cs;vjc,1ktg,1xfo;ypu,11s8,1r1k,1ubo,1zhg,2woq;1qjg,1qn0;11qw,266w;rtq,s1k,see,11g8,1hbs,1hp4,1r14,266k,26ys;s4e,2514;1hos,1jp4,1qqg,2rus;rxa,seq,tmg,11eg,11qk,1qns,25tk,266s,2itg,2rnw,2rrg,2s1w;sei,1hp0,1r0s,2chw;ruk,uzg,v4s,vik,1h4s,25ss,2a2s;sb2,25zw;vbw,24u4;1hb0,1kf0,1kss,2flw;s0q,v5k,yc8,1hi4,2lxg,2oqs;vie,vis,1k8s,1km4,25mk,2f18,2f4s;26e4,26l4;28ws,28yg,29ak;29as,2fik;yq8,151g,151k;s0s,v6g,1kt4;n7xd,nuw1;n7xe,n7xg,n7xk,18aiq,18c5g,18few;1af38,1af3c,1b0iq;nuwy,nuys,nv2g;1b1c4,1b1fs;n79a,n7js,x6vs;on9e,p8oy,x79k,xjig;1afus,1afuw,1b4co;n7cs,nifs;n9he,nitk,rhxg,s0as;1ap6w,1bptw;n9hs,nits,on9s;n9hg,n9hk,on9g,on9k,p8qs,p8ug;ncls,rhxs;nclk,rhxk,s0eg;1aiyw,1bdoo;n8ws,n93s,nc7s,omvs,ow7s,rnrs;oqdg,owlk,ro5k;oqds,owls"};
+  /* 쌍둥이로는 대칭 없는 도형(8자세가 모두 다름)만 쓴다. 대칭 있는 쌍둥이는 돌린 자세끼리 좌우·상하 뒤집기 짝이 되거나 겹쳐서 '나'(쌍둥이 셋)를 만들 수 없고,
+     그런 도형이 '가'에만 나오면 문제 모양이나 바깥 크기 방향으로 정답 종류를 짐작할 수 있었다(2026-11-14 시험에서 2단계 방향 요령 33%).
+     그래서 대칭 없는 쌍둥이가 있는 도형만 문제로 쓴다(6칸 6가지, 7칸 38가지, 8칸 180가지, 9칸 608가지). */
+  const TWIN_OF = {};
+  function twinMap(n) {
+    if (TWIN_OF[n]) return TWIN_OF[n];
+    const map = {};
+    (ROT_TWINS[n] || '').split(';').filter(Boolean).forEach(function (g) {
+      const ks = g.split(',').map(function (s) { return parseInt(s, 36); }).filter(function (k) { const c = maskCells(k); return new Set(rotations(c).concat(rotations(mirror(c))).map(polyKey)).size === 8; });
+      ks.forEach(function (k) { map[k] = ks.filter(function (x) { return x !== k; }); });
+    });
+    return (TWIN_OF[n] = map);
+  }
   function makePolyomino(r, n) {
     const cells = {}; cells['1,1'] = true;
     let count = 1, guard = 0;
@@ -1114,6 +1127,14 @@
   function rotate(cells) { return cells.map(function (c) { return [-c[1], c[0]]; }); }
   function mirror(cells) { return cells.map(function (c) { return [-c[0], c[1]]; }); }
   function rotations(cells) { const out = []; let cur = cells; for (let i = 0; i < 4; i++) { out.push(cur); cur = rotate(cur); } return out; }
+  function flipV(cells) { return cells.map(function (c) { return [c[0], -c[1]]; }); }
+  function maskCells(m) { const out = []; for (let i = 0; i < 25; i++) if (m & (1 << i)) out.push([i % 5, (i / 5) | 0]); return out; }
+  function freeMaskOf(cells) {
+    let best = Infinity;
+    rotations(cells).concat(rotations(mirror(cells))).forEach(function (t) { let m = 0; normalize(t).forEach(function (c) { m |= 1 << (c[1] * 5 + c[0]); }); if (m < best) best = m; });
+    return best;
+  }
+  function polyBox(cells) { const n = normalize(cells); return [Math.max.apply(null, n.map(function (c) { return c[0]; })) + 1, Math.max.apply(null, n.map(function (c) { return c[1]; })) + 1]; }
   function polySVG(cells) {
     const n = normalize(cells);
     const w = Math.max.apply(null, n.map(function (c) { return c[0]; })) + 1;
@@ -1132,61 +1153,120 @@
     const g = Math.max(5, w, h), ox = (g - w) / 2, oy = (g - h) / 2;
     return n.map(function (c) { return (c[0] + ox) + ',' + (c[1] + oy); });
   }
+  /* 겹침(2026-11-13, 2026-11-14 다시 짬): 그려진 자리에서 문제 도형과 겹치는 칸 수로 "가장 덜(많이) 겹치는 보기"를 고르는 요령을 막는다.
+     정답이 혼자 가장 덜 겹치는 문항 1/4, 혼자 가장 많이 겹치는 문항 1/4, 그 사이(가장 덜·많이 겹치는 보기는 하나씩)인 문항 1/2이 되게 고른다.
+     직사각 도형은 바깥 크기 방향이 문제와 같은 보기가 대체로 더 겹쳐서, 같은 방향 정답('가', 반 바퀴)은 가장 많이 겹치는 쪽으로만,
+     뒤바뀐 방향 정답('나'와 1단계, 90°)은 가장 덜 겹치는 쪽으로만 끝이 될 수 있다. 그래서 '가'는 [혼자 가장 많이, 사이]를, '나'·1단계는 [혼자 가장 덜, 사이]를
+     반씩 고른다('가'·'나'가 반씩이라 모두 합하면 1/4·1/4·1/2). 정사각 도형은 방향이 없어 짜임과 상관없이 1/4·1/4·1/2로 고른다.
+     예전에는 네 보기 전체의 순위를 동점은 무작위로 갈라 맞춰서, 정답이 동점 속에 들면 그 요령이 1/동점 수만큼 맞아 1·2단계가 30~31%였다. */
+  function overlapFits(v, want) {
+    const lo = Math.min.apply(null, v), hi = Math.max.apply(null, v);
+    const nLo = v.filter(function (x) { return x === lo; }).length, nHi = v.filter(function (x) { return x === hi; }).length;
+    if (want === 0) return v[0] === lo && nLo === 1;
+    if (want === 3) return v[0] === hi && nHi === 1;
+    return nLo === 1 && nHi === 1 && v[0] > lo && v[0] < hi;
+  }
+  /* 2단계부터 문제 도형은 대칭 없는 쌍둥이가 있는 자유 도형 중에서 고르게 고르고(자세 8가지도 고르게), 1단계는 칸을 하나씩 붙여 키운다(makePolyomino).
+     정사각인지 직사각인지는 그 비율대로 먼저 정하고 그 안에서만 다시 고른다. 짜임('가'·'나')도 먼저 따로 정하므로, 겹침 목표가 안 맞아 다시 고르더라도
+     정사각·직사각 비율이 짜임마다 같다(2026-11-14 시험: 한쪽 짜임에서만 되는 도형을 그 짜임에만 쓰니 정사각이 '나'에 몰려 3단계 '같은 방향 고르기'가 32%). */
+  const TWIN_KEYS = {};
   function makeRotation(r, level) {
     const size = ROT_SIZE[level] || 5;
-    // 오답 셋: 거울에 비춘 모양을 네 방향 중 서로 다른 세 방향으로 돌린 것. 아래에서 네 방향이 서로 다르고 정답의 어떤 회전과도 다름을 확인한다.
-    // 보기 넷 중 바깥 크기(가로×세로)가 문제 도형과 같은 방향인 것(0°·180° 돌림)과 뒤바뀐 것(90°·270°)이 늘 둘씩이 되게 고르고, 정답은 두 쪽에서 반반으로 낸다.
-    // 아무렇게나 고르면 방향이 몇 개씩 나뉘는지만 보고(3:1이면 혼자인 쪽을 지우고, 2:2면 뒤바뀐 쪽) 고르는 요령이 32%로 우연(25%)보다 잘 맞았다(2026-10-18).
-    // mirs[0]·mirs[2]는 문제 도형과 같은 방향, mirs[1]·mirs[3]은 뒤바뀐 방향이다(거울에 비춰도 바깥 크기는 그대로). 바깥 크기가 정사각형이면 방향이 없다.
-    // 2026-11-13: 거울상은 한 줄의 칸이 제자리에 남고 90°·180° 돌림은 가운데 점 하나만 남아서, 그려진 자리에서 문제 도형과 겹치는 칸이 정답은 적고
-    // 오답은 많았다. 그래서 가장 덜 겹치는 보기를 고르면 2단계에서 41%가 맞았다. 이제 정답 종류(비정사각형이면 180°인지)와 '문제와 겹치는 칸 수'로 본
-    // 정답 순위(0 = 가장 덜 겹침, 동점은 무작위)를 먼저 정하고, 도형마다 쓸 수 있는 (돌림 수, 오답 셋) 묶음 중 그 순위가 나오는 것만 쓴다.
-    // 맞는 묶음이 없으면 다음 도형으로 넘어가고, 300번 안에 못 찾으면 마지막으로 만든 쓸 수 있는 도형에서 예전 방식으로 고른다(문항이 비지 않게.
-    // 단계당 3000문항에서 3단계 1.3%, 1단계 0.1%, 나머지 0%). 가장 덜 겹치는 보기 고르기는 41% → 1단계 31%, 2단계 32~33%, 3~5단계 25~29%가 됐다(단계당 1000~3000문항).
-    // 1·2단계는 겹치는 칸 수가 같은 보기가 많아, 동점 속 정답이 순위 1·2로 뽑혀도 '가장 덜 겹침' 묶음에 들어가므로 30% 안팎이 남는다.
-    // 문제를 그린 그대로 좌우·상하로 뒤집은 보기(mirs[0]·mirs[2])를 알아보고 지우는 요령(약 42%)은 오답 구성을 바꿔야 해서 이번에는 그대로 둔다.
-    const half = r.next() < 0.5, wantRank = r.int(0, 3);
-    let shape = null, rots, mirs, square = false, pick = null;
-    // 2026-11-13: 예전에는 300번이 다 지나면 대칭이거나 칸이 모자란 도형이 검사 없이 쓰였다. 이제 검사를 통과한 도형만 shape에 남기고, 하나도 없으면 다시 만든다.
-    for (let guard = 0; guard < 300 && !pick; guard++) {
-      const s = makePolyomino(r, size);
-      if (s.length < size) continue;
+    const wantRank = r.int(0, 3), wantEnd = r.next() < 0.5, half = r.next() < 0.5, wantSq1 = r.next() < 0.2;   // half: 2단계부터 '가'(반 바퀴 정답)인지
+    const twins = size >= 6 ? twinMap(size) : null;
+    let tkeys = null;
+    if (twins) {
+      const tk = TWIN_KEYS[size] = TWIN_KEYS[size] || (function () {
+        const all = Object.keys(twins).filter(function (k) { return twins[k].length; }).map(Number);
+        const isSq = function (k) { const b = polyBox(maskCells(k)); return b[0] === b[1]; };
+        return { sq: all.filter(isSq), rect: all.filter(function (k) { return !isSq(k); }) };
+      })();
+      tkeys = r.next() * (tk.sq.length + tk.rect.length) < tk.sq.length ? tk.sq : tk.rect;
+    }
+    let pick = null, last = null;
+    // 쌍둥이 단계는 문제를 바로 고르므로(버리는 도형이 없음) 겹침 목표를 찾는 횟수를 40번으로 둔다. 폰에서 오래 걸리지 않게 후보마다 모양 열쇠·뒤집기 열쇠·겹침을 한 번만 센다.
+    const cap = tkeys ? 40 : 120;
+    for (let guard = 0; guard < cap && !pick; guard++) {
+      let s;
+      if (tkeys) { const s0 = maskCells(r.pick(tkeys)); s = r.pick(rotations(s0).concat(rotations(mirror(s0)))); }
+      else { s = makePolyomino(r, size); if (s.length < size) continue; }
       const rs = rotations(s), keys = rs.map(polyKey);
       if (keys.length !== new Set(keys).size) continue;
-      const ms = rotations(mirror(s)), mkeys = ms.map(polyKey);
+      const ms = rotations(mirror(s)), mkeys = ms.map(polyKey);   // ms[0] 좌우 거울, ms[1]·ms[3] 대각선 거울상, ms[2] 상하 거울
       if (mkeys.some(function (k) { return keys.indexOf(k) >= 0; })) continue;
       if (mkeys.length !== new Set(mkeys).size) continue;
-      const nb = normalize(s);
-      shape = s; rots = rs; mirs = ms;
-      square = Math.max.apply(null, nb.map(function (c) { return c[0]; })) === Math.max.apply(null, nb.map(function (c) { return c[1]; }));
-      const combos = [];
-      if (square) [1, 2, 3].forEach(function (kk) { [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]].forEach(function (ix) { combos.push({ k: kk, dis: ix.map(function (i) { return ms[i]; }) }); }); });
-      else if (half) combos.push({ k: 2, dis: [ms[0], ms[1], ms[3]] }, { k: 2, dis: [ms[2], ms[1], ms[3]] });
-      else [1, 3].forEach(function (kk) { combos.push({ k: kk, dis: [ms[0], ms[2], ms[1]] }, { k: kk, dis: [ms[0], ms[2], ms[3]] }); });
-      const P0 = polyDrawn(s), ov = function (cs) { return polyDrawn(cs).filter(function (q) { return P0.indexOf(q) >= 0; }).length; };
-      const fit = r.shuffle(combos).filter(function (c) {
-        const v = [rs[c.k]].concat(c.dis).map(ov);
-        return r.shuffle([0, 1, 2, 3]).sort(function (a, b) { return v[a] - v[b]; }).indexOf(0) === wantRank;
+      const P0 = polyDrawn(s);
+      // 보기 후보: 칸(c), 모양 열쇠(k), 좌우·상하로 뒤집은 모양의 열쇠(f, 필요할 때 셈), 문제와 겹치는 칸 수(v)
+      const node = function (cells, key) { return { c: cells, k: key || polyKey(cells), f: null, v: polyDrawn(cells).filter(function (q) { return P0.indexOf(q) >= 0; }).length }; };
+      const flips = function (nd) { return nd.f || (nd.f = [polyKey(mirror(nd.c)), polyKey(flipV(nd.c))]); };
+      const R = rs.map(function (c, i) { return node(c, keys[i]); }), M = ms.map(function (c, i) { return node(c, mkeys[i]); });
+      const combos = { mirror: [], half: [], twin: [] };
+      if (!twins) {
+        // 1단계: 정답 90° + 좌우·상하 거울 + 대각선 거울상 하나
+        [1, 3].forEach(function (kk) { [M[1], M[3]].forEach(function (d) { combos.mirror.push({ a: R[kk], k: kk, dis: [M[0], M[2], d], kind: 'mirror' }); }); });
+      } else {
+        const tw = twins[freeMaskOf(s)];
+        if (!tw || !tw.length) continue;
+        const box = polyBox(s);
+        tw.forEach(function (xm) {
+          // 쌍둥이를 문제와 같은 바깥 크기 방향으로 놓은 기준 자세 X0, 그 자세에서 돌리고 뒤집은 것들
+          const xc = maskCells(xm), all = rotations(xc).concat(rotations(mirror(xc)));
+          const x0 = all.filter(function (t) { const b = polyBox(t); return b[0] === box[0] && b[1] === box[1]; })[0];
+          const xr = rotations(x0).map(function (c) { return node(c); }), xm2 = rotations(mirror(x0)).map(function (c) { return node(c); });   // xr: 0·90·180·270°, xm2: 좌우·(대각)·상하·(대각)
+          [xr[0], xr[2], xm2[0], xm2[2]].forEach(function (x) { combos.half.push({ a: R[2], k: 2, dis: [M[1], M[3], x], kind: 'half' }); });
+          // '나'의 같은 방향 쌍둥이 둘은 0°·180°(또는 좌우·상하) 짝이라 서로 뒤집기가 아니고, 뒤바뀐 방향 하나는 그 둘과 돌려서 겹치지 않는 쪽(거울 쪽)이다
+          [1, 3].forEach(function (kk) {
+            [xm2[1], xm2[3]].forEach(function (w) { combos.twin.push({ a: R[kk], k: kk, dis: [xr[0], xr[2], w], kind: 'twin' }); });
+            [xr[1], xr[3]].forEach(function (w) { combos.twin.push({ a: R[kk], k: kk, dis: [xm2[0], xm2[2], w], kind: 'twin' }); });
+          });
+        });
+      }
+      /* 2단계부터 보기 넷은 모두 달라야 하고, 문제를 그대로 좌우·상하로 뒤집은 보기(= ms[0]·ms[2])도, 보기끼리 그대로 좌우·상하 뒤집기인 짝도 없어야 한다(하나씩 확인한다) */
+      const pFlip = [mkeys[0], mkeys[2]];
+      const valid = function (c) {
+        const opts = [c.a].concat(c.dis), ks = opts.map(function (o) { return o.k; });
+        if (new Set(ks).size !== 4) return false;
+        if (c.kind === 'mirror') return true;
+        if (ks.some(function (k) { return pFlip.indexOf(k) >= 0; })) return false;
+        return opts.every(function (o, i) { const f = flips(o); return ks.every(function (k, j) { return i === j || f.indexOf(k) < 0; }); });
+      };
+      const sb = polyBox(s), square = sb[0] === sb[1];
+      // 1단계(쌍둥이 없음)도 정사각(F자 5칸, 쓸 수 있는 5칸 도형 5가지 중 1가지)을 1/5로 먼저 정한다. 안 그러면 겹침 목표를 맞추기 쉬운 정사각으로 쏠렸다(39%)
+      if (!twins && square !== wantSq1) continue;
+      const mine = twins ? (half ? 'half' : 'twin') : 'mirror';
+      // 겹침 목표(overlapFits): 정사각은 wantRank(0 혼자 가장 덜, 3 혼자 가장 많이, 1·2 사이), 직사각은 끝('가'는 혼자 가장 많이, '나'·1단계는 혼자 가장 덜) 또는 사이
+      const want = square ? wantRank : wantEnd ? (mine === 'half' ? 3 : 0) : 1;
+      const cands = r.shuffle(combos[mine].filter(valid));
+      if (!cands.length) continue;
+      const tgt = want === 0 ? [1, 0] : want === 3 ? [0, 1] : [0, 0];
+      cands.forEach(function (c) {
+        const v = [c.a.v].concat(c.dis.map(function (d) { return d.v; }));
+        if (!pick && overlapFits(v, want)) pick = { s: s, c: c };
+        // 못 맞출 때를 위해 목표에 가장 가까운 묶음을 남긴다(가장 덜·많이 겹침 요령의 적중 = 1/동점 수)
+        const lo = Math.min.apply(null, v), hi = Math.max.apply(null, v);
+        const cr = [v[0] === lo ? 1 / v.filter(function (x) { return x === lo; }).length : 0, v[0] === hi ? 1 / v.filter(function (x) { return x === hi; }).length : 0];
+        const dd = Math.abs(cr[0] - tgt[0]) + Math.abs(cr[1] - tgt[1]);
+        if (!last || dd < last.d) last = { s: s, c: c, d: dd };
       });
-      if (fit.length) pick = fit[0];
     }
-    if (!shape) return makeRotation(r, level);
-    if (!pick) {
-      const kk = square ? r.int(1, 3) : half ? 2 : r.pick([1, 3]);
-      pick = { k: kk, dis: square ? r.sample(mirs, 3) : kk === 2 ? [r.pick([mirs[0], mirs[2]]), mirs[1], mirs[3]] : [mirs[0], mirs[2], r.pick([mirs[1], mirs[3]])] };
-    }
-    const k = pick.k, dis = pick.dis;
-    const o = shuffleOptions(r, [rots[k]].concat(dis), 0);
+    // 40번(1단계 120번) 안에 못 맞추면 목표에 가장 가까웠던 묶음을 쓰고, 쓸 수 있는 묶음이 하나도 없었으면 다시 만든다
+    if (!pick) pick = last;
+    if (!pick) return makeRotation(r, level);
+    const k = pick.c.k, kind = pick.c.kind;
+    const o = shuffleOptions(r, [pick.c.a.c].concat(pick.c.dis.map(function (d) { return d.c; })), 0);
     return {
       type: 'choice', part: 'rotation', scored: true, level: level, timeLimit: ROT_TIME[level] || 40,
       prompt: '이 도형을 돌리기만 해서 만들 수 있는 것은? (뒤집으면 안 돼요)',
-      promptHtml: '<div class="poly-prompt">' + polySVG(shape) + '</div>',
+      promptHtml: '<div class="poly-prompt">' + polySVG(pick.s) + '</div>',
       optionsHtml: o.options.map(polySVG), answer: o.answer, optionCols: 4,
       // 2026-11-13: 각도만 적으면 방향을 몰라 270°를 반시계로 돌려 보면 다른 모양이 나왔다. rotate는 화면(y 아래)에서 시계 방향이라 k = 1이 시계 방향 90°다.
-      // 오답 중 mirs[0]은 돌리지 않은 단순 좌우 뒤집기라 '뒤집은 모양이거나 그것을 돌린 것'으로 적는다.
-      explain: '정답은 원래 도형을 ' + (k === 2 ? '반 바퀴(180°)' : k === 1 ? '시계 방향으로 90°' : '시계 반대 방향으로 90°') + ' 돌린 모양이에요. 나머지 셋은 모두 원래 도형을 거울에 비춰 뒤집은 모양이거나 그것을 돌린 것이라, 칸 수와 크기는 같아도 돌리기만 해서는 만들 수 없어요.'
+      explain: '정답은 원래 도형을 ' + (k === 2 ? '반 바퀴(180°)' : k === 1 ? '시계 방향으로 90°' : '시계 반대 방향으로 90°') + ' 돌린 모양이에요. ' +
+        (kind === 'mirror' ? '나머지 셋은 모두 원래 도형을 거울에 비춰 뒤집은 모양이거나 그것을 돌린 것이라, 칸 수와 크기는 같아도 돌리기만 해서는 만들 수 없어요.'
+          : kind === 'half' ? '나머지 중 둘은 원래 도형을 거울에 비춰 뒤집은 뒤 돌린 모양이고, 하나는 칸 수와 크기는 같아도 원래 도형과 다른 도형이라, 돌리기만 해서는 만들 수 없어요.'
+            : '나머지 셋은 칸 수와 크기는 같아도 원래 도형과 다른 도형이라, 돌리거나 뒤집어도 원래 도형이 되지 않아요.')
     };
   }
+
 
   /* ===== 6. 전개도 접기 (1~5단계) =====
      정육면체 전개도 11가지 중 하나에 면마다 다른 무늬를 넣고, 접었을 때 위·왼쪽 앞·오른쪽 앞 세 면이 보이는
@@ -1546,7 +1626,7 @@
      정답률을 옛 보기와 새 보기에서 견주면 3·4·5단계가 .05·.08·.09 내려간다(.91/.79/.61/.38/.25). 평가자 어림(.88/.76/.62/.44/.30)과 모형 값을 평균한 정답률로
      위와 같이 매겼다 → .89/.75/.56/.35/.19(바꾸기 전 .90/.76/.60/.38/.21).
      이 세 과제는 평가자 1명이 한 번 어림한 임시값이라, 실제 응시 자료가 쌓이면(tools/norms-from-stats.cjs. 이 과제들은 ai-est-2026-10-18b 이후 행만 쓰고,
-     회전·전개도는 2026-11-13에 정답 순위 고르기를 넣어 ai-est-2026-11-13 이후 행만 쓴다)
+     회전·전개도는 2026-11-13에 정답 순위 고르기를 넣어 ai-est-2026-11-13 이후 행만 쓰고, 회전은 2026-11-14에 오답 구성을 바꿔 ai-est-2026-11-14 이후 행만 쓴다)
      그 값으로 바꾸고 NORMS_VERSION도 올린다. 나머지 9과제(규칙 찾기 5·언어 4)는 2026-10-18 고침에서는 생성기와 문항 풀이 그대로라 값을 그대로 뒀다
      (2026-11-13에 규칙 찾기 5과제의 생성기와 언어 27문항의 글이 바뀌었지만 LEVEL_P는 그대로 두었다. NORMS_VERSION 설명 참고). */
   const LEVEL_P = {
@@ -1596,8 +1676,11 @@
      바뀌었다(보기만 보고 찍는 요령 줄이기, 수열 4·5단계 문항 구성, 회전·전개도 정답 순위 고르게 등). 기준값(LEVEL_P·NORMS·OBS)은 그대로 두고, 실제 자료가
      쌓이면 다시 매긴다. 이 일곱 과제는 같은 도구가 원자료에서 ai-est-2026-11-12 까지의 행을 뺀다(블록 세기는 재시도 한도 고침과 거울상 문항 거르기뿐이라 문항이 같다).
      언어 4과제는 같은 날 27문항(유추 24·26·32, 어휘 4·7·13·20·35, 논리 0·4·38, 공통점 1·2·3·10~15·17~19·33·41·44·46)의 보기·문장을 번호는 그대로 두고 고쳤고,
-     공통점 47~53번을 덧붙였다. 도구는 그 27문항의 ai-est-2026-11-12 까지 응답을 문항별 정답률에서 뺀다(POOL_CHANGED). */
-  const NORMS_VERSION = 'ai-est-2026-11-13';
+     공통점 47~53번을 덧붙였다. 도구는 그 27문항의 ai-est-2026-11-12 까지 응답을 문항별 정답률에서 뺀다(POOL_CHANGED).
+     ai-est-2026-11-14 = 도형 유추와 도형 회전의 보기 구성을 다시 짠 버전(유추: C와 보기만 보고 맞히는 요령 41~72% → 17~26%, 회전: 돌리지 않고 뒤집기·방향·겹침으로
+     고르는 요령 75~85% → 2단계부터 25% 안팎). 두 과제 모두 오답이 정답에 더 가까워져 같은 단계가 전보다 어려울 것으로 보지만, 근거 자료가 없어
+     LEVEL_P·NORMS·OBS는 그대로 두고 실제 자료로 다시 매긴다. 같은 도구가 이 두 과제는 원자료에서 ai-est-2026-11-13 까지의 행을 뺀다(PROC_OLD4). */
+  const NORMS_VERSION = 'ai-est-2026-11-14';
   /* 폭 과제 부분 점수(spanScore의 part)의 기준값(2026-10-18): NORMS의 최장 폭 평균·sd에서 바꿔 쓴다. part = 최장 폭 − 0.5 × (두 번째 시도에서만 맞힌 길이 수)라
      평균은 shift만큼 낮고 퍼짐은 scale배다. 시행 단위 모형(한 시행의 정답 확률 σ((μ − 길이)/τ), μ = a + b·θ, a·b는 지금 진행 규칙과 새 최대 길이로 푼 최장 폭이
      NORMS 평균·sd와 같아지게 맞춤, 4만 명)에서 τ = 0.55일 때 네 과제 모두 shift 0.24~0.25, scale 0.96~0.97이었다(τ 0.4면 0.18~0.19·0.97~0.98, 0.7이면 0.29~0.30·0.94).
