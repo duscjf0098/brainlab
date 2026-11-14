@@ -10,8 +10,10 @@
    GET  /export   원자료(관리용). Authorization: Bearer <ADMIN_TOKEN>. 토큰은 wrangler secret 으로만 둔다.
    GET  /         상태(받은 결과 수, 집계 표본 수).
    남용 방지: 본문 크기 제한(MAX_BODY), IP당 요청 빈도 제한(ratelimits 바인딩 — Cloudflare 안의 순간 계수기라 IP가 저장되지 않음. 엣지마다 따로 세는
-   느슨한 제한이라 몰아치기는 일부만 막는다), 서버 전체 전송 상한(분당 MAX_PER_MIN, 하루 MAX_PER_DAY — D1 quota 표에 개수만 센다, IP 없음),
-   전송은 ALLOWED_ORIGINS 에 있는 Origin 만. 값은 모두 범위를 검사하고 모르는 필드는 버린다. Workers 로그 저장(observability)은 꺼 둔다. */
+   느슨한 제한이라 몰아치기는 일부만 막는다), 서버 전체 전송 상한(분당 MAX_PER_MIN, 하루 MAX_PER_DAY — D1 quota 표에 개수만 센다, IP 없음.
+   2026-11-14부터 검증과 중복 확인을 통과한 결과만 센다), 전송은 ALLOWED_ORIGINS 에 있는 Origin 만(2026-11-14부터 Origin 이 없는 요청도 거절).
+   값은 모두 범위를 검사하고 모르는 필드는 버린다. 2026-11-14부터 과제 z 와 원점수가 서로 맞는지도 보고(맞지 않으면 400), 종합 z 가 과제 z 평균과
+   너무 다르면 종합 z 만 버리며, 문항 응답 시간이 범위 밖이면 그 값만 null 로 받는다(validate 설명). Workers 로그 저장(observability)은 꺼 둔다. */
 
 const TASKS = {
   matrix: 'prop', figAnalogy: 'prop', series: 'prop', sequence: 'prop', weights: 'prop',
@@ -26,6 +28,18 @@ const TIME_FACTORS = [0, 1, 1.5];
 const STATS_TTL_MS = 60 * 60 * 1000;        // 집계 다시 계산 간격
 const STATS_TTL_SMALL_MS = 60 * 1000;       // 표본이 적을 때(계산이 싸다)
 const MAX_ROWS = 10000;                     // 집계에 쓰는 최근 결과 수 (한 번 계산에 D1 읽기 ≈ 결과 수 × 21행)
+/* 과제 z 와 원점수가 맞는지 볼 때 쓰는 사이트 기준값(2026-11-14). js/tests/cognitive.js 의 NORMS(폭·반응·개수 과제의 평균·표준편차)·SPAN_PART·TOUCH_MS 와
+   같은 값이다(기준값 버전 ai-est-2026-11-13). 사이트 기준값을 바꾸면 여기도 같이 바꾸고 다시 배포한다. 허용 폭이 넉넉해서 평균이 표준편차의 절반쯤
+   움직이는 정도는 정상 결과가 걸리지 않지만, 그보다 크게 바뀐 채로 두면 정상 결과가 400 으로 버려질 수 있다. */
+const NORM = {
+  digitF: { mean: 7.0, sd: 1.1 }, digitB: { mean: 5.2, sd: 1.2 }, grid: { mean: 6.0, sd: 1.1 }, lns: { mean: 5.3, sd: 1.1 },
+  reaction: { mean: 290, sd: 40 }, choicert: { mean: 470, sd: 80 }, stroop: { mean: 800, sd: 125 }, symbol: { mean: 24, sd: 6 }
+};
+const SPAN_PART = { shift: 0.25, scale: 0.96 };
+const TOUCH_MS = 30;
+const Z_TOL = 1.5;          // 폭·개수 과제: 보낸 z 와 원점수로 다시 낸 z 의 차이가 이보다 크면 거절
+const RT_SIGN_Z = 1;        // 반응 과제: |z| 가 이보다 크면 z 의 부호와 반응 시간(기준보다 빠른지 느린지)이 맞아야 한다
+const OVERALL_TOL = 2;      // 종합 z 와 과제 z 평균의 차이가 이보다 크면 종합 z 만 버린다
 
 function json(obj, status, extra) {
   return new Response(JSON.stringify(obj), { status: status || 200, headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, extra || {}) });
@@ -33,6 +47,7 @@ function json(obj, status, extra) {
 function round3(x) { return Math.round(x * 1000) / 1000; }
 function num(x, lo, hi) { return typeof x === 'number' && isFinite(x) && x >= lo && x <= hi; }
 function int(x, lo, hi) { return num(x, lo, hi) && x % 1 === 0; }
+function clamp3(x) { return Math.max(-3, Math.min(3, x)); }
 function today() { return new Date().toISOString().slice(0, 10); }
 function allowedOrigins(env) { return String(env.ALLOWED_ORIGINS || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean); }
 function corsHeaders(origin, env) {
@@ -92,9 +107,9 @@ async function status(env) {
 
 /* ===== 전송 ===== */
 async function submit(request, env, origin) {
-  if (origin && allowedOrigins(env).indexOf(origin) < 0) return json({ error: 'origin not allowed' }, 403);
+  // 브라우저는 다른 주소로 보내는 POST 에 늘 Origin 을 붙인다. 없으면 브라우저 밖(curl 등)에서 온 요청이라 받지 않는다(2026-11-14)
+  if (!origin || allowedOrigins(env).indexOf(origin) < 0) return json({ error: 'origin not allowed' }, 403);
   if (await limited(env.RL_SUBMIT, request)) return json({ error: 'too many requests' }, 429, { 'Retry-After': '60' });
-  if (await overQuota(env)) return json({ error: 'busy' }, 429, { 'Retry-After': '120' });
   const max = Number(env.MAX_BODY || 16384);
   if (Number(request.headers.get('Content-Length') || 0) > max) return json({ error: 'too large' }, 413);
   const text = await request.text();
@@ -104,6 +119,9 @@ async function submit(request, env, origin) {
   const v = validate(body);
   if (v.error) return json({ error: v.error }, 400);
   const rec = v.value;
+  // 전송 상한은 검증과 중복 확인을 통과한 결과만 센다(2026-11-14). 예전에는 맨 앞에서 세서 잘못된 요청·중복 요청도 하루 상한을 썼다
+  if (await env.DB.prepare('SELECT 1 AS x FROM submissions WHERE sid = ?1').bind(rec.sid).first()) return json({ ok: true, dup: true });
+  if (await overQuota(env)) return json({ error: 'busy' }, 429, { 'Retry-After': '120' });
   const stmts = [env.DB.prepare('INSERT OR IGNORE INTO submissions (sid, day, test_id, mode, time_factor, device, norms, overall_z, payload) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)')
     .bind(rec.sid, today(), rec.testId, rec.mode, rec.timeFactor, rec.device, rec.norms, rec.overall, JSON.stringify(rec.tasks))];
   Object.keys(rec.tasks).forEach(function (k) {
@@ -113,7 +131,7 @@ async function submit(request, env, origin) {
         t.adaptive == null ? null : (t.adaptive ? 1 : 0), t.value == null ? null : t.value, t.acc == null ? null : t.acc, t.touch == null ? null : (t.touch ? 1 : 0)));
   });
   const r = await env.DB.batch(stmts);
-  if (!r[0].meta.changes) return json({ ok: true, dup: true });
+  if (!r[0].meta.changes) return json({ ok: true, dup: true });   // 거의 같은 때 같은 결과가 두 번 온 경우
   return json({ ok: true }, 201);
 }
 
@@ -130,7 +148,15 @@ async function overQuota(env) {
   return nMin > perMin || nDay > perDay;
 }
 
-/* 받은 값의 모양과 범위 검사. 모르는 필드는 버린다. */
+/* 받은 값의 모양과 범위 검사. 모르는 필드는 버린다.
+   값끼리의 검사(2026-11-14): 사이트 채점이 낼 수 없는 조합은 결과 전체를 거절한다(400 inconsistent z). 사이트 큐는 400 을 다시 보내지 않는다.
+   - 정답률 과제: 다 맞혔는데 z < 0, 다 틀렸는데 z > 0 (채점 모형은 맞힐수록 z 가 오른다)
+   - 폭 과제: 사이트와 같은 식으로 다시 낸 z(부분 점수 part 가 있으면 part, 없으면 최장 폭)와 Z_TOL 넘게 다름
+   - 반응 과제: |z| > RT_SIGN_Z 인데 z 의 부호와 반응 시간이 반대(z 가 양수면 기준보다 빨라야 한다. 터치는 기준 + TOUCH_MS)
+   - 기호 찾기: (개수 − 평균)/표준편차와 Z_TOL 넘게 다름
+   종합 z 는 과제 z 평균과 OVERALL_TOL 넘게 다르면 종합 z 만 null 로 받는다. 사이트가 만드는 과제 구성(20과제·빠른 검사 7과제)에서는 과제 z 를 어떻게
+   골라도 차이가 1.81 안쪽이다(사이트 채점 함수 domainZ·overallZ 로 꼭짓점을 모두 세어 본 값. 사이트의 OBS 를 바꾸면 다시 잰다).
+   문항 응답 시간은 0~6000(0.1초 단위 정수)이 아니면 그 값만 null 로 받는다. 예전에는 결과 전체를 거절해 그 결과의 다른 과제 자료까지 사라졌다. */
 function validate(b) {
   if (!b || typeof b !== 'object') return { error: 'bad body' };
   if (b.testId !== 'cognitive') return { error: 'unknown test' };
@@ -141,7 +167,6 @@ function validate(b) {
   if (TIME_FACTORS.indexOf(tf) < 0) return { error: 'bad timeFactor' };
   const device = b.device === 'touch' || b.device === 'mouse' ? b.device : null;
   const norms = typeof b.norms === 'string' && b.norms.length <= 40 && /^[\w.-]+$/.test(b.norms) ? b.norms : null;
-  const overall = num(b.overall, -3, 3) ? round3(b.overall) : null;
   if (!b.tasks || typeof b.tasks !== 'object') return { error: 'no tasks' };
   const keys = Object.keys(b.tasks);
   if (!keys.length || keys.length > 20) return { error: 'bad tasks' };
@@ -154,6 +179,7 @@ function validate(b) {
     const o = { z: round3(t.z) };
     if (kind === 'prop') {
       if (!int(t.n, 1, 60) || !int(t.c, 0, 60) || t.c > t.n) return { error: 'bad counts ' + k };
+      if ((t.c === t.n && t.z < 0) || (t.c === 0 && t.z > 0)) return { error: 'inconsistent z ' + k };
       o.n = t.n; o.c = t.c; o.adaptive = !!t.adaptive;
       if (t.levels && typeof t.levels === 'object') {
         o.levels = {};
@@ -165,32 +191,44 @@ function validate(b) {
         }
         if (sumN > t.n || sumC > t.c) return { error: 'bad level sum ' + k };
       }
-      /* 문항별 기록: [풀 번호(-1 = 생성 문항), 단계(0~6), 정답 1·오답 0·시간 초과 -1, 응답 시간(0.1초, 없으면 null)] */
+      /* 문항별 기록: [풀 번호(-1 = 생성 문항), 단계(0~6), 정답 1·오답 0·시간 초과 -1, 응답 시간(0.1초, 없으면 null)]
+         응답 시간은 화면을 벗어나 멈춘 시간이 섞이거나 기기 시계가 바뀌면 범위를 벗어날 수 있어서, 0~6000 정수가 아니면 그 값만 null 로 둔다 */
       if (t.items != null) {
         if (!Array.isArray(t.items) || t.items.length !== t.n) return { error: 'bad items ' + k };
         o.items = [];
         for (const it of t.items) {
-          if (!Array.isArray(it) || it.length !== 4 || !int(it[0], -1, 999) || (it[0] >= 0 && !POOL_TASKS[k]) || !int(it[1], 0, 6) || [-1, 0, 1].indexOf(it[2]) < 0 || !(it[3] === null || int(it[3], 0, 6000))) return { error: 'bad item ' + k };
-          o.items.push([it[0], it[1], it[2], it[3]]);
+          if (!Array.isArray(it) || it.length !== 4 || !int(it[0], -1, 999) || (it[0] >= 0 && !POOL_TASKS[k]) || !int(it[1], 0, 6) || [-1, 0, 1].indexOf(it[2]) < 0) return { error: 'bad item ' + k };
+          o.items.push([it[0], it[1], it[2], int(it[3], 0, 6000) ? it[3] : null]);
         }
         if (o.items.filter(function (x) { return x[2] === 1; }).length !== t.c) return { error: 'bad item sum ' + k };
       }
       if (num(t.rtAvg, 0, 600)) o.rtAvg = Math.round(t.rtAvg);
     } else if (kind === 'span') {
       if (!int(t.value, 0, 12)) return { error: 'bad span ' + k };
+      /* 사이트는 부분 점수(part: 0.5 단위, 최장 폭 이하)가 있으면 그것으로, 없으면(예전 판) 최장 폭으로 z 를 낸다. 같은 식으로 다시 내서 견준다.
+         최장 폭으로만 견주면 두 번째 시도에서 맞힌 길이가 많은 정상 결과가 걸린다(네 개면 1.5 넘게 차이 난다). part 는 저장하지 않는다 */
+      const nm = NORM[k];
+      const part = typeof t.part === 'number' && t.part >= 0 && t.part <= t.value && (t.part * 2) % 1 === 0 ? t.part : null;
+      const want = part != null ? (part - (nm.mean - SPAN_PART.shift)) / (nm.sd * SPAN_PART.scale) : (t.value - nm.mean) / nm.sd;
+      if (Math.abs(t.z - clamp3(want)) > Z_TOL) return { error: 'inconsistent z ' + k };
       o.value = t.value;
     } else if (kind === 'rt') {
       if (!num(t.value, 50, 10000)) return { error: 'bad rt ' + k };
+      const ref = NORM[k].mean + (t.touch ? TOUCH_MS : 0);
+      if ((t.z > RT_SIGN_Z && t.value >= ref) || (t.z < -RT_SIGN_Z && t.value <= ref)) return { error: 'inconsistent z ' + k };
       o.value = Math.round(t.value);
       if (num(t.acc, 0, 1)) o.acc = round3(t.acc);
       o.touch = !!t.touch;
     } else {
       if (!int(t.value, 0, 120)) return { error: 'bad count ' + k };
+      if (Math.abs(t.z - clamp3((t.value - NORM[k].mean) / NORM[k].sd)) > Z_TOL) return { error: 'inconsistent z ' + k };
       o.value = t.value;
       if (num(t.acc, 0, 1)) o.acc = round3(t.acc);
     }
     tasks[k] = o;
   }
+  let overall = num(b.overall, -3, 3) ? round3(b.overall) : null;
+  if (overall != null && Math.abs(b.overall - keys.reduce(function (s, k) { return s + b.tasks[k].z; }, 0) / keys.length) > OVERALL_TOL) overall = null;
   return { value: { sid: b.sid, testId: 'cognitive', mode: b.mode, timeFactor: tf, device: device, norms: norms, overall: overall, tasks: tasks } };
 }
 
