@@ -608,25 +608,23 @@
   }
 
   /* ===== 1b. 도형 유추 (A → B 와 같은 변환을 C에 적용) =====
-     2026-11-14 다시 짬: C와 보기를 먼저 만들고, 정답은 그 뒤에 "C와 변환 수만큼 다른 보기" 중에서 고른 다음 A·B를 거꾸로 만든다.
-     예전에는 변환 속성의 보기 값이 늘 [정답, C 값](+하나)이고 변환하지 않는 가짜 속성은 값 둘이라, A·B를 안 보고 C와 보기만 봐도
-     "바뀌는 속성(값 셋, 크기·개수·방향 등)은 C와 다른 값, 나머지는 C와 같은 값"으로 1·2단계 70%, 3·4단계 41~49%, 5단계 55~67%가 맞았다(우연 16.7%).
-     지금은 보기에서 달라지는 속성(변환 수 + 1개)마다 값 묶음이 [C 값, 같은 방식으로 고른 다른 값 둘]이라, 그 속성이 바뀌는 속성인지 보기와 C만으로는 알 수 없다.
-     크기·개수·방향은 한 단계 이웃만이 아니라 다른 값 아무것으로나 바뀔 수 있다(작게 → 크게는 "두 단계", 방향은 반 바퀴도 있음). 반대 방향 값도 보기에 들어간다.
-     보기 틀(AN_TPL)은 속성마다 값이 고르게(값 셋이면 둘씩, 둘이면 셋씩) 나오면서 "C와 변환 수만큼 다른 보기"가 가장 많게 짰다:
-     1·2단계 4개(나머지 둘은 두 곳이 다름, C 자체는 보기에 없음), 3·4단계 6개 모두(좌우가 끼면 5개), 5단계 5개. 정답은 그중 하나를 고르게 고르므로
-     C와 보기만 보는 요령은 1/4(1·2단계), 1/6~1/5(3~5단계)가 바닥이다. 변환 속성에서는 늘 C = A라(A와 C가 다른 속성은 변환하지 않는 속성뿐)
-     "바뀐 값으로 바꿈"과 "같은 만큼 바꿈"이 같은 답을 내서 정답이 하나다. */
+     2026-11-18 다시 짬(기준값 버전 ai-est-2026-11-18b). 2026-11-14 판은 C와 보기를 먼저 만들고 정답을 나중에 골라 "C와 보기만 보는 요령"은 막았지만,
+     A와 C가 보기에서 달라지지 않는 속성에서만 달라서 정답이 보기에서 달라지는 모든 속성에서 B와 같은 값이었다.
+     그래서 A·C를 안 보고 "B와 가장 닮은 보기"만 골라도 1~5단계 98~100%가 맞았다(1단계는 정답이 B와 똑같은 그림이었다).
+     지금은 교과서의 2×2 유추(흰 원 → 검은 원, 흰 네모 → 검은 네모)를 그대로 쓴다. 보기에서 달라지는 속성은 두 무리다.
+       바뀌는 무리(n개): A = C, B = 정답. A→B의 변화다.
+       다른 무리(n개): A = B, C = 정답. A와 C의 차이다.
+     단계마다 n = 1·1·2·2·3이고, 2·4단계는 보기에 안 나오는 A·C 차이(A·B만 다른 값, C와 보기는 모두 C 값)를 하나 더한다.
+     속성마다 값은 셋(C 값, B 쪽 값, 다른 값)이고 한 무리의 속성은 보기마다 같은 꼴로 함께 움직인다. 보기 여섯은 (바뀌는 무리, 다른 무리)의 꼴이
+     (B 쪽, C) = 정답, (C, B 쪽) = A와 같은 그림, (C, 다른), (B 쪽, 다른), (다른, C), (다른, B 쪽)이다. 3×3에서 C·B·(다른, 다른) 대각선을 뺀 여섯 칸이다.
+     그래서 C나 B 하나와 보기만 보면 정답과 같은 꼴(한 무리만 다른 보기)이 넷이라 25%이고, 둘을 보면 둘이라 50%다.
+     보기 6개를 속성마다 고르게(값마다 둘씩) 두면서 C+보기와 B+보기를 둘 다 25%로 막는 짜임은 이것뿐이다. 바뀌는 수와 다른 수가 다르면 둘 중 하나가
+     33%(정답 꼴 보기 셋) 아래로 안 내려가고, 무리를 함께 움직이지 않으면 그림 둘로 정답이 하나로 좁혀진다(README "2026-11-18 도형 유추").
+     정답은 늘 하나다: 바뀌는 속성은 A = C라 "바뀐 값으로"와 "같은 만큼"이 같은 답을 내고, 다른 속성은 A = B라 C 값을 그대로 둔다. */
   const TRANS_KO = { fill: '채움', shape: '모양', frame: '틀', size: '크기', count: '개수', rot: '방향', flip: '좌우', marks: '모서리 점', lines: '선' };
-  const AN_POOL12 = ['fill', 'shape', 'size', 'count', 'frame'], AN_POOL3 = ['fill', 'shape', 'frame', 'size', 'count', 'rot', 'flip', 'marks', 'lines'];
-  /* 보기 틀: 보기마다 속성별 값 번호(0 = C의 값, 1·2 = 다른 값). 'f'는 마지막 열이 좌우(값 둘)인 틀이다. */
-  const AN_TPL = {
-    1: [[0, 1], [0, 2], [1, 0], [2, 0], [1, 2], [2, 1]],
-    2: [[0, 1, 1], [0, 2, 2], [1, 0, 2], [2, 0, 1], [1, 2, 0], [2, 1, 0]],
-    '2f': [[0, 0, 1], [0, 2, 1], [1, 0, 1], [1, 1, 0], [2, 2, 0], [2, 1, 0]],
-    3: [[0, 0, 0, 1], [0, 1, 2, 1], [1, 0, 1, 2], [2, 2, 0, 2], [1, 2, 1, 0], [2, 1, 2, 0]],
-    '3f': [[0, 0, 0, 0], [0, 1, 2, 1], [1, 0, 1, 1], [2, 2, 0, 1], [1, 2, 1, 0], [2, 1, 2, 0]]
-  };
+  const AN_N = [1, 1, 2, 2, 3], AN_X = [0, 1, 0, 1, 0];   // 단계마다 무리 크기 n, 보기에 안 나오는 A·C 차이 수
+  // 좌우(값 둘)는 값 셋이 필요한 짜임이라 쓰지 않는다
+  const AN_POOL12 = ['fill', 'shape', 'size', 'count', 'frame'], AN_POOL3 = ['fill', 'shape', 'frame', 'size', 'count', 'rot', 'marks', 'lines'];
   /* 모서리 점·선 값: 넷 다 있는 것만 빼고 모든 묶음(빈 것 포함). C의 값도 다른 값도 같은 묶음에서 고르게 고른다. */
   const AN_SETS = { marks: allSubsets('abcd').filter(function (s) { return s.length < 4; }).concat(['']), lines: allSubsets('hvde').filter(function (s) { return s.length < 4; }).concat(['']) };
   function anDomain(a) { return AN_SETS[a] || (a === 'rot' ? ROTS : a === 'flip' ? [0, 1] : DOMAIN[a]); }
@@ -639,65 +637,45 @@
     if (!ops.length || r.next() < 0.5) return 'xor';
     return ops[0];
   }
+  /* 보기 여섯의 (바뀌는 무리 꼴, 다른 무리 꼴): 0 = C 값, 1 = B 쪽 값, 2 = 다른 값. 첫째가 정답, 둘째는 A와 같은 그림 */
+  const AN_CELLS = [[1, 0], [0, 1], [0, 2], [1, 2], [2, 0], [2, 1]];
   function makeFigAnalogy(r, level, tries, disTries) {
-    const nT = [1, 1, 2, 2, 3][level - 1], nN = [0, 1, 1, 2, 2][level - 1];
-    /* 1) 보기에서 달라질 속성 W(변환 수 + 1개). 서로 막는 속성(방향·좌우는 함께 못 쓰고, 모양이 바뀌면 방향·좌우가 안 보임)은 건너뛴다.
-          W의 어느 둘(셋)을 골라도 변환으로 쓸 수 있어야, 정답을 나중에 골라도 늘 맞는 변환이 된다. */
+    const n = AN_N[level - 1], nX = AN_X[level - 1];
+    /* 1) 보기에서 달라질 속성 2n개. 방향은 삼각형·화살표에서만 보여서 모양과 함께 못 쓴다.
+          고른 속성을 한 번 더 섞어 앞 n개를 바뀌는 무리, 뒤 n개를 다른 무리로 둔다. 고른 순서 그대로 나누면 방향·모양 건너뛰기 때문에
+          방향·모양이 앞자리(바뀌는 무리)에 치우쳐, C와 보기만 보고도 "방향이 다른 보기"를 골라 5단계 32%가 맞았다(2026-11-18 시험). */
     const W = [];
     r.shuffle(level <= 2 ? AN_POOL12 : AN_POOL3).forEach(function (t) {
-      if (W.length > nT) return;
-      const ori = W.indexOf('rot') >= 0 || W.indexOf('flip') >= 0;
-      if ((t === 'rot' || t === 'flip') && (ori || W.indexOf('shape') >= 0)) return;
-      if (t === 'shape' && ori) return;
+      if (W.length >= 2 * n) return;
+      if ((t === 'rot' && W.indexOf('shape') >= 0) || (t === 'shape' && W.indexOf('rot') >= 0)) return;
       W.push(t);
     });
-    const hasFlip = W.indexOf('flip') >= 0;
-    if (hasFlip) { W.splice(W.indexOf('flip'), 1); W.push('flip'); }   // 좌우(값 둘)는 틀의 마지막 열
-    const tpl = AN_TPL[nT + (hasFlip ? 'f' : '')];
-    // 2) C: 속성마다 고르게. 방향이 있으면 삼각형·화살표, 좌우가 있으면 ㄱ자(모양은 W에 없다)
+    const WR = r.shuffle(W), TT = WR.slice(0, n), NN = WR.slice(n);
+    // 2) C, 그리고 속성마다 값 셋 [C 값, B 쪽 값, 다른 값](셋을 같은 방식으로 고르니 어느 것이 C 값인지 보기로는 알 수 없다)
     const C = { frame: r.pick(FRAMES), shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.pick(COUNTS), size: r.pick(SIZES), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
     if (W.indexOf('rot') >= 0) C.shape = r.pick(['triangle', 'arrow']);
-    if (hasFlip) C.shape = 'lshape';
-    W.forEach(function (a) { C[a] = r.pick(anDomain(a)); });
-    // 3) 속성마다 값 묶음 [C 값, 다른 값 둘(좌우는 하나)]. 바뀌는 속성이든 아니든 같은 방식이다.
-    const vals = W.map(function (a, j) {
-      const k = Math.max.apply(null, tpl.map(function (row) { return row[j]; }));
-      return [C[a]].concat(r.sample(anDomain(a).filter(function (v) { return v !== C[a]; }), k));
-    });
-    // 4) 보기
-    const opts = tpl.map(function (row) { const o = Object.assign({}, C); W.forEach(function (a, j) { o[a] = vals[j][row[j]]; }); return o; });
-    const shaped = opts.filter(function (o) { return W.filter(function (a) { return o[a] !== C[a]; }).length === nT; });
-    /* 5) A와 C가 다른 속성(noise)은 정답을 고르기 전에, 보기에서 달라지지 않는 속성에서 고른다(그런 속성은 변환 속성이 될 수 없다).
-          5단계에서 W가 채움·틀·크기·개수와 방향(또는 좌우)이면 남는 속성이 하나뿐이라, 그때만 정답을 먼저 고르고 정답이 C 값을 두는 W 속성도 쓴다(드묾). */
-    const ori = W.indexOf('rot') >= 0 || hasFlip;
-    const noise = r.sample(['fill', 'shape', 'frame', 'size', 'count'].filter(function (a) { return W.indexOf(a) < 0 && !(a === 'shape' && ori); }), nN);
-    const D = r.pick(shaped);
-    if (noise.length < nN) noise.push.apply(noise, r.sample(W.filter(function (a) { return D[a] === C[a]; }), nN - noise.length));
-    const A = Object.assign({}, C);
-    noise.forEach(function (a) { A[a] = r.pick(anDomain(a).filter(function (v) { return v !== C[a]; })); });
-    /* 6) 눈으로 가리기: 보기 값 묶음의 모든 조합(× A의 다른 값)이 다 또렷해야 쓴다. C·보기·A·B가 모두 이 안에 들고, 정답이 어느 것이든 같은 판정이라
-          다시 만들기가 정답과 엮이지 않는다(2026-11-14: C와 보기만 따로 보면 C 자리의 조합만 늘 또렷해서, 보기만 보고도 C를 조금 짐작할 수 있었다). */
-    let grid = [Object.assign({}, C)];
-    W.forEach(function (a, j) {
-      const list = vals[j].concat(noise.indexOf(a) >= 0 && vals[j].indexOf(A[a]) < 0 ? [A[a]] : []), next = [];
-      grid.forEach(function (c) { list.forEach(function (v) { const d = Object.assign({}, c); d[a] = v; next.push(d); }); });
-      grid = next;
-    });
-    noise.filter(function (a) { return W.indexOf(a) < 0; }).forEach(function (a) { grid = grid.concat(grid.map(function (c) { const d = Object.assign({}, c); d[a] = A[a]; return d; })); });
+    const V = {};
+    W.forEach(function (a) { C[a] = r.pick(anDomain(a)); V[a] = [C[a]].concat(r.sample(anDomain(a).filter(function (v) { return v !== C[a]; }), 2)); });
+    // 3) 보기에 안 나오는 A·C 차이(2·4단계 하나): A·B만 다른 값이고 C와 보기는 모두 C 값이다
+    const noise = r.sample(['fill', 'shape', 'frame', 'size', 'count'].filter(function (a) { return W.indexOf(a) < 0 && !(a === 'shape' && W.indexOf('rot') >= 0); }), nX);
+    const AX = {}; noise.forEach(function (a) { AX[a] = r.pick(anDomain(a).filter(function (v) { return v !== C[a]; })); });
+    const cell = function (t, m, ax) { const o = Object.assign({}, C); TT.forEach(function (a) { o[a] = V[a][t]; }); NN.forEach(function (a) { o[a] = V[a][m]; }); if (ax) Object.assign(o, AX); return o; };
+    /* 4) 눈으로 가리기: 아홉 꼴 모두(A의 다른 값을 얹은 것까지)가 또렷해야 쓴다. 정답 자리·무리와 상관없는 판정이라
+          다시 만들기가 정답과 엮이지 않는다. */
+    const grid = [];
+    [0, 1, 2].forEach(function (t) { [0, 1, 2].forEach(function (m) { grid.push(cell(t, m)); if (nX) grid.push(cell(t, m, true)); }); });
     if ((tries || 0) < RETRY && !legible(grid)) return makeFigAnalogy(r, level, (tries || 0) + 1, disTries);
-    // 7) 변환 속성 = 정답이 C와 다른 곳. B = A에 변환을 적용한 것(변환 속성은 A = C라 B의 값이 곧 정답의 값)
-    const trans = W.filter(function (a) { return D[a] !== C[a]; });
-    const B = Object.assign({}, A);
-    trans.forEach(function (a) { B[a] = D[a]; });
-    const o = shuffleOptions(r, [D].concat(opts.filter(function (x) { return x !== D; })), 0);
-    const explain = 'A에서 B로: ' + trans.map(function (t) {
+    const A = cell(0, 1, true), B = cell(1, 1, true), D = cell(1, 0);
+    const o = shuffleOptions(r, AN_CELLS.map(function (p) { return cell(p[0], p[1]); }), 0);
+    const diffs = NN.concat(noise);
+    const explain = 'A에서 B로: ' + TT.map(function (t) {
       if (t === 'fill' || t === 'shape' || t === 'frame') return t === 'frame' && D[t] === 'none' ? '틀이 없어짐' : U.josa(TRANS_KO[t], '이', '가') + ' ' + U.josa(VAL_KO[t][D[t]], '으로', '로') + ' 바뀜';
       if (t === 'size') { const d = SIZES.indexOf(D.size) - SIZES.indexOf(C.size); return '크기가 ' + (Math.abs(d) === 1 ? '한' : '두') + ' 단계 ' + (d > 0 ? '커짐' : '작아짐'); }
       if (t === 'count') { const d = D.count - C.count; return '개수가 ' + ['', '하나', '둘', '셋'][Math.abs(d)] + ' ' + (d > 0 ? '늘어남' : '줄어듦'); }
       if (t === 'rot') { const d = ((D.rot - C.rot) % 360 + 360) % 360; return d === 180 ? '반 바퀴(180°) 돎' : (d === 90 ? '시계 방향' : '반시계 방향') + '으로 90° 돎'; }
       if (t === 'flip') return '좌우가 뒤집힘';
       return TRANS_KO[t] + ': ' + OPK_KO[anSetOp(r, C[t], D[t])];
-    }).join(', ') + '. 같은 변화를 C에 적용한 게 정답이에요.' + (noise.length ? ' C는 A와 ' + U.josa(noise.map(function (a) { return TRANS_KO[a]; }).join('·'), '이', '가') + ' 다르지만 바뀌는 규칙은 같아요.' : '');
+    }).join(', ') + '. 같은 변화를 C에 적용한 게 정답이에요.' + (diffs.length ? ' C는 A와 ' + U.josa(diffs.map(function (a) { return TRANS_KO[a]; }).join('·'), '이', '가') + ' 다르지만 바뀌는 규칙은 같아요.' : '');
     return {
       type: 'choice', part: 'figAnalogy', scored: true, level: level, timeLimit: level >= 4 ? 60 : 45,
       prompt: 'A가 B로 바뀐 것과 같은 방식으로 C를 바꾸면?',
@@ -1773,7 +1751,9 @@
      그 값으로 바꾸고 NORMS_VERSION도 올린다. 나머지 9과제(규칙 찾기 5·언어 4)는 2026-10-18 고침에서는 생성기와 문항 풀이 그대로라 값을 그대로 뒀다
      (2026-11-13에 규칙 찾기 5과제의 생성기와 언어 27문항의 글이 바뀌었지만 LEVEL_P는 그대로 두었다. NORMS_VERSION 설명 참고).
      2026-11-18에 도형 행렬 4~6단계의 2×2(그 단계 문항의 40%)를 다시 짰다. 보이는 규칙이 3·4·5개로 늘고 오답이 정답과 같은 수만큼 C와 달라
-     같은 단계가 전보다 어려울 것으로 보지만, 근거 자료가 없어 matrix 값(default)도 그대로 둔다(README "2026-11-18 2×2 도형 행렬 보기 다시 짜기"). */
+     같은 단계가 전보다 어려울 것으로 보지만, 근거 자료가 없어 matrix 값(default)도 그대로 둔다(README "2026-11-18 2×2 도형 행렬 보기 다시 짜기").
+     같은 날(ai-est-2026-11-18b) 도형 유추도 다시 짰다. 정답이 더는 B를 닮지 않고 1단계도 A와 C가 달라 진짜 유추가 되며, 단계마다 A·C 차이가 하나 이상
+     보기에 나온다. 모든 단계가 전보다 어려울 것으로 보지만 figAnalogy 값도 그대로 둔다(README "2026-11-18 도형 유추 보기 다시 짜기"). */
   const LEVEL_P = {
     default: { 1: 0.92, 2: 0.80, 3: 0.62, 4: 0.42, 5: 0.25, 6: 0.12 },
     analogy: { 1: 0.94, 2: 0.77, 3: 0.60, 4: 0.38, 5: 0.25 },
@@ -1828,8 +1808,12 @@
      ai-est-2026-11-18 = 도형 행렬 2×2(4~6단계)를 정답을 나중에 고르는 짜임으로 다시 짠 버전(위 줄을 안 보고 아래 왼쪽 칸과 보기만 보고 맞히는 요령
      72~87% → 11~16%, 위 오른쪽·위 왼쪽 칸 하나와 보기만 보는 요령도 42~55%·37~46% → 26~35%·30~41%). 보이는 규칙이 늘고(4·5·6단계 3·4·5개)
      오답이 정답과 같은 수만큼 C와 달라 같은 단계가 전보다 어려울 것으로 보지만, LEVEL_P·NORMS·OBS는 그대로 두고 실제 자료로 다시 매긴다.
-     3×3은 바뀌지 않았다. 같은 도구가 도형 행렬은 원자료에서 ai-est-2026-11-14 까지의 행을 뺀다(PROC_OLD5). */
-  const NORMS_VERSION = 'ai-est-2026-11-18';
+     3×3은 바뀌지 않았다. 같은 도구가 도형 행렬은 원자료에서 ai-est-2026-11-14 까지의 행을 뺀다(PROC_OLD5).
+     ai-est-2026-11-18b = 도형 유추를 2×2 유추 짜임(바뀌는 무리·다른 무리)으로 다시 짠 버전(A·C를 안 보고 B와 보기만 보고 "B와 가장 닮은 보기"를
+     고르는 요령 98~100% → 25%, C+보기는 그대로 25% 안팎). 1단계도 A와 C가 달라 정답이 B와 같은 그림이 아니고, 단계마다 A·C 차이가 하나 이상
+     보기에 나와(A→B 변화 + A·C 차이 수 1~5 → 2~6) 같은 단계가 전보다 어려울 것으로 보지만, LEVEL_P·NORMS·OBS는 그대로 두고 실제 자료로 다시 매긴다.
+     같은 도구가 도형 유추는 원자료에서 ai-est-2026-11-18 까지의 행을 뺀다(PROC_OLD6). */
+  const NORMS_VERSION = 'ai-est-2026-11-18b';
   /* 폭 과제 부분 점수(spanScore의 part)의 기준값(2026-10-18): NORMS의 최장 폭 평균·sd에서 바꿔 쓴다. part = 최장 폭 − 0.5 × (두 번째 시도에서만 맞힌 길이 수)라
      평균은 shift만큼 낮고 퍼짐은 scale배다. 시행 단위 모형(한 시행의 정답 확률 σ((μ − 길이)/τ), μ = a + b·θ, a·b는 지금 진행 규칙과 새 최대 길이로 푼 최장 폭이
      NORMS 평균·sd와 같아지게 맞춤, 4만 명)에서 τ = 0.55일 때 네 과제 모두 shift 0.24~0.25, scale 0.96~0.97이었다(τ 0.4면 0.18~0.19·0.97~0.98, 0.7이면 0.29~0.30·0.94).
