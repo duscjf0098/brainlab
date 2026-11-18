@@ -241,35 +241,12 @@
     }
     return [logicRow(r, op, order), logicRow(r, op, order), logicRow(r, op, order)];
   }
-  /* 2×2: 오른쪽 = 왼쪽 op K (K는 숨은 고정 집합). 예시 행이 하나뿐이라 K를 완전히 알 수 없으므로,
-     예시에 맞는 모든 (연산, K') 가설이 질문 행에서 같은 답을 내야 정답이 유일하다. 네 연산 × K'의 모든 부분집합을 확인한다. */
+  /* 집합의 모든 부분집합(빈 것 빼고). 2×2 행렬(makeMatrix2)의 집합 속성 위 줄은 예시 줄에 맞는 모든 (연산, K′) 가설이 같은 답을 내는지 m2SetStem이 따로 본다(2026-11-18,
+     예전 kUnique·logicK는 그 일을 하던 옛 2×2 짜임과 함께 뺐다). */
   function allSubsets(order) {
     const out = [];
     for (let m = 1; m < (1 << order.length); m++) { let s = ''; for (let i = 0; i < order.length; i++) if (m & (1 << i)) s += order[i]; out.push(s); }
     return out;
-  }
-  function kUnique(left0, c0, left1, answer, order) {
-    const subs = allSubsets(order);
-    return Object.keys(OPS).every(function (o) {
-      return subs.every(function (K2) { return OPS[o](left0, K2, order) !== c0 || OPS[o](left1, K2, order) === answer; });
-    });
-  }
-  function logicK(r, op, order) {
-    for (let t = 0; t < 300; t++) {
-      const K = randomSet(r, order, 1, 2);
-      const left0 = randomSet(r, order, 1, 3), c0 = OPS[op](left0, K, order);
-      if (!c0 || c0 === left0) continue;
-      const left1 = randomSet(r, order, 1, 3), c1 = OPS[op](left1, K, order);
-      // 2026-11-13: 정답(c1)이 전체 집합이면 원소 수가 같은 오답 보기를 만들 수 없어(sameSizeSets) 쓰지 않는다
-      if (!c1 || c1 === left1 || left1 === left0 || c1.length === order.length) continue;
-      if (!kUnique(left0, c0, left1, c1, order)) continue;
-      return { K: K, rows: [[left0, c0], [left1, c1]] };
-    }
-    // 연산별로 검증된 안전한 기본값 (가설 전수 검사를 통과하는 조합)
-    const o = order;
-    if (op === 'xor') return { K: o.slice(0, 2), rows: [[o.slice(0, 1), o.slice(1, 2)], [o.slice(2, 3), o.slice(0, 3)]] };
-    if (op === 'sub') return { K: o.slice(0, 1), rows: [[o.slice(0, 3), o.slice(1, 3)], [o.slice(0, 2), o.slice(1, 2)]] };
-    return { K: o.slice(0, 1), rows: [[o.slice(1, 2), o.slice(0, 2)], [o.slice(1, 3), o.slice(0, 3)]] };
   }
   /* 집합 보기(선·모서리 점, 2026-11-13): 원소 수가 정답과 같은 다른 집합으로 만든다(모자라면 하나 많거나 적은 집합).
      예전에는 다른 연산(합·교·배타·빼기)의 결과를 오답으로 썼는데(logicFoils, 이때 지움), 그 값들이 모두 합집합의 부분집합이라 합집합 정답이 늘 가장 큰 집합이 되어
@@ -329,8 +306,10 @@
      횟수는 읽기 쉬운지 다시 만드는 횟수(tries)와 따로 센다(disTries). 우연히 실패한 것이면 몇 번 안에 풀리고, 만드는 방식이 잘못돼
      늘 실패하는 경우에도 폰이 오래 멈추지 않게 작게 둔다. 1단계에서도 다 쓰면 오류를 낸다(끝없이 다시 만들지 않게). */
   const DIS_RETRY = 5;
-  function makeMatrix(r, level, tries, disTries) {
-    const grid = level >= 4 && r.next() < 0.4 ? 2 : 3;
+  function makeMatrix(r, level, tries, disTries, only3) {
+    // 2×2는 makeMatrix2가 따로 만든다(2026-11-18). only3: 2×2 위 줄을 끝내 못 만들었을 때 같은 단계의 3×3으로 대신 낸다
+    const grid = !only3 && level >= 4 && r.next() < 0.4 ? 2 : 3;
+    if (grid === 2) return makeMatrix2(r, level);
     const recipe = {
       1: { cat: 1, prog: 0, logic: 0, pool: ['shape', 'fill', 'count', 'size'] },
       2: { cat: 2, prog: 0, logic: 0, pool: ['shape', 'fill', 'count', 'size', 'frame'] },
@@ -339,54 +318,42 @@
       5: { cat: 2, prog: 1, logic: 1, pool: ['shape', 'fill', 'size', 'frame'], progPool: ['rot', 'pos', 'count', 'size'], ops: ['union', 'inter', 'xor', 'sub'] },
       6: { cat: 2, prog: 1, logic: 2, pool: ['shape', 'fill', 'size', 'frame'], progPool: ['rot', 'pos'], ops: ['xor', 'sub', 'union', 'inter'] }
     }[level];
-    if (grid === 2) { recipe.cat = Math.max(1, recipe.cat - 1); recipe.prog = Math.max(recipe.prog, 1); }
 
     // 기본값 (모든 칸 공통)
     const base = { frame: level >= 3 && r.next() < 0.4 ? r.pick(FRAMES.slice(1)) : 'none', shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.int(1, 2), size: r.pick(SIZES), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
-    // 진행 속성 고르기 (회전·반전은 비대칭 모양을 요구하고, 위치는 개수 1을 요구한다)
+    // 진행 속성 고르기 (회전은 비대칭 모양을 요구하고, 위치는 개수 1을 요구한다)
     // 3×3에서는 크기를 진행 속성으로 쓰지 않는다(2026-11-13). 크기는 세 단계뿐이라 세 행이 모두 작게·중간·크게가 되어 사실상 "열 고정"인데 해설은 진행이라 했고, 정답이 늘 "크게"였다.
-    const progAttrs = recipe.prog ? r.sample(recipe.progPool.filter(function (a) { return !(grid === 3 && a === 'size'); }), recipe.prog) : [];
-    let flipAttr = false;
-    if (grid === 2 && level >= 5 && r.next() < 0.35) flipAttr = true;
-    if (progAttrs.indexOf('rot') >= 0 || flipAttr) base.shape = flipAttr ? 'lshape' : r.pick(ASYM);
+    const progAttrs = recipe.prog ? r.sample(recipe.progPool.filter(function (a) { return a !== 'size'; }), recipe.prog) : [];
+    if (progAttrs.indexOf('rot') >= 0) base.shape = r.pick(ASYM);
     if (progAttrs.indexOf('pos') >= 0) base.count = 1;
-    const catPool = recipe.pool.filter(function (a) { return progAttrs.indexOf(a) < 0 && !(a === 'shape' && (progAttrs.indexOf('rot') >= 0 || flipAttr)) && !(a === 'count' && progAttrs.indexOf('pos') >= 0); });
+    const catPool = recipe.pool.filter(function (a) { return progAttrs.indexOf(a) < 0 && !(a === 'shape' && progAttrs.indexOf('rot') >= 0) && !(a === 'count' && progAttrs.indexOf('pos') >= 0); });
     const catAttrs = r.sample(catPool, Math.min(recipe.cat, catPool.length));
 
     // 규칙 명세
     const spec = {};
     catAttrs.forEach(function (a) {
-      const vals = r.sample(DOMAIN[a], grid === 3 ? 3 : 2);
-      const rule = grid === 2 ? (r.next() < 0.3 ? 'row' : 'col') : r.pick(level === 1 ? ['col', 'latin'] : ['row', 'col', 'latin']);
+      const vals = r.sample(DOMAIN[a], 3);
+      const rule = r.pick(level === 1 ? ['col', 'latin'] : ['row', 'col', 'latin']);
       spec[a] = { kind: 'cat', rule: rule, vals: vals, perm: r.shuffle([0, 1, 2]) };
     });
-    if (grid === 3 && catAttrs.length >= 2 && !catAttrs.some(function (a) { return spec[a].rule === 'latin'; })) spec[r.pick(catAttrs)].rule = 'latin';
-    if (grid === 2 && catAttrs.length && !catAttrs.some(function (a) { return spec[a].rule === 'col'; }) && !progAttrs.length && !flipAttr) spec[catAttrs[0]].rule = 'col';
+    if (catAttrs.length >= 2 && !catAttrs.some(function (a) { return spec[a].rule === 'latin'; })) spec[r.pick(catAttrs)].rule = 'latin';
     progAttrs.forEach(function (a) {
       const seq = PROG_SEQ[a];
       /* 2026-11-13: 개수·크기도 커지기·작아지기를 반반으로 하고, 시작값을 범위 안에서 고른다. 예전에는 늘 커지는 쪽이고 시작값이 0~1로 고정이라
          정답 값이 보기 값들 중 늘 같은 순위였다("가장 작은 값 빼기"가 3단계 20%, 우연 12.5%). */
-      /* 2×2 개수 진행은 정답 칸의 값(1~4)을 먼저 고르게 정하고(ai), 끝값이면 방향을 그쪽으로, 아래 줄 시작값을 거기서 거꾸로 정한다(2026-11-14).
-         예전에는 시작값과 방향을 따로 뽑아 정답이 1:2:2:1 비율이라, 보기 개수 {1,2,3,4}에서 2나 3을 고르면 그 문항의 1/6이 맞았다(우연 1/8). 방향은 여전히 반반이다. */
-      const ai = grid === 2 && a === 'count' ? r.int(0, seq.length - 1) : -1;
-      const step = ai === 0 ? -1 : ai === seq.length - 1 ? 1 : (a === 'rot' && r.next() < 0.3) || (!CYCLIC[a] && r.next() < 0.5) ? -1 : 1;
+      const step = (a === 'rot' && r.next() < 0.3) || (!CYCLIC[a] && r.next() < 0.5) ? -1 : 1;
       const starts = [];
-      for (let row = 0; row < grid; row++) starts.push(CYCLIC[a] ? r.int(0, seq.length - 1) : (step > 0 ? r.int(0, seq.length - grid) : r.int(grid - 1, seq.length - 1)));
-      if (ai >= 0) starts[1] = ai - step;
-      /* 3×3에서 첫째·둘째 행의 시작값이 같으면 위 두 행이 같은 세 값을 가져 "각 행에 세 값이 한 번씩"(라틴)으로도 읽히고,
+      for (let row = 0; row < 3; row++) starts.push(CYCLIC[a] ? r.int(0, seq.length - 1) : (step > 0 ? r.int(0, seq.length - 3) : r.int(2, seq.length - 1)));
+      /* 첫째·둘째 행의 시작값이 같으면 위 두 행이 같은 세 값을 가져 "각 행에 세 값이 한 번씩"(라틴)으로도 읽히고,
          그 읽기의 답은 진행의 답과 다르다(2026-11-13, 3단계 0.2%가 실제로 답이 둘). 시작값을 다르게 하면 두 행의 값 묶음이 달라져 라틴으로 읽을 수 없다. */
-      if (grid === 3 && starts[0] === starts[1]) { const valid = seq.map(function (_, i) { return i; }).filter(function (i) { return CYCLIC[a] || (step > 0 ? i <= seq.length - grid : i >= grid - 1); }); const pool = valid.filter(function (i) { return i !== starts[0]; }); if (pool.length) starts[1] = r.pick(pool); }
+      if (starts[0] === starts[1]) { const valid = seq.map(function (_, i) { return i; }).filter(function (i) { return CYCLIC[a] || (step > 0 ? i <= seq.length - 3 : i >= 2); }); const pool = valid.filter(function (i) { return i !== starts[0]; }); if (pool.length) starts[1] = r.pick(pool); }
       spec[a] = { kind: 'prog', step: step, starts: starts };
     });
-    /* 좌우 반전은 왼쪽 칸의 시작값 f0(0·1)을 무작위로 둔다(2026-11-13). 예전에는 flip이 열 번호라 정답이 늘 뒤집힌 ㄱ이어서,
-       안 뒤집힌 보기 4개는 보기만 봐도 오답이었다(좌우 문항에서 25%, 우연 12.5%). */
-    if (flipAttr) spec.flip = { kind: 'flip', f0: r.int(0, 1) };
     const logicAttrs = recipe.logic ? r.sample(['marks', 'lines'], recipe.logic) : [];
     logicAttrs.forEach(function (a) {
       const order = a === 'marks' ? 'abcd' : 'hvde';
-      const op = r.pick(grid === 2 ? recipe.ops.filter(function (o) { return o !== 'inter'; }) : recipe.ops);
-      if (grid === 3) spec[a] = { kind: 'logic', op: op, order: order, rows: logicRows(r, op, order) };
-      else { const k = logicK(r, op, order); spec[a] = { kind: 'logicK', op: op, order: order, K: k.K, rows: k.rows }; }
+      const op = r.pick(recipe.ops);
+      spec[a] = { kind: 'logic', op: op, order: order, rows: logicRows(r, op, order) };
     });
 
     function value(a, row, col) {
@@ -398,11 +365,10 @@
         return s.vals[(s.perm[row] + col) % 3];
       }
       if (s.kind === 'prog') { const seq = PROG_SEQ[a]; return CYCLIC[a] ? seq[((s.starts[row] + s.step * col) % seq.length + seq.length) % seq.length] : seq[s.starts[row] + s.step * col]; }   // 순서 속성의 시작값은 끝까지 범위 안에 들도록 골랐다(위 starts)
-      if (s.kind === 'flip') return col ^ s.f0;
       return s.rows[row][col];
     }
     const cells = [];
-    for (let row = 0; row < grid; row++) for (let col = 0; col < grid; col++) {
+    for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
       const c = {}; ALL_ATTRS.forEach(function (a) { c[a] = value(a, row, col); }); cells.push(c);
     }
     const answer = cells[cells.length - 1];
@@ -410,41 +376,31 @@
     // 보기: 달라지는 속성마다 값 세 가지(정답 포함), 균형 배치
     const varying = {};
     catAttrs.forEach(function (a) { varying[a] = fitSet(r, a, [answer[a]].concat(spec[a].vals)); });
-    /* 진행 보기 값(2026-11-13): 개수는 늘 네 값 전부, 크기는 정답과 이웃한 값 하나(위·아래 중 무작위). 예전 [정답, 한 칸 앞, 한 칸 뒤, 두 칸 뒤]는
-       끝값에서 잘려 정답이 늘 같은 순위가 됐다. */
+    /* 진행 보기 값(2026-11-13): 개수는 늘 네 값 전부. 예전 [정답, 한 칸 앞, 한 칸 뒤, 두 칸 뒤]는 끝값에서 잘려 정답이 늘 같은 순위가 됐다. */
     progAttrs.forEach(function (a) {
       const v = answer[a];
       if (a === 'count') varying[a] = [v].concat(r.shuffle(PROG_SEQ.count.filter(function (x) { return x !== v; })));
-      else if (a === 'size') varying[a] = [v, r.pick(SIZES.filter(function (x) { return Math.abs(SIZES.indexOf(x) - SIZES.indexOf(v)) === 1; }))];
       else varying[a] = fitSet(r, a, [v, nextVal(a, v, -1), nextVal(a, v, 1), nextVal(a, v, 2)]);
     });
-    if (flipAttr) varying.flip = [answer.flip, answer.flip ? 0 : 1];
     logicAttrs.forEach(function (a) {
       const s = spec[a];
       varying[a] = sameSizeSets(r, answer[a], s.order, 4);   // 원소 수가 정답과 같은 집합(2026-11-13, sameSizeSets 주석)
     });
-    const foilEx = function () { return Object.keys(varying).concat(progAttrs.indexOf('rot') >= 0 || flipAttr ? ['shape'] : []).concat(progAttrs.indexOf('pos') >= 0 ? ['count'] : []); };
+    const foilEx = function () { return Object.keys(varying).concat(progAttrs.indexOf('rot') >= 0 ? ['shape'] : []).concat(progAttrs.indexOf('pos') >= 0 ? ['count'] : []); };
     if (Object.keys(varying).length === 1) { const f = pickFoil(r, answer, foilEx()); varying[f.attr] = f.vals; }
     let dis = balancedDistractors(r, answer, varying, 8);
     if (!dis) { const f = pickFoil(r, answer, foilEx()); varying[f.attr] = f.vals; dis = balancedDistractors(r, answer, varying, 8); }
     // 보기 수를 줄이지 않고 다시 만든다(2026-11-13, DIS_RETRY 주석)
     if (!dis) {
-      if ((disTries || 0) < DIS_RETRY) return makeMatrix(r, level, tries, (disTries || 0) + 1);
+      if ((disTries || 0) < DIS_RETRY) return makeMatrix(r, level, tries, (disTries || 0) + 1, only3);
       if (level > 1) return makeMatrix(r, level - 1);
       throw new Error('도형 행렬 보기를 만들지 못함');
     }
     const o = shuffleOptions(r, [answer].concat(dis), 0);
-    // 2×2는 다른 읽기로도 맞는 오답이 있으면 다시 만든다(2026-11-13, altClash 주석)
-    if ((tries || 0) < RETRY && (!legible(cells.concat(o.options)) || (grid === 2 && altClash(cells, o.options, o.answer, progAttrs, logicAttrs)))) return makeMatrix(r, level, (tries || 0) + 1, disTries);
+    if ((tries || 0) < RETRY && !legible(cells.concat(o.options))) return makeMatrix(r, level, (tries || 0) + 1, disTries, only3);
 
-    /* 방향 진행과 좌우 반전이 함께 있는 2×2는 한 문장으로 쓴다(2026-11-13). 그림은 돌린 다음 뒤집은 것이라(cellSVG의 변환 순서),
-       두 문장으로 따로 쓰면 "뒤집은 뒤 돌리기"로 읽은 사람에게는 도는 방향이 반대가 된다. */
-    const rotFlip = flipAttr && progAttrs.indexOf('rot') >= 0;
-    /* 왼쪽 칸이 뒤집혀 있으면(f0=1) 같은 문장의 도는 방향이 반대다(2026-11-13). 칸 그림 = 뒤집기^f·돌리기(a)이고 뒤집기·돌리기(s)·뒤집기 = 돌리기(−s)라서,
-       "왼쪽을 s만큼 돌린 뒤 좌우로 뒤집기"의 결과는 f0=0이면 돌리기(a+s)를 뒤집은 것, f0=1이면 안 뒤집은 돌리기(a−s)다. 오른쪽 칸은 늘 a+step이므로 f0=1이면 s = −step. */
-    const rfCw = rotFlip && (spec.rot.step > 0) === (spec.flip.f0 === 0);
-    const explain = catAttrs.map(function (a) { return ATTR_KO[a] + ': ' + (grid === 2 && spec[a].rule === 'col' ? '왼쪽과 오른쪽이 각각 정해진 값' : RULE_KO[spec[a].rule]); })
-      .concat(progAttrs.filter(function (a) { return !(rotFlip && a === 'rot'); }).map(function (a) {
+    const explain = catAttrs.map(function (a) { return ATTR_KO[a] + ': ' + RULE_KO[spec[a].rule]; })
+      .concat(progAttrs.map(function (a) {
         const up = spec[a].step > 0;
         // 개수는 "하나씩 늘어남/줄어듦", 크기는 "한 단계씩 커짐/작아짐"(2026-11-13: 예전에는 개수에도 "한 단계씩 커짐"이라 어색했다)
         return ATTR_KO[a] + ': ' + (a === 'rot' ? '오른쪽으로 갈수록 ' + (up ? '시계 방향' : '반시계 방향') + '으로 90°씩 돎'
@@ -452,13 +408,200 @@
           : a === 'count' ? '오른쪽으로 갈수록 하나씩 ' + (up ? '늘어남' : '줄어듦')
           : '오른쪽으로 갈수록 한 단계씩 ' + (up ? '커짐' : '작아짐'));
       }))
-      .concat(rotFlip ? ['방향·좌우: 오른쪽은 왼쪽을 ' + (rfCw ? '시계 방향' : '반시계 방향') + '으로 90° 돌린 뒤 좌우로 뒤집은 것'] : flipAttr ? ['좌우: 오른쪽은 왼쪽을 거울처럼 뒤집은 것'] : [])
-      .concat(logicAttrs.map(function (a) { const s = spec[a]; return ATTR_KO[a] + ': ' + (s.kind === 'logic' ? '셋째 열은 ' + OP_KO[s.op] : '오른쪽은 ' + OPK_KO[s.op]); }))
+      .concat(logicAttrs.map(function (a) { return ATTR_KO[a] + ': 셋째 열은 ' + OP_KO[spec[a].op]; }))
       .join(' / ');
     return {
       type: 'choice', part: 'matrix', scored: true, level: level, timeLimit: [60, 60, 80, 90, 100, 120][level - 1],
-      prompt: (grid === 2 ? '왼쪽에서 오른쪽으로의 변화를 찾아 ' : '규칙을 찾아 ') + '빈칸에 들어갈 도형을 고르세요.',
-      promptHtml: '<div class="matrix' + (grid === 2 ? ' matrix2' : '') + '">' + cells.slice(0, cells.length - 1).map(cellSVG).join('') + '<div class="cell cell-missing"><span>?</span></div></div>',
+      prompt: '규칙을 찾아 빈칸에 들어갈 도형을 고르세요.',
+      promptHtml: '<div class="matrix">' + cells.slice(0, cells.length - 1).map(cellSVG).join('') + '<div class="cell cell-missing"><span>?</span></div></div>',
+      optionsHtml: o.options.map(cellSVG), answer: o.answer, optionCols: 4,
+      explain: explain
+    };
+  }
+
+  /* ===== 1a. 2×2 도형 행렬 (4~6단계, 2026-11-18 다시 짬) =====
+     2×2는 "위 왼쪽 : 위 오른쪽 = 아래 왼쪽 : ?" 꼴의 유추라서, 예전 짜임(규칙을 먼저 정하고 정답을 계산한 뒤 오답을 붙임)에서는 위 줄을 안 보고
+     아래 왼쪽 칸과 보기만 봐도 "열 고정·진행·좌우·집합 규칙이면 아래 왼쪽과 다른 값"으로 4·5단계 71~73%, 6단계 87~88%가 맞았다(우연 12.5%).
+     열 고정 70%·시계 방향 70% 같은 비율을 반반으로 바꿔도 64~82%라, 도형 유추(2026-11-14)처럼 정답을 나중에 고르는 짜임으로 바꿨다.
+     1) 보기에서 달라질 속성 W를 고른다(4단계 3개, 5단계 4개, 6단계 5개). 값 자리가 둘인 속성(좌우·크기·모양·채움·틀) 하나와,
+        값 넷인 진행 속성(방향·위치·개수)과 모서리 점·선(5단계부터). m2Attrs 주석.
+     2) 아래 왼쪽 칸 C와 속성마다 값 묶음 [C 값, 다른 값들]을 정하고, 보기 틀(M2_TPL)로 보기 8개를 만든다. 틀은 속성마다 값이 고르게(값 넷이면 둘씩,
+        둘이면 넷씩) 나오면서 "C와 k곳 다른 보기"가 가장 많게 짰다(k = 4단계 2, 5단계 3, 6단계 4. 4단계는 8개 모두, 5·6단계는 7개).
+     3) 정답은 그중 하나를 고르게 고르고, 정답이 C와 다른 속성이 곧 "왼쪽 → 오른쪽" 변화가 된다. 아래 왼쪽 칸과 보기만으로는 어느 보기인지 알 수 없다.
+     4) 위 줄(위 왼쪽 TL, 위 오른쪽 TR)을 거꾸로 만든다. 바뀌는 속성: 방향·위치·개수는 한두 단계(하나·둘, 90°·반 바퀴, 한 칸·두 칸)면 진행
+        (TL은 30%는 C, 나머지는 C와 다른 값에서), 크기는 한 단계면 진행, 모서리 점·선은 (연산, K, TL)을 찾아 예시 줄에 맞는 모든 가설이 같은 답을 내게
+        (못 찾으면 TL = C), 좌우는 거울 뒤집기(방향이 없으면 반은 TL이 정답 쪽 값), 그 밖(모양·채움·틀, 크기 두 단계, 개수 1↔4)은 열 고정(TL = C, TR = 정답 값).
+        안 바뀌는 속성: 점·선과 방향이 있을 때의 좌우는 네 칸이 모두 같고, 값 자리가 둘인 속성은 반은 네 칸이 같게 반은 행 고정, 나머지는 행 고정(TL = TR ≠ C).
+        네 칸이 같은 속성이 있거나 정답이 위 칸과 똑같은 그림이 되면 보기에 안 나오는 속성 하나를 행 고정으로 더한다(보이는 규칙 수를 3·4·5로).
+        다른 읽기로 맞는 오답(altClash)이 생기거나 그림이 흐리면 위 줄만 다시 만든다(보기·C·정답은 그대로라 다시 만들기가 정답과 엮이지 않는다).
+     위 줄을 짜는 비율(TL = C 30%, 값 둘인 속성의 반반, 점·선의 대각선 꼴 빼기)은 위 왼쪽·위 오른쪽 칸 하나와 보기만 보는 요령도 함께 낮추려고 고른 값이다
+     (2026-11-18 감사, 시드 셋: 아래 왼쪽 11~16%, 위 오른쪽 26~35%, 위 왼쪽 30~41%. 예전 짜임은 아래 왼쪽 72~87%, 위 오른쪽 42~55%, 위 왼쪽 37~46%). */
+  const M2_TPL = {
+    '244': [[0, 1, 1], [0, 1, 2], [0, 2, 1], [0, 3, 3], [1, 0, 2], [1, 0, 3], [1, 2, 0], [1, 3, 0]],
+    '4444': [[0, 1, 1, 1], [0, 1, 1, 2], [1, 0, 2, 1], [1, 0, 2, 2], [2, 2, 0, 3], [2, 2, 3, 0], [3, 3, 0, 3], [3, 3, 3, 0]],
+    '2444': [[0, 0, 0, 1], [0, 1, 1, 1], [0, 1, 1, 2], [0, 2, 2, 2], [1, 0, 2, 3], [1, 2, 3, 0], [1, 3, 0, 3], [1, 3, 3, 0]],
+    '44444': [[0, 0, 0, 1, 1], [0, 1, 1, 1, 1], [1, 0, 1, 2, 2], [1, 1, 0, 2, 2], [2, 2, 2, 0, 3], [2, 2, 3, 0, 3], [3, 3, 2, 3, 0], [3, 3, 3, 3, 0]],
+    '24444': [[0, 0, 0, 0, 0], [0, 1, 1, 1, 1], [0, 1, 1, 1, 2], [0, 2, 2, 2, 1], [1, 0, 2, 2, 2], [1, 2, 0, 3, 3], [1, 3, 3, 0, 3], [1, 3, 3, 3, 0]]
+  };
+  const M2_K = { 4: 2, 5: 3, 6: 4 };
+  const SET_ORDER = { marks: 'abcd', lines: 'hvde' };
+  const M2_SETS = { marks: allSubsets('abcd').filter(function (s) { return s.length < 4; }).concat(['']), lines: allSubsets('hvde').filter(function (s) { return s.length < 4; }).concat(['']) };
+  function m2Domain(a) { return M2_SETS[a] || (a === 'rot' ? ROTS : a === 'flip' ? [0, 1] : PROG_SEQ[a] && a === 'pos' ? PROG_SEQ.pos : DOMAIN[a]); }
+  const popc = function (m) { let k = 0; while (m) { k += m & 1; m >>= 1; } return k; };
+  /* 집합 속성의 위 줄: op(C, K) = 정답, TR = op(TL, K), TL ≠ C, 그리고 예시 줄(TL → TR)에 맞는 모든 (연산, K′)(빈 K′ 포함)가 아래 줄에서 정답을 낸다.
+     뒤집기 가설(K′ = TL ⊕ TR)이 늘 예시 줄에 맞으므로 TL ⊕ TR = C ⊕ 정답이 된다. 그래서 TR = C이면 TL = 정답(대각선으로 바뀐 꼴)이라 뺀다
+     (2026-11-18: 빼기 전에는 위 왼쪽 칸과 보기만 보고 점·선 하나로 30%, 6단계 전체 52%가 맞았다) */
+  function m2SetStem(r, a, c, d, pool) {
+    const order = SET_ORDER[a];
+    const mk = function (s) { return setOf(s).reduce(function (m, k) { return m | (1 << order.indexOf(k)); }, 0); };
+    const st = function (m) { return order.split('').filter(function (k, i) { return m & (1 << i); }).join(''); };
+    const C = mk(c), D = mk(d), out = [];
+    const ops = { union: function (x, k) { return x | k; }, xor: function (x, k) { return x ^ k; }, inter: function (x, k) { return x & k; }, sub: function (x, k) { return x & ~k & 15; } };
+    const uniq = function (tl, tr) { return Object.keys(ops).every(function (o) { for (let K = 0; K < 16; K++) if (ops[o](tl, K) === tr && ops[o](C, K) !== D) return false; return true; }); };
+    ['union', 'xor', 'sub'].forEach(function (o) {
+      for (let K = 1; K < 16; K++) {
+        if (ops[o](C, K) !== D) continue;
+        for (let tl = 0; tl < 16; tl++) {
+          if (tl === C || popc(tl) > 3) continue;
+          const tr = ops[o](tl, K);
+          if (tr === tl || tr === 0 || tr === C || popc(tr) > 3 || !uniq(tl, tr)) continue;
+          out.push({ op: o, tl: st(tl), tr: st(tr) });
+        }
+      }
+    });
+    if (!out.length) {
+      // TL = C면 예시 줄에 맞는 가설은 모두 C → 정답으로 간다(늘 하나). 연산은 더하기·빼기로 되면 그것, 아니면 뒤집기
+      const op = (C & ~D) === 0 ? 'union' : (D & ~C) === 0 ? 'sub' : 'xor';
+      return { op: op, tl: c, tr: d };
+    }
+    // 위 오른쪽 값이 보기 값 가운데 하나면 그것부터(위 오른쪽만 닮은 보기를 고르는 요령이 오답으로도 끌리게)
+    const decoy = out.filter(function (x) { return pool.indexOf(x.tr) >= 0; });
+    return r.pick(decoy.length ? decoy : out);
+  }
+  /* 보기에서 달라질 속성 W. 방향·좌우가 있으면 모양은 못 쓰고(삼각형·화살표·ㄱ자로 고정), 위치가 있으면 개수는 못 쓴다(1개).
+     값 자리가 둘인 속성(TWO_SLOT: 좌우·크기·모양·채움·틀)은 단계마다 꼭 하나이고 틀의 첫 열(값 둘)에 둔다. 나머지는 값 넷인 진행 속성(방향·위치·개수)과 점·선.
+     (2026-11-18) 모양·채움·틀은 바뀌면 열 고정이라 위 오른쪽 칸이 정답 값을 그대로 보여 준다. 값이 넷이면 "위 오른쪽과 같은 값인 보기 둘"로 좁혀져
+     위 오른쪽+보기 요령이 59~69%였다. 값이 둘이면 바뀌든(열 고정) 안 바뀌든(행 고정) 위 오른쪽은 늘 "C가 아닌 값"이라 정답을 가리키지 않는다. */
+  const TWO_SLOT = ['flip', 'size', 'shape', 'fill', 'frame'];
+  function m2Attrs(r, level) {
+    const W = [];
+    const has = function (x) { return W.indexOf(x) >= 0; };
+    const fits = function (a) {
+      if (has(a)) return false;
+      if (a === 'shape' && (has('rot') || has('flip'))) return false;
+      if ((a === 'rot' || a === 'flip') && has('shape')) return false;
+      if ((a === 'count' && has('pos')) || (a === 'pos' && has('count'))) return false;
+      if (TWO_SLOT.indexOf(a) >= 0 && W.some(function (x) { return TWO_SLOT.indexOf(x) >= 0; })) return false;
+      return true;
+    };
+    const add = function (list) { const c = list.filter(fits); if (c.length) { W.push(r.pick(c)); return true; } return false; };
+    if (level >= 5 && r.next() < 0.35) W.push('flip');
+    if (level === 4) { add(['count', 'pos']); add(['rot', 'pos', 'count']); add(['shape', 'fill', 'frame', 'size']); }
+    else if (level === 5) { add(['rot', 'pos', 'count']); add(['shape', 'fill', 'frame', 'size']); add(['marks', 'lines']); }
+    else { add(['rot', 'pos']); W.push('marks', 'lines'); add(['rot', 'pos', 'count']); add(['shape', 'fill', 'frame', 'size']); }
+    const want = level - 1;
+    while (W.length < want && add(['rot', 'pos', 'count', 'marks', 'lines'])) { /* 값 넷인 속성으로 채움 */ }
+    while (W.length < want && add(['shape', 'fill', 'frame'])) { /* 거의 없음 */ }
+    return W;
+  }
+  function makeMatrix2(r, level, tries) {
+    const k = M2_K[level];
+    const W = m2Attrs(r, level);
+    const has = function (a) { return W.indexOf(a) >= 0; };
+    // 값 자리가 둘인 속성(m2Attrs 주석)을 틀의 첫 열에, 나머지는 섞어서
+    const two = W.filter(function (a) { return TWO_SLOT.indexOf(a) >= 0; })[0] || (level === 4 ? r.pick(W) : null);
+    const cols = (two ? [two] : []).concat(r.shuffle(W.filter(function (a) { return a !== two; })));
+    const tpl = M2_TPL[cols.map(function (a) { return a === two ? 2 : 4; }).join('')];
+    // 아래 왼쪽 칸 C: 보기에서 안 달라지는 속성은 예전 기본값처럼
+    const C = { frame: r.next() < 0.4 ? r.pick(FRAMES.slice(1)) : 'none', shape: r.pick(SHAPES), fill: r.pick(FILLS), count: r.int(1, 2), size: r.pick(SIZES), pos: 'c', rot: 0, flip: 0, lines: '', marks: '' };
+    if (has('rot')) C.shape = has('flip') ? 'lshape' : r.pick(ASYM);
+    if (has('flip')) C.shape = 'lshape';
+    if (has('pos')) C.count = 1;
+    const vals = cols.map(function (a, j) {
+      const m = Math.max.apply(null, tpl.map(function (row) { return row[j]; })) + 1;
+      // 방향이 있으면 좌우는 늘 0에서(뒤집힌 칸을 돌리면 보이는 도는 방향이 반대라 해설과 어긋난다)
+      C[a] = a === 'flip' && has('rot') ? 0 : r.pick(m2Domain(a));
+      return [C[a]].concat(r.sample(m2Domain(a).filter(function (v) { return v !== C[a]; }), m - 1));
+    });
+    const opts = tpl.map(function (row) { const o = Object.assign({}, C); cols.forEach(function (a, j) { o[a] = vals[j][row[j]]; }); return o; });
+    // 눈으로 가리기: 보기 값 묶음의 모든 조합(정답이 어느 것이든 같은 판정)
+    let grid = [Object.assign({}, C)];
+    cols.forEach(function (a, j) { const next = []; grid.forEach(function (g) { vals[j].forEach(function (v) { const x = Object.assign({}, g); x[a] = v; next.push(x); }); }); grid = next; });
+    if ((tries || 0) < RETRY && !legible(grid)) return makeMatrix2(r, level, (tries || 0) + 1);
+    const shaped = opts.filter(function (o) { return W.filter(function (a) { return o[a] !== C[a]; }).length === k; });
+    const D = r.pick(shaped), ans = opts.indexOf(D);
+    const setsInW = W.filter(function (a) { return M2_SETS[a]; });
+    let stem = null;
+    for (let g = 0; g < 30 && !stem; g++) {
+      const TL = Object.assign({}, C), TR = Object.assign({}, C), rule = {}, meta = {}, prog = [];
+      W.forEach(function (a) {
+        const c = C[a], d = D[a], pool = vals[cols.indexOf(a)];
+        if (c === d) {
+          // 점·선은 위 줄이 달라 보이면 다른 연산으로 읽혀 답이 갈리고, 방향이 있을 때 좌우는 위 줄도 안 뒤집혀야 해서(아래 해설 주석) 네 칸이 같다
+          if (M2_SETS[a] || (a === 'flip' && has('rot'))) { rule[a] = 'const'; return; }
+          /* 값 자리가 둘인 속성은 반은 네 칸이 같게, 반은 행 고정으로. 바뀌면 열 고정(위 왼쪽 = C, 위 오른쪽 = 정답 값)이라, 안 바뀔 때 늘 행 고정이면
+             위 왼쪽이 늘 정답이 아닌 값이 되어 "위 왼쪽과 다른 값" 요령이 통하고, 늘 같게 두면 위 오른쪽이 늘 정답 값이 된다(2026-11-18) */
+          if (TWO_SLOT.indexOf(a) >= 0 && r.next() < 0.5) { rule[a] = 'const'; return; }
+          // 행 고정 값은 보기 값 가운데서(위 오른쪽만 닮은 보기를 고르는 요령이 오답으로도 끌리게)
+          const v = r.pick(pool.filter(function (x) { return x !== c; }));
+          TL[a] = TR[a] = v; rule[a] = 'row'; return;
+        }
+        if (M2_SETS[a]) { const s = m2SetStem(r, a, c, d, pool); TL[a] = s.tl; TR[a] = s.tr; rule[a] = 'logic'; meta[a] = s.op; return; }
+        if (PROG_SEQ[a]) {
+          const seq = PROG_SEQ[a], n = seq.length;
+          // 한 단계(±1)와 두 단계(개수 둘씩·반 바퀴·두 칸)는 진행으로, 그보다 큰 변화(개수 1↔4, 크기 작게↔크게는 시작값이 C뿐)는 열 고정으로
+          let step = seq.indexOf(d) - seq.indexOf(c);
+          if (CYCLIC[a]) { const m = ((step % n) + n) % n; step = m === n - 1 ? -1 : m; }
+          if (Math.abs(step) > (a === 'size' ? 1 : 2)) step = 0;   // 크기는 세 단계라 두 단계 진행(작게 → 크게)은 해설이 어색해 열 고정으로
+          if (step) {
+            const starts = seq.filter(function (v) { const i = seq.indexOf(v); return v !== c && (CYCLIC[a] || (i + step >= 0 && i + step < n)); });
+            const decoy = starts.filter(function (v) { return pool.indexOf(nextVal(a, v, step)) >= 0; });   // 위 오른쪽 값이 보기 값이 되는 시작값부터
+            /* 열에 한 번쯤(30%)은 C에서 시작해 위 오른쪽이 정답 값과 같게 둔다. 늘 다르게 하면 "위 오른쪽과 같은 값인 보기는 빼기"가 통한다
+               (값 넷인 속성에서 보기 여덟 중 둘이 위 오른쪽 값이라, 정답이 그 값일 몫이 1/4 안팎이면 그 요령은 아무것도 못 얻는다) */
+            const tl = r.next() < 0.3 ? c : starts.length ? r.pick(decoy.length ? decoy : starts) : null;
+            if (tl !== null) { TL[a] = tl; TR[a] = nextVal(a, tl, step); rule[a] = 'prog'; meta[a] = step; prog.push(a); return; }
+          }
+        }
+        // 좌우는 위 왼쪽이 정답 쪽 값이어도 "거울처럼 뒤집음"이 그대로 맞아, 방향이 없으면 반은 그렇게 둔다(위 왼쪽·위 오른쪽 어느 쪽도 정답 값을 가리키지 않게)
+        if (a === 'flip' && !has('rot') && r.next() < 0.5) { TL[a] = d; TR[a] = c; rule[a] = 'flip'; return; }
+        TL[a] = c; TR[a] = d; rule[a] = a === 'flip' ? 'flip' : 'col';
+      });
+      /* 안 바뀌는 속성이 점·선·좌우라 네 칸이 같으면(또는 정답이 위 칸과 똑같은 그림이면), 보기에 안 나오는 속성 하나를 행 고정으로 더한다.
+         그래야 보이는 규칙 수가 늘 W의 수(4단계 3, 5단계 4, 6단계 5)이고 정답이 위 오른쪽을 그대로 베낀 그림이 되지 않는다(2026-11-18: 안 더하면 4단계 평균 규칙 수가 3단계보다 적었다) */
+      if (W.some(function (a) { return rule[a] === 'const'; }) || cellKey(D) === cellKey(TL) || cellKey(D) === cellKey(TR)) {
+        const free = ['frame', 'fill', 'size', 'shape', 'count'].filter(function (a) { return !has(a) && !(a === 'shape' && (has('rot') || has('flip'))) && !(a === 'count' && has('pos')); });
+        const a = r.pick(free), v = r.pick(DOMAIN[a].filter(function (x) { return x !== C[a]; }));
+        TL[a] = TR[a] = v; rule[a] = 'row';
+      }
+      if (!legible([TL, TR, C].concat(opts)) || altClash([TL, TR, C], opts, ans, prog, setsInW)) continue;
+      stem = { TL: TL, TR: TR, rule: rule, meta: meta };
+    }
+    if (!stem) {
+      if ((tries || 0) < RETRY) return makeMatrix2(r, level, (tries || 0) + 1);
+      return makeMatrix(r, level, 0, 0, true);   // 거의 없음: 같은 단계의 3×3으로 대신
+    }
+    const TL = stem.TL, TR = stem.TR, rule = stem.rule, meta = stem.meta;
+    /* 해설: 방향 진행과 좌우 바뀜이 함께면 한 문장(2026-11-13 rotFlip 주석. 방향이 있으면 C의 좌우가 0이라 왼쪽 칸은 안 뒤집힘 → 시계 방향 = 오른쪽으로 돈 것) */
+    // 반 바퀴는 좌우 뒤집기와 순서가 바뀌어도 같아 두 문장으로 따로 써도 맞다. 90°일 때만 한 문장으로
+    const rotFlip = rule.rot === 'prog' && Math.abs(meta.rot) === 1 && rule.flip === 'flip';
+    const explain = ALL_ATTRS.filter(function (a) { return rule[a] && rule[a] !== 'const' && !(rotFlip && a === 'rot'); }).map(function (a) {
+      const t = rule[a];
+      if (a === 'flip' && rotFlip) return '방향·좌우: 오른쪽은 왼쪽을 ' + (meta.rot > 0 ? '시계 방향' : '반시계 방향') + '으로 90° 돌린 뒤 좌우로 뒤집은 것';
+      if (t === 'row') return ATTR_KO[a] + ': ' + RULE_KO.row;
+      if (t === 'col') return ATTR_KO[a] + ': 왼쪽과 오른쪽이 각각 정해진 값';
+      if (t === 'flip') return '좌우: 오른쪽은 왼쪽을 거울처럼 뒤집은 것';
+      if (t === 'logic') return ATTR_KO[a] + ': 오른쪽은 ' + OPK_KO[meta[a]];
+      const up = meta[a] > 0, two = Math.abs(meta[a]) === 2;
+      return ATTR_KO[a] + ': ' + (a === 'rot' ? '오른쪽으로 갈수록 ' + (two ? '반 바퀴씩 돎' : (up ? '시계 방향' : '반시계 방향') + '으로 90°씩 돎')
+        : a === 'pos' ? '오른쪽으로 갈수록 ' + (two ? '두 칸씩 이동' : (up ? '시계 방향' : '반시계 방향') + '으로 한 칸씩 이동')
+        : a === 'count' ? '오른쪽으로 갈수록 ' + (two ? '둘씩 ' : '하나씩 ') + (up ? '늘어남' : '줄어듦')
+        : '오른쪽으로 갈수록 한 단계씩 ' + (up ? '커짐' : '작아짐'));
+    }).join(' / ');
+    const o = shuffleOptions(r, opts, ans);
+    return {
+      type: 'choice', part: 'matrix', scored: true, level: level, timeLimit: [60, 60, 80, 90, 100, 120][level - 1],
+      prompt: '왼쪽에서 오른쪽으로의 변화를 찾아 빈칸에 들어갈 도형을 고르세요.',
+      promptHtml: '<div class="matrix matrix2">' + [TL, TR, C].map(cellSVG).join('') + '<div class="cell cell-missing"><span>?</span></div></div>',
       optionsHtml: o.options.map(cellSVG), answer: o.answer, optionCols: 4,
       explain: explain
     };
@@ -1628,7 +1771,9 @@
      이 세 과제는 평가자 1명이 한 번 어림한 임시값이라, 실제 응시 자료가 쌓이면(tools/norms-from-stats.cjs. 이 과제들은 ai-est-2026-10-18b 이후 행만 쓰고,
      회전·전개도는 2026-11-13에 정답 순위 고르기를 넣어 ai-est-2026-11-13 이후 행만 쓰고, 회전은 2026-11-14에 오답 구성을 바꿔 ai-est-2026-11-14 이후 행만 쓴다)
      그 값으로 바꾸고 NORMS_VERSION도 올린다. 나머지 9과제(규칙 찾기 5·언어 4)는 2026-10-18 고침에서는 생성기와 문항 풀이 그대로라 값을 그대로 뒀다
-     (2026-11-13에 규칙 찾기 5과제의 생성기와 언어 27문항의 글이 바뀌었지만 LEVEL_P는 그대로 두었다. NORMS_VERSION 설명 참고). */
+     (2026-11-13에 규칙 찾기 5과제의 생성기와 언어 27문항의 글이 바뀌었지만 LEVEL_P는 그대로 두었다. NORMS_VERSION 설명 참고).
+     2026-11-18에 도형 행렬 4~6단계의 2×2(그 단계 문항의 40%)를 다시 짰다. 보이는 규칙이 3·4·5개로 늘고 오답이 정답과 같은 수만큼 C와 달라
+     같은 단계가 전보다 어려울 것으로 보지만, 근거 자료가 없어 matrix 값(default)도 그대로 둔다(README "2026-11-18 2×2 도형 행렬 보기 다시 짜기"). */
   const LEVEL_P = {
     default: { 1: 0.92, 2: 0.80, 3: 0.62, 4: 0.42, 5: 0.25, 6: 0.12 },
     analogy: { 1: 0.94, 2: 0.77, 3: 0.60, 4: 0.38, 5: 0.25 },
@@ -1679,8 +1824,12 @@
      공통점 47~53번을 덧붙였다. 도구는 그 27문항의 ai-est-2026-11-12 까지 응답을 문항별 정답률에서 뺀다(POOL_CHANGED).
      ai-est-2026-11-14 = 도형 유추와 도형 회전의 보기 구성을 다시 짠 버전(유추: C와 보기만 보고 맞히는 요령 41~72% → 17~26%, 회전: 돌리지 않고 뒤집기·방향·겹침으로
      고르는 요령 75~85% → 2단계부터 25% 안팎). 두 과제 모두 오답이 정답에 더 가까워져 같은 단계가 전보다 어려울 것으로 보지만, 근거 자료가 없어
-     LEVEL_P·NORMS·OBS는 그대로 두고 실제 자료로 다시 매긴다. 같은 도구가 이 두 과제는 원자료에서 ai-est-2026-11-13 까지의 행을 뺀다(PROC_OLD4). */
-  const NORMS_VERSION = 'ai-est-2026-11-14';
+     LEVEL_P·NORMS·OBS는 그대로 두고 실제 자료로 다시 매긴다. 같은 도구가 이 두 과제는 원자료에서 ai-est-2026-11-13 까지의 행을 뺀다(PROC_OLD4).
+     ai-est-2026-11-18 = 도형 행렬 2×2(4~6단계)를 정답을 나중에 고르는 짜임으로 다시 짠 버전(위 줄을 안 보고 아래 왼쪽 칸과 보기만 보고 맞히는 요령
+     72~87% → 11~16%, 위 오른쪽·위 왼쪽 칸 하나와 보기만 보는 요령도 42~55%·37~46% → 26~35%·30~41%). 보이는 규칙이 늘고(4·5·6단계 3·4·5개)
+     오답이 정답과 같은 수만큼 C와 달라 같은 단계가 전보다 어려울 것으로 보지만, LEVEL_P·NORMS·OBS는 그대로 두고 실제 자료로 다시 매긴다.
+     3×3은 바뀌지 않았다. 같은 도구가 도형 행렬은 원자료에서 ai-est-2026-11-14 까지의 행을 뺀다(PROC_OLD5). */
+  const NORMS_VERSION = 'ai-est-2026-11-18';
   /* 폭 과제 부분 점수(spanScore의 part)의 기준값(2026-10-18): NORMS의 최장 폭 평균·sd에서 바꿔 쓴다. part = 최장 폭 − 0.5 × (두 번째 시도에서만 맞힌 길이 수)라
      평균은 shift만큼 낮고 퍼짐은 scale배다. 시행 단위 모형(한 시행의 정답 확률 σ((μ − 길이)/τ), μ = a + b·θ, a·b는 지금 진행 규칙과 새 최대 길이로 푼 최장 폭이
      NORMS 평균·sd와 같아지게 맞춤, 4만 명)에서 τ = 0.55일 때 네 과제 모두 shift 0.24~0.25, scale 0.96~0.97이었다(τ 0.4면 0.18~0.19·0.97~0.98, 0.7이면 0.29~0.30·0.94).
@@ -2402,7 +2551,7 @@
     spanGen: SPAN_GEN,
     adaptNext: adaptNext,
     adaptRecord: adaptRecord,
-    _internals: { cellSVG: cellSVG, legible: legible, OPS: OPS, logicRows: logicRows, logicK: logicK, kUnique: kUnique, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },
+    _internals: { cellSVG: cellSVG, legible: legible, OPS: OPS, logicRows: logicRows, altNext: altNext, VERBAL: VERBAL, VOCAB: VOCAB, LOGIC: LOGIC, SIMILAR: SIMILAR },
     tasks: TASK_KEYS.map(function (k) { return { key: k, label: TASKS[k].label, domain: TASKS[k].domain, domainLabel: DOMAINS.filter(function (d) { return d.key === TASKS[k].domain; })[0].label, minutes: TASKS[k].minutes }; }),
     domains: DOMAINS.map(function (d) { return { key: d.key, label: d.label }; }),
     explain: DOMAINS.map(function (d) { return { label: d.label, what: d.what, where: d.where, tasks: TASK_KEYS.filter(function (k) { return TASKS[k].domain === d.key; }).map(function (k) { return TASKS[k].label; }).join(', ') }; }),
